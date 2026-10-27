@@ -1,0 +1,6 @@
+<anvil-form container="HtmlTemplate" prop:html="@theme:standard-page.html">
+    <anvil-component type="ColumnPanel" name="menu_panel" prop:spacing_above="none" prop:spacing_below="none" container:slot="left-nav"></anvil-component>
+    <anvil-component type="ColumnPanel" name="footer_panel" prop:role="sidebar-actions" prop:spacing_above="none" prop:spacing_below="none" container:slot="nav-right"></anvil-component>
+    <anvil-component type="ColumnPanel" name="title_panel" prop:spacing_above="none" prop:spacing_below="none" container:slot="title"></anvil-component>
+    <anvil-component type="ColumnPanel" name="content_panel" prop:role="bc-content" prop:spacing_above="none" prop:spacing_below="none" container:slot="default"></anvil-component>
+</anvil-form>

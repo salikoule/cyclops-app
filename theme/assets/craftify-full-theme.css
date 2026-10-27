@@ -1,0 +1,4173 @@
+/**
+ This CSS implements the Material Design look and feel for Anvil apps.
+ **/
+
+/** 
+Horizontal repeating panel
+**/
+@import "_/theme/tabulator_styles.css";
+
+.craftify-echart-host {
+  width: 100%;
+  min-height: 120px;
+  overflow: hidden;
+}
+
+/* ConfigureForm layout and semantic roles */
+.anvil-role-configure-shell { background:#f6f8fb; padding:18px 20px 32px; }
+.anvil-role-configure-header {
+  background:linear-gradient(135deg,#fff 0%,#f4f7fb 100%);
+  border:1px solid #e2e8f0; border-radius:12px; padding:18px 22px;
+}
+.anvil-role-configure-header .anvil-role-subheading { letter-spacing:.02em; margin-bottom:4px; }
+.anvil-role-configure-section-title {
+  color:#1f497d; font-size:17px; font-weight:650; margin-bottom:2px;
+}
+.anvil-role-configure-section-help {
+  color:#64748b; font-size:12px; margin-bottom:10px;
+}
+.anvil-role-configure-setting {
+  background:#fff; border:1px solid #e2e8f0; border-radius:10px;
+  box-sizing:border-box; flex:1 1 300px; min-width:280px; padding:14px 16px;
+}
+.anvil-role-configure-setting-title {
+  color:#334155; font-size:14px; font-weight:650; margin-bottom:4px;
+}
+.anvil-role-configure-setting-help {
+  color:#64748b; font-size:12px; line-height:1.4; margin-bottom:10px;
+}
+.anvil-role-configure-settings-flow {
+  align-items:stretch; gap:12px; flex-wrap:wrap;
+}
+.anvil-role-configure-controls {
+  align-items:center; gap:10px; flex-wrap:wrap;
+}
+.anvil-role-configure-controls .anvil-role-primary-color { margin-left:auto; }
+.anvil-role-configure-mapping-field {
+  background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+  box-sizing:border-box; flex:1 1 220px; min-width:210px; padding:10px 12px;
+}
+.anvil-role-configure-mapping-label {
+  color:#475569; font-size:12px; font-weight:600; margin-bottom:4px;
+}
+.anvil-role-configure-table-card {
+  background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px;
+}
+.anvil-role-configure-shell .anvil-role-card {
+  padding:14px 16px;
+}
+.anvil-role-configure-shell .anvil-role-card > .anvil-panel-section > .anvil-panel-section-container.full-width-row {
+  margin-left:0;
+  margin-right:0;
+}
+.anvil-role-configure-shell .anvil-role-card > .anvil-panel-section:first-child > .anvil-panel-section-container.full-width-row {
+  margin-top:0;
+}
+
+.anvil-role-filters-bar {
+  width: 100%;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 16px 10px;
+  margin: 0 0 12px;
+}
+
+.anvil-role-filters-bar > .anvil-panel-section:first-child > .anvil-panel-section-container > .anvil-panel-section-gutter > .anvil-panel-row,
+.anvil-role-filters-bar .anvil-panel-row:has(.anvil-role-filters-title) {
+  display: flex !important;
+  align-items: center;
+  width: 100%;
+}
+
+.anvil-role-filters-bar .anvil-panel-col:has(.anvil-role-filters-title) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.anvil-role-filters-bar .anvil-panel-col:has(.anvil-role-filters-actions) {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.anvil-role-filters-title {
+  display: block;
+}
+
+.anvil-role-filters-title-row,
+.anvil-role-filters-title-row.flow-panel {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.anvil-role-filters-title-row > * {
+  flex: 0 0 auto;
+  width: auto !important;
+}
+
+.anvil-role-filters-title-row .anvil-role-filters-title {
+  display: inline-flex !important;
+  align-items: center;
+  width: auto !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex: 0 0 auto !important;
+  cursor: pointer;
+}
+
+.anvil-role-filters-collapse,
+.anvil-role-filters-collapse.anvil-component {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto !important;
+  align-self: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.anvil-role-filters-title-row .anvil-role-filters-summary,
+.anvil-role-filters-title-row .anvil-component:has(.anvil-role-filters-summary) {
+  display: inline-flex !important;
+  align-items: center;
+  flex: 1 1 auto !important;
+  min-width: 0;
+  width: auto !important;
+  height: 28px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.anvil-role-filters-title-row .anvil-component:has(.anvil-role-filters-count) {
+  display: inline-flex !important;
+  align-items: center;
+  height: 28px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.anvil-role-filters-collapse > .btn {
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 1px 0 0 !important;
+  border-radius: 999px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #fff !important;
+  color: #1e3a5f !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  box-shadow: none !important;
+  text-transform: none !important;
+}
+
+.anvil-role-filters-collapse > .btn .anvil-component-icon {
+  margin: 0 !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+}
+
+.anvil-role-filters-collapse > .btn:hover {
+  background: #f0f6fc !important;
+  border-color: #9bb6d3 !important;
+}
+
+.anvil-role-filters-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.anvil-role-filters-count {
+  flex: 0 0 auto;
+  display: inline-flex !important;
+  align-items: center;
+  align-self: center !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  line-height: 20px !important;
+  border-radius: 999px;
+  padding: 0 8px !important;
+  background: #e8f1fb;
+  color: #1e3a5f !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  margin: 0 !important;
+  white-space: nowrap;
+}
+
+.anvil-role-filters-summary .anvil-label,
+.anvil-role-filters-count .anvil-label {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: inherit !important;
+}
+
+.anvil-role-filters-actions,
+.anvil-role-filters-actions.flow-panel {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: auto !important;
+  margin-left: auto !important;
+  overflow: visible !important;
+}
+
+.anvil-role-filters-actions .btn,
+.anvil-role-filters-clear > .btn,
+.anvil-role-filters-search > .btn {
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #fff !important;
+  color: #1e3a5f !important;
+  padding: 8px 12px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  min-width: 0 !important;
+  width: auto !important;
+  box-shadow: none !important;
+  text-transform: none !important;
+}
+
+.anvil-role-filters-actions .btn:hover,
+.anvil-role-filters-clear > .btn:hover,
+.anvil-role-filters-search > .btn:hover {
+  background: #f0f6fc !important;
+  border-color: #9bb6d3 !important;
+  color: #1e3a5f !important;
+}
+
+.anvil-role-filters-actions .btn[disabled],
+.anvil-role-filters-clear > .btn[disabled] {
+  color: #94a3b8 !important;
+  background: #fff !important;
+  border-color: #e2e8f0 !important;
+  opacity: 0.55;
+}
+
+.anvil-role-filters-title-block {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.anvil-role-filters-title {
+  font-size: 20px !important;
+  font-weight: 650 !important;
+  color: #1e3a5f !important;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0 !important;
+}
+
+.anvil-role-filters-subtitle {
+  display: block;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  font-style: italic;
+  color: #64748b !important;
+  line-height: 1.35;
+  margin: 2px 0 0 !important;
+}
+
+.anvil-role-product-toolbar {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 4px;
+  width: 100%;
+}
+
+.anvil-role-product-toolbar > *:last-child {
+  margin-left: auto;
+}
+
+.anvil-role-product-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  align-self: center !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  line-height: 32px !important;
+  border-radius: 999px;
+  padding: 0 10px !important;
+  background: #e8f1fb;
+  color: #1e3a5f !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0;
+  margin: 0 !important;
+  white-space: nowrap;
+  box-sizing: border-box !important;
+}
+
+.anvil-role-product-chip .anvil-label {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: inherit !important;
+}
+
+.anvil-role-forecast-key,
+.anvil-role-forecast-key.anvil-label {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: 0 !important;
+  padding: 0 12px 0 10px !important;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #1e3a5f !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  line-height: 32px !important;
+}
+
+.anvil-role-forecast-key::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: #f5c518;
+  flex: 0 0 auto;
+}
+
+.anvil-role-capacity-low,
+.anvil-role-capacity-mid,
+.anvil-role-capacity-high,
+.anvil-role-capacity-low.anvil-label,
+.anvil-role-capacity-mid.anvil-label,
+.anvil-role-capacity-high.anvil-label {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: 0 !important;
+  padding: 0 12px 0 10px !important;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff !important;
+  color: #1e3a5f !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  line-height: 32px !important;
+}
+
+.anvil-role-capacity-low::before,
+.anvil-role-capacity-mid::before,
+.anvil-role-capacity-high::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+.anvil-role-capacity-low::before { background: #A8B2FF; }
+.anvil-role-capacity-mid::before { background: #FFDB71; }
+.anvil-role-capacity-high::before { background: #DBB5AF; }
+
+.anvil-role-filters-extra {
+  width: 100%;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.anvil-role-filter-card {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.anvil-role-filter-card .anvil-label {
+  font-size: 10px !important;
+  font-weight: 650 !important;
+  color: #64748b !important;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  margin: 0 0 4px !important;
+  min-height: 0 !important;
+}
+.anvil-role-filter-card .anvil-label > .label-text {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.anvil-role-ae-ms-btn {
+  width: 100%;
+}
+
+.anvil-role-ae-ms-btn > button {
+  color: #0f172a;
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  min-height: 32px;
+  height: auto;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1.35;
+  text-align: left;
+  box-shadow: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.anvil-role-ae-ms-btn > button:hover {
+  color: #0f172a;
+  background-color: #fff;
+  border-color: #9bb6d3;
+}
+
+.anvil-role-ae-ms-btn > button:active:focus,
+.anvil-role-ae-ms-btn > button:focus,
+.anvil-role-ae-ms-btn > button:active,
+.anvil-role-ae-ms-btn.open > button,
+.anvil-role-ae-ms-btn > button[aria-expanded="true"] {
+  color: #0f172a;
+  background-color: #fff;
+  border-color: #9bb6d3;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12);
+}
+
+/* Date pickers match the filter dropdown: 32px box, clickable calendar on the right. */
+.anvil-role-ae-ms-btn > button {
+  box-sizing: border-box;
+  height: 32px;
+  max-height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 30px;
+}
+.anvil-role-date-field > .anvil-panel-section,
+.anvil-role-date-field > .anvil-panel-section > .anvil-panel-section-container {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.anvil-role-date-field .anvil-label {
+  margin: 0 0 4px !important;
+  min-height: 0 !important;
+}
+.anvil-role-date-field .anvil-label > .label-text {
+  padding: 0 !important;
+  line-height: 1.3 !important;
+  font-size: 10px !important;
+  font-weight: 650 !important;
+}
+.anvil-component.anvil-datepicker,
+.anvil-datepicker {
+  display: flex !important;
+  align-items: center;
+  position: relative;
+  width: 100%;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  vertical-align: top;
+  background: #fff !important;
+  background-image: none !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px;
+  padding: 0 8px 0 12px !important;
+  box-shadow: none !important;
+  overflow: hidden;
+  line-height: 32px !important;
+}
+.anvil-datepicker:hover {
+  border-color: #9bb6d3 !important;
+}
+.anvil-datepicker:focus-within {
+  border-color: #9bb6d3 !important;
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12) !important;
+}
+.anvil-datepicker input,
+.anvil-datepicker input.form-control,
+.anvil-datepicker input.anvil-component {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100% !important;
+  height: 30px !important;
+  min-height: 0 !important;
+  max-height: 30px !important;
+  border: 0 !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  font-family: inherit !important;
+  color: #0f172a !important;
+  line-height: 30px !important;
+}
+.anvil-datepicker > :not(input) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  position: static !important;
+  flex: 0 0 16px;
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 0 0 8px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: #64748b !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+.anvil-datepicker .fa,
+.anvil-datepicker i {
+  font-size: 14px !important;
+  color: #64748b !important;
+  line-height: 1 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+.anvil-datepicker .fa::before,
+.anvil-datepicker i::before {
+  font-family: FontAwesome, "Font Awesome 5 Free" !important;
+  font-weight: 400 !important;
+  font-size: 14px !important;
+  color: #64748b !important;
+  content: "\f073" !important;
+}
+.anvil-datepicker input[disabled],
+.anvil-datepicker.anvil-disabled {
+  background-color: #f8fafc !important;
+  color: #94a3b8 !important;
+  border-bottom: 0 !important;
+}
+
+:root {
+  --ae-ms-option-text: #1e293b;
+  --ae-ms-option-text-active: #ffffff;
+  --ae-ms-option-bg-hover: #eef4fb;
+  --ae-ms-option-bg-active: #1e3a5f;
+  --ae-ms-option-subtext: #64748b;
+  --ae-ms-option-subtext-active: rgba(255, 255, 255, 0.75);
+}
+
+.ae-popover.ae-ms-popover {
+  --ae-popover-bg: #ffffff;
+  --ae-popover-border: #e2e8f0;
+  --ae-popover-shadow: 0 8px 24px rgba(15, 23, 42, 0.10);
+  border-radius: 10px;
+}
+
+.ae-popover.ae-ms-popover input {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+}
+
+.anvil-role-horizontal-repeater {
+    display: flex;
+}
+.anvil-role-horizontal-repeater>div {
+    min-width: 200px;
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+.anvil-role-horizontal-repeater .anvil-panel-col {
+    min-width: max-content;
+}  
+.anvil-role-twod-repeater .anvil-role-horizontal-repeater>div {
+    overflow: hidden;
+}
+.anvil-role-twod-repeater>div {
+    overflow-x: auto;
+}
+
+/* Stop panel-cols cutting off drop shadows */
+.anvil-panel-col {
+  padding-bottom: 10px;
+  margin-bottom: -10px;
+}
+
+.content > .placeholder {
+  margin: 16px;
+  color: #888;
+  font-size: 18px;
+  outline: 1px dotted;
+  padding: 16px;
+  text-align: center;
+}
+
+/* Put things on a 4px grid (none of this 7px nonsense) */
+.has-text .anvil-component-icon.left-icon { margin-right: 8px; }
+.has-text .anvil-component-icon.right-icon { margin-left: 8px; }
+
+a>.anvil-component-icon.left_edge-icon,
+a>.anvil-component-icon.right_edge-icon,
+.anvil-label>.anvil-component-icon.left_edge-icon,
+.anvil-label>.anvil-component-icon.right_edge-icon {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.anvil-label>.label-text, a>.link-text {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.file-loader>label {
+    padding: 8px;
+}
+.checkbox label, .radio label {
+    padding-top: 8px; padding-right: 8px; padding-bottom: 8px;
+}
+.anvil-spacing-above-none { margin-top: 0px; }
+.anvil-spacing-above-small { margin-top: 0px; }
+.anvil-spacing-above-medium { margin-top: 8px; }
+.anvil-spacing-above-large { margin-top: 16px; }
+.anvil-spacing-below-none { margin-bottom: 0px; }
+.anvil-spacing-below-small { margin-bottom: 4px; }
+.anvil-spacing-below-medium { margin-bottom: 8px; }
+.anvil-spacing-below-large { margin-bottom: 16px; }
+
+
+.col-padding.col-padding-tiny { padding: 0 2px; }
+.column-panel.col-padding-tiny > .anvil-panel-section > .anvil-panel-section-container > .anvil-panel-section-gutter { margin: 0 -2px; }
+
+.col-padding.col-padding-small { padding: 0 4px; }
+.column-panel.col-padding-small > .anvil-panel-section > .anvil-panel-section-container > .anvil-panel-section-gutter { margin: 0 -4px; }
+
+/* was 8px  */
+.col-padding.col-padding-medium { padding: 0 0px; }
+/* Was -8px */
+.column-panel.col-padding-medium > .anvil-panel-section > .anvil-panel-section-container > .anvil-panel-section-gutter { margin: 0 0px; } 
+
+.col-padding.col-padding-large { padding: 0 12px; }
+.column-panel.col-padding-large > .anvil-panel-section > .anvil-panel-section-container > .anvil-panel-section-gutter { margin: 0 -12px; }
+
+.col-padding.col-padding-huge { padding: 0 20px; }
+.column-panel.col-padding-huge > .anvil-panel-section > .anvil-panel-section-container > .anvil-panel-section-gutter { margin: 0 -20px; }
+
+.flow-panel.flow-spacing-tiny > .flow-panel-gutter { margin: 0 -2px; }
+.flow-panel.flow-spacing-tiny > .flow-panel-gutter > .flow-panel-item { margin: 0 2px; }
+
+.flow-panel.flow-spacing-small > .flow-panel-gutter { margin: 0 -4px; }
+.flow-panel.flow-spacing-small > .flow-panel-gutter > .flow-panel-item { margin: 0 4px; }
+
+.flow-panel.flow-spacing-medium > .flow-panel-gutter { margin: 0 -8px; align-items: center; }
+.flow-panel.flow-spacing-medium > .flow-panel-gutter > .flow-panel-item { margin: 0 8px; }
+
+.flow-panel.flow-spacing-large > .flow-panel-gutter { margin: 0 -12px; }
+.flow-panel.flow-spacing-large > .flow-panel-gutter > .flow-panel-item { margin: 0 12px; }
+
+.flow-panel.flow-spacing-huge > .flow-panel-gutter { margin: 0 -20px; }
+.flow-panel.flow-spacing-huge > .flow-panel-gutter > .flow-panel-item { margin: 0 20px; }
+
+
+/* Typography */
+
+/*added Montserrat as default for simple website theme*/
+body {
+  font-family: Montserrat, Roboto, Noto, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4286;
+  background-color: #fafafa;
+}
+
+.modal-footer .btn + .btn {
+    margin-bottom: 0;
+    margin-left: 0px;
+    margin: auto;
+    text-align: center;
+    padding: 8px 8px;
+}
+
+.modal-content {
+  border-radius: 2em!important;
+}
+
+.modal-title {
+  text-align: center;
+}
+
+@media print {
+  body {
+    background-color: white;
+  }
+}
+
+a, a:focus {
+    text-decoration: none;
+    color: %color:Primary 700%;
+    outline: none !important;
+}
+
+a:hover, a:active {
+  color: %color:iPac Primary%;
+}
+
+.anvil-label {
+/*  font-size: 16px;*/
+}
+
+/*changed subheading and headline for simple website theme*/
+.anvil-role-subheading {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: %color:iPac Primary%;
+}
+
+.anvil-role-headline {
+  font-size: 34px;
+  line-height: 32px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: %color:iPac Primary%
+}
+
+.anvil-role-input-prompt {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.anvil-role-display-4 {
+  font-size: 112px;
+  font-weight: light;
+}
+
+.anvil-role-text {
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+.anvil-role-text > .label-text, .anvil-role-text .link-text {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Page structure: sidebar + content, no top ribbon */
+.structure {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: calc(100vh - %anvil-banner-height%);
+  height: 0; /* To make flex-grow work in IE */
+}
+
+html:not(.designer) .structure > .app-bar {
+  display: none !important;
+}
+
+html:not(.designer) .sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 6;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #1e3a5f;
+  text-align: center;
+  line-height: 36px;
+  box-shadow: none;
+}
+
+@media (max-width: 998px) {
+  html:not(.designer) .sidebar-toggle {
+    display: block;
+  }
+  html:not(.designer) .content {
+    padding-top: 48px;
+  }
+}
+
+/* However, this breaks the designer's height measurement. IE isn't supported for the designer, so set it back. */
+.designer .structure {
+  height: initial;
+}
+
+.app-bar {
+  flex: 0 0;
+  flex-basis: auto;
+  flex-basis: content;
+}
+
+.nav-holder {
+  flex-grow: 1;
+  overflow: visible;
+}
+
+/* Mobile and desktop margins for content */
+ .content > * > .anvil-container {
+  padding: 0px;
+}
+/*
+@media(min-width:991px) {
+  .content > * > .anvil-container {
+    padding: 16px 24px;
+  }
+} */
+ 
+.content .anvil-measure-this {
+  padding-bottom: 1px; /* Prevent margin collapse messing up embedding */
+}
+
+/* Allow overflows to show drop shadows in ColumnPanels
+   This can create unwanted scrollbars; we compensate for this at the top level with .nav-holder .content {overflow-x: hidden;}
+*/
+.anvil-container-overflow {
+  overflow-x: visible;
+  overflow-y: visible;
+}
+
+
+/* Desktop: Nav bar pinned */
+
+.nav-holder {
+  display: flex;
+  flex-direction: row;
+}
+
+.nav-holder .left-nav {
+  position: relative;
+  flex-shrink: 0;
+  min-width: 220px;
+  max-width: 240px;
+  min-height: 100%;
+}
+
+.nav-shield {
+  display: none;
+}
+
+/* Mobile: Nav bar is a modal overlay */
+
+@media(max-width:998px) {
+  html:not(.designer) .nav-holder {
+    display: block;
+  }
+  html:not(.designer) .nav-holder .left-nav {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: calc(100% - 56px);
+    max-width: 360px;
+    z-index: 3;
+    border-right: none;
+  /* 16dp */  box-shadow: 0 16px 24px 2px rgba(0, 0, 0, 0.14), 0 6px 30px 5px rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(0, 0, 0, 0.2);
+
+    display: none;
+    transition: right 0.5s;
+  }
+  
+  html:not(.designer) .nav-holder .left-nav.shown {
+    display: block;
+  }
+  .nav-shield.shown {
+    display: block;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    background-color: rgba(0,0,0,0.2);
+  }
+ }
+
+.nav-holder .left-nav, .left-nav-placeholder {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #e2e8f0;
+    font-size: 14px;
+    font-weight: 500;
+    overflow: visible;
+    box-sizing: border-box;
+    background-color: %color:White%;
+}
+
+.left-nav-main {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.left-nav-main::-webkit-scrollbar { display: none; }
+
+.left-nav-footer {
+  flex: 0 0 auto;
+  border-top: 1px solid #e2e8f0;
+  padding: 10px 8px 12px;
+  background: #fff;
+  overflow: visible;
+  position: relative;
+  z-index: 20;
+}
+
+.left-nav-footer > .anvil-container,
+.left-nav-footer .anvil-role-sidebar-actions,
+.left-nav-footer .anvil-panel-section,
+.left-nav-footer .anvil-panel-col {
+  overflow: visible !important;
+}
+
+.left-nav-footer > .anvil-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+}
+
+.left-nav-footer .anvil-dropdown {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.left-nav-footer .anvil-dropdown select,
+.left-nav-footer select.form-control {
+  border: 0 !important;
+}
+
+.anvil-role-sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.anvil-role-sidebar-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-holder .content {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.nav-collapse {
+  position: absolute;
+  top: 16px;
+  right: -14px;
+  z-index: 6;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #1e3a5f;
+  font-size: 16px;
+  line-height: 26px;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 39, 68, 0.06);
+}
+
+.nav-collapse:hover {
+  border-color: #9bb6d3;
+  background: #f8fafc;
+}
+
+.structure.nav-collapsed .nav-collapse {
+  right: -14px;
+  transform: rotate(180deg);
+}
+
+.structure.nav-collapsed .left-nav {
+  min-width: 64px;
+  max-width: 64px;
+  overflow: visible;
+}
+
+.structure.nav-collapsed .left-nav-main {
+  overflow: visible;
+}
+
+.nav-brand,
+.bc-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 16px 10px;
+}
+
+.structure.nav-collapsed .nav-brand,
+.structure.nav-collapsed .bc-brand {
+  justify-content: center;
+  padding: 10px 8px 16px;
+}
+
+.structure.nav-collapsed .nav-brand-text,
+.structure.nav-collapsed .bc-brand-text {
+  display: none !important;
+}
+
+.structure.nav-collapsed .left-nav-main a {
+  position: relative;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  padding: 8px !important;
+}
+
+.structure.nav-collapsed .left-nav-main a .link-text,
+.structure.nav-collapsed .left-nav-main a.anvil-role-nav-sub-link,
+.structure.nav-collapsed .left-nav-main a.anvil-role-nav-expand-toggle,
+.structure.nav-collapsed .left-nav-main a > span:not(.anvil-component-icon):not(.fa) {
+  display: none !important;
+}
+
+.structure.nav-collapsed .left-nav-main a .anvil-component-icon,
+.structure.nav-collapsed .left-nav-main a .anvil-component-icon::before,
+.structure.nav-collapsed .left-nav-main a i {
+  font-size: 15px !important;
+  line-height: 1 !important;
+}
+
+.structure.nav-collapsed .left-nav-main a[data-nav-label]:hover::after {
+  content: attr(data-nav-label);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #0f2744;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  z-index: 80;
+  box-shadow: 0 8px 20px rgba(15, 39, 68, 0.18);
+  pointer-events: none;
+}
+
+.structure.nav-collapsed .left-nav img {
+  max-height: 28px;
+}
+
+@media (max-width: 998px) {
+  .nav-collapse {
+    display: none;
+  }
+}
+
+.left-nav-placeholder {
+  display: block;
+  padding: 8px;
+  line-height: 1;
+  width: 58px;
+}
+.left-nav-placeholder .prompt {
+  display: inline-block;
+  white-space: nowrap;
+  transform: translate(-50%,0) rotate(-90deg) translate(-50%,0) translate(15px,16px);
+  padding: 16px 16px;
+  color: #888;
+  outline: 1px dotted #888;
+  visibility: hidden;
+}
+.anvil-highlight .left-nav-placeholder .prompt {
+  visibility: visible;
+}
+
+.left-nav > .column-panel,
+.left-nav-main > .column-panel {
+  padding: 14px 8px;
+}
+.left-nav > .column-panel > .anvil-panel-section > .anvil-panel-section-container:not(.full-width-row),
+.left-nav-main > .column-panel > .anvil-panel-section > .anvil-panel-section-container:not(.full-width-row) {
+  margin: 0 8px;
+  width: initial;
+  max-width: initial;
+  overflow-x: visible;
+}
+.left-nav > .column-panel > .anvil-panel-section:first-child > .anvil-panel-section-container.full-width-row,
+.left-nav-main > .column-panel > .anvil-panel-section:first-child > .anvil-panel-section-container.full-width-row {
+  margin-top: -14px;
+}
+.left-nav > .column-panel > .anvil-panel-section > .anvil-panel-section-container > .anvil-panel-section-gutter > .anvil-panel-row > .anvil-panel-col,
+.left-nav-main > .column-panel > .anvil-panel-section > .anvil-panel-section-container > .anvil-panel-section-gutter > .anvil-panel-row > .anvil-panel-col {
+  overflow-x: visible;
+}
+
+.left-nav-main img,
+.left-nav img,
+.left-nav .anvil-image,
+.left-nav-main .anvil-image,
+.anvil-role-nav-logo,
+.anvil-role-nav-logo img {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 100% !important;
+  max-height: 56px !important;
+  margin: 6px auto 12px !important;
+  object-fit: fill !important;
+  border-radius: 10px !important;
+}
+.structure.nav-collapsed .left-nav img,
+.structure.nav-collapsed .left-nav .anvil-image,
+.structure.nav-collapsed .anvil-role-nav-logo,
+.structure.nav-collapsed .anvil-role-nav-logo img {
+  max-height: 32px !important;
+  border-radius: 6px !important;
+}
+
+.left-nav .anvil-component-icon,
+.left-nav .anvil-component-icon.fa,
+.left-nav i.fa {
+  font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", FontAwesome !important;
+  font-weight: 900;
+  font-size: 15px;
+  line-height: 1;
+  color: inherit;
+}
+
+.left-nav .anvil-component-icon.left-icon {
+  width: 0;
+  margin-right: 26px;
+  position: relative;
+  top: 0.05em;
+}
+
+.left-nav a.anvil-role-nav-ai-assistant .anvil-component-icon::before {
+  content: "" !important;
+  display: block;
+  width: 15px;
+  height: 15px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M12 3.6l1.45 5.5 5.5 1.45-5.5 1.45L12 17.5l-1.45-5.5-5.5-1.45 5.5-1.45z'/%3E%3Cpath d='M18.35 4.15l.6 1.85 1.85.6-1.85.6-.6 1.85-.6-1.85-1.85-.6 1.85-.6z'/%3E%3Ccircle cx='7.15' cy='16.85' r='1.05'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M12 3.6l1.45 5.5 5.5 1.45-5.5 1.45L12 17.5l-1.45-5.5-5.5-1.45 5.5-1.45z'/%3E%3Cpath d='M18.35 4.15l.6 1.85 1.85.6-1.85.6-.6 1.85-.6-1.85-1.85-.6 1.85-.6z'/%3E%3Ccircle cx='7.15' cy='16.85' r='1.05'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.left-nav .anvil-component-icon.left_edge-icon,
+.left-nav .anvil-component-icon.right_edge-icon {
+  left: 10px;
+  padding-top: 0;
+  width: 0;
+}
+
+.left-nav .anvil-component-icon.right_edge-icon {
+  left: initial;
+  right: 8px;
+  top: 0;
+  padding-top: 0;
+  font-size: 12px;
+  font-weight: 900;
+  color: #94a3b8;
+}
+
+.left-nav a > .link-text,
+.left-nav a > .anvil-component-icon.left_edge-icon,
+.left-nav a > .anvil-component-icon.right_edge-icon {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.left-nav a, .left-nav .anvil-label.left_edge-icon, .left-nav .anvil-label.right_edge-icon {
+  color: #1e3a5f;
+  margin: 1px 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+
+.left-nav a.anvil-role-nav-sub-link {
+  padding: 6px 10px 6px 36px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.left-nav .anvil-component.left_edge-icon {
+  padding-left: 36px;
+}
+
+.left-nav a.anvil-role-nav-expand-toggle {
+  padding: 8px 6px;
+  min-width: 22px;
+  text-align: center;
+}
+
+.left-nav a.anvil-role-nav-expand-toggle > .anvil-component-icon.right_edge-icon {
+  right: 6px;
+}
+
+/* Keep main nav labels on one row inside flow-panel rows */
+.anvil-role-flow-panel-nav > .flow-panel-gutter {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.anvil-role-flow-panel-nav > .flow-panel-gutter > .flow-panel-item:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.anvil-role-flow-panel-nav > .flow-panel-gutter > .flow-panel-item:first-child > a {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.anvil-role-flow-panel-nav > .flow-panel-gutter > .flow-panel-item:last-child {
+  flex: 0 0 auto;
+}
+
+.left-nav a.anvil-role-nav-expand-toggle:hover {
+  background-color: transparent !important;
+  cursor: pointer;
+}
+
+.left-nav a:hover, .left-nav .anvil-role-selected {
+  color: #1e3a5f;
+  background-color: #f0f6fc;
+}
+
+.structure.nav-collapsed .left-nav .anvil-component-icon.left-icon {
+  width: auto;
+  margin-right: 0;
+  position: static;
+}
+
+.structure.nav-collapsed .left-nav .anvil-component.left_edge-icon {
+  padding-left: 8px;
+}
+
+.structure.nav-collapsed .left-nav a {
+  justify-content: center;
+  padding: 8px;
+}
+
+.designer .nav-holder .left-nav {
+  min-width: 56px;
+}
+
+.designer .nav-holder .left-nav > .anvil-component {
+  min-width: 160px;
+}
+
+.nav-holder .left-nav > .anvil-component {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.nav-holder .content {
+  flex: 1;
+  overflow-x: hidden;
+}
+
+/* Components: App Bar */
+.app-bar {
+  min-height: 56px;
+  line-height: 40px;
+  padding: 0 16px 0 72px;
+
+  font-size: 20px;
+  font-weight: 500;
+  color: %color:iPac Primary%;
+  background-color: %color:White%;
+  
+  z-index: 1;
+  /* 4dp  box-shadow: 0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.2);  */
+}
+
+.app-bar .anvil-component {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.app-bar > .sidebar-toggle { display:block; float:left;  margin-left: -61px; }
+.app-bar > .top-left-btn { float: left; margin-left: -60px; margin-right: -40px; }
+.app-bar > .title { float: left; }
+.app-bar > .title > .placeholder { outline: 1px dotted; padding-left: 16px; padding-right: 16px; margin: 8px 8px 0; display:none; }
+.app-bar > .app-bar-nav { float: right; font-weight: normal; }
+.app-bar > .app-bar-nav .placeholder { margin-top: 8px; padding: 0 8px; }
+.anvil-highlight .app-bar > .app-bar-nav .placeholder { outline: 1px dotted #ccc; }
+.anvil-highlight .app-bar > .title > .placeholder { display:block; }
+
+.app-bar a, .app-bar .anvil-component {
+  display: block;
+  color: %color:iPac Primary%;
+  line-height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  margin: 5px 4px 0;
+}
+
+.app-bar .title .anvil-component {
+  margin-left: 0;
+}
+
+.app-bar input.anvil-component, .app-bar .anvil-component input {
+  line-height: 30px;
+  color: %color:iPac Primary%;
+}
+
+.app-bar select.form-control {
+  height: 43px; /* 30px line height + 12px padding + 1px border */
+}
+
+.app-bar .anvil-component-icon-present .anvil-component-icon, .app-bar .sidebar-toggle .fa {
+  width: 30px;
+  text-align: center;
+  color: %color:iPac Primary%;
+}
+
+/* Don't put spacing on the top-level container (eg FlowPanel) */
+.app-bar-nav > .anvil-container {
+  margin: 0;
+  padding: 0;
+  min-height: 56px;
+}
+
+.anvil-highlight .app-bar-nav > .anvil-container:not(.has-components):not(a) {
+  outline: 1px dotted #fff;
+  margin-top: 8px;
+  min-height: 40px;
+  padding: 5px 8px;
+}
+
+.anvil-highlight .app-bar-nav > .anvil-container:not(.has-components):not(a)::after {  
+  content: "Drop Links here"
+}
+
+/* Rejig margin vs padding to give links the halo */
+.app-bar a, .app-bar a.anvil-component {
+  padding: 5px;
+  margin: 8px 0 0;
+  border-radius: 20px;
+}
+
+.app-bar a .link-text {
+  padding: 0 4px;
+}
+.app-bar a.has-text .anvil-component-icon.left {
+  margin-right: 4px;
+}
+.app-bar a.has-text .anvil-component-icon.right {
+  margin-left: 4px;
+}
+
+.app-bar a:hover, .app-bar a:active {
+  color: #eee; text-decoration: none;
+  background-color: %color:Primary 700%;
+}
+
+
+/* Component: Floating window */
+.floating-window {
+  background-color: #fff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.16) !important;
+}
+.floating-window-header {
+  display: flex !important;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #fff !important;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 10px 8px 10px 16px !important;
+  border-top-left-radius: 13px;
+  border-top-right-radius: 13px;
+  min-height: 44px;
+}
+.floating-window-title {
+  flex: 1 1 auto;
+  font-size: 15px;
+  font-weight: 650;
+  color: #1e3a5f;
+}
+.floating-window-icon-container {
+  gap: 2px;
+}
+.button-close-floating-window,
+.button-collapse-floating-window {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.button-close-floating-window:hover,
+.button-collapse-floating-window:hover {
+  background: #f1f5f9;
+}
+.close-floating-window-icon-style,
+.collapse-floating-window-icon-style {
+  color: #64748b;
+  font-size: 13px;
+}
+.floating-window-content {
+  background: #fff;
+  border-radius: 0 0 13px 13px;
+}
+
+/* Component: Dialog (alert), Notification */
+.modal-content {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.16) !important;
+  overflow: hidden;
+}
+
+/* change alert width */
+@media (min-width: 768px) {
+  .modal-lg {
+      width: 80vw;
+  }
+}
+
+.modal-header {
+  padding: 18px 20px 0;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: #1e3a5f;
+  border: 0;
+}
+
+.modal-body {
+  padding: 16px 20px 20px;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.modal-footer {
+  padding: 8px 8px 8px 8px;
+  border: 0;
+  text-align: center;
+}
+
+.modal-footer .btn,
+.modal-footer .anvil-m3-button,
+.modal-content .anvil-m3-button,
+.anvil-modal .anvil-m3-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: 999px !important;
+  background: #fff !important;
+  background-color: #fff !important;
+  color: #1e3a5f !important;
+  border: 1px solid #e2e8f0 !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  line-height: 30px !important;
+  box-shadow: none !important;
+  text-transform: none !important;
+  margin: 0 4px !important;
+}
+.modal-footer .anvil-m3-button button,
+.modal-content .anvil-m3-button button,
+.anvil-modal .anvil-m3-button button {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 0 !important;
+  line-height: inherit !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.modal-footer .btn:hover, .modal-footer .btn:focus,
+.modal-footer .anvil-m3-button:hover, .modal-footer .anvil-m3-button:focus,
+.modal-content .anvil-m3-button:hover, .modal-content .anvil-m3-button:focus {
+  background: #f0f6fc !important;
+  background-color: #f0f6fc !important;
+  color: #1e3a5f !important;
+  border-color: #9bb6d3 !important;
+  box-shadow: none;
+  top: 0;
+}
+.modal-footer .btn-primary,
+.modal-footer .btn-success,
+.modal-footer .anvil-role-primary-color > .btn,
+.modal-content .anvil-m3-filled,
+.modal-content [class*="anvil-m3-button"][class*="filled"] {
+  background: #1e3a5f !important;
+  background-color: #1e3a5f !important;
+  color: #fff !important;
+  border-color: #1e3a5f !important;
+}
+.modal-footer .btn-primary:hover, .modal-footer .btn-primary:focus,
+.modal-footer .btn-success:hover,
+.modal-footer .anvil-role-primary-color > .btn:hover {
+  background: #0f2744 !important;
+  background-color: #0f2744 !important;
+  color: #fff !important;
+  border-color: #0f2744 !important;
+}
+
+/* Replace leftover M3 lavender on pickers, menus, and surfaces */
+:root,
+html,
+body {
+  --anvil-m3-secondary-container: #f8fafc;
+  --anvil-m3-surface: #ffffff;
+  --anvil-m3-surface-container: #f8fafc;
+  --anvil-m3-surface-container-low: #ffffff;
+  --anvil-m3-surface-container-lowest: #ffffff;
+  --anvil-m3-surface-container-high: #f8fafc;
+  --anvil-m3-surface-container-highest: #f1f5f9;
+  --anvil-m3-surface-variant: #f1f5f9;
+  --md-sys-color-secondary-container: #f8fafc;
+  --md-sys-color-surface: #ffffff;
+  --md-sys-color-surface-container: #f8fafc;
+  --md-sys-color-surface-container-high: #f8fafc;
+  --md-sys-color-surface-container-highest: #f1f5f9;
+}
+
+.datepicker,
+.datepicker-dropdown,
+.datepicker.dropdown-menu,
+.daterangepicker,
+[class*="anvil-m3-date"],
+[class*="anvil-m3-calendar"] {
+  background: #f8fafc !important;
+  background-color: #f8fafc !important;
+}
+
+.datepicker table,
+.datepicker table tr,
+.datepicker table tr td,
+.datepicker table tr th,
+.daterangepicker table,
+.daterangepicker table tr,
+.daterangepicker table tr td,
+.daterangepicker table tr th {
+  background-color: transparent !important;
+}
+
+.datepicker table tr td:hover,
+.datepicker table tr td.day:hover,
+.daterangepicker td.available:hover,
+[class*="anvil-m3-date"] [class*="day"]:hover,
+[class*="anvil-m3-calendar"] [class*="day"]:hover {
+  background-color: #e8f1fb !important;
+}
+
+/* Notifications — one card for Anvil Notification and ToastyNotification */
+div[data-notify="container"].alert,
+.toastify.ipac-toast {
+  width: 320px !important;
+  max-width: calc(100vw - 32px) !important;
+  margin: 0 !important;
+  float: none !important;
+  padding: 10px 28px 10px 44px !important;
+  background: #fff !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  border-left: 3px solid #2563eb !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12) !important;
+  font-family: Montserrat, system-ui, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  line-height: 1.35 !important;
+  text-align: left !important;
+}
+div[data-notify="container"].alert {
+  right: 16px !important;
+  left: auto !important;
+}
+div[data-notify="container"].alert::before,
+.toastify.ipac-toast::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 11px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background-color: #eff6ff;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 14px 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2.2'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M12 11v5'/%3E%3Ccircle cx='12' cy='8' r='0.8' fill='%232563eb'/%3E%3C/svg%3E");
+}
+div[data-notify="container"].alert > span[data-notify="icon"],
+div[data-notify="container"].alert > a[data-notify="url"] {
+  display: none !important;
+}
+div[data-notify="container"].alert > span[data-notify="title"],
+div[data-notify="container"].alert > span[data-notify="message"] {
+  display: block !important;
+  color: #0f172a !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  line-height: 1.35 !important;
+}
+div[data-notify="container"].alert > span[data-notify="title"]:empty {
+  display: none !important;
+}
+div[data-notify="container"].alert:has(> span[data-notify="title"]:not(:empty)) > span[data-notify="message"] {
+  margin-top: 2px;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #64748b !important;
+}
+div[data-notify="container"].alert > .close,
+div[data-notify="container"].alert > button[data-notify="dismiss"],
+.toastify.ipac-toast .toast-close {
+  position: absolute !important;
+  right: 6px !important;
+  top: 6px !important;
+  float: none !important;
+  width: 22px !important;
+  height: 22px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  line-height: 22px !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+div[data-notify="container"].alert-success,
+.toastify.ipac-toast-success {
+  border-left-color: #059669 !important;
+}
+div[data-notify="container"].alert-success::before,
+.toastify.ipac-toast-success::before {
+  background-color: #ecfdf5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23059669' stroke-width='2.4'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7'/%3E%3C/svg%3E");
+}
+div[data-notify="container"].alert-warning,
+.toastify.ipac-toast-warning {
+  border-left-color: #d97706 !important;
+}
+div[data-notify="container"].alert-warning::before,
+.toastify.ipac-toast-warning::before {
+  background-color: #fffbeb;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d97706' stroke-width='2.2'%3E%3Cpath d='M12 8v5'/%3E%3Ccircle cx='12' cy='16.5' r='0.8' fill='%23d97706'/%3E%3Cpath d='M10.3 4.8L3.3 17a2 2 0 0 0 1.7 3h14a2 2 0 0 0 1.7-3L13.7 4.8a2 2 0 0 0-3.4 0z'/%3E%3C/svg%3E");
+}
+div[data-notify="container"].alert-danger,
+.toastify.ipac-toast-danger {
+  border-left-color: #dc2626 !important;
+}
+div[data-notify="container"].alert-danger::before,
+.toastify.ipac-toast-danger::before {
+  background-color: #fef2f2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23dc2626' stroke-width='2.2'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M9 9l6 6M15 9l-6 6'/%3E%3C/svg%3E");
+}
+.toastify.ipac-toast:has(.toast-progress-bar) {
+  border-left-color: #1e3a5f !important;
+  padding-bottom: 14px !important;
+}
+.toastify.ipac-toast:has(.toast-progress-bar)::before {
+  background-color: #f1f5f9;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231e3a5f' stroke-width='2.2'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M12 8v5l3 2'/%3E%3C/svg%3E");
+}
+.toastify.ipac-toast .toast-progress-bar {
+  left: 0 !important;
+  height: 2px !important;
+  background: #e2e8f0 !important;
+}
+.toastify.ipac-toast .toast-progress-bar-inner {
+  width: 40% !important;
+  background: #1e3a5f !important;
+  animation: none !important;
+  transform: none !important;
+}
+html.ipac-dark div[data-notify="container"].alert,
+html.ipac-dark .toastify.ipac-toast {
+  background: #151e2e !important;
+  color: #e7eef7 !important;
+  border-color: #2a3a52 !important;
+  border-left-color: #2563eb !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35) !important;
+}
+html.ipac-dark div[data-notify="container"].alert > span[data-notify="title"],
+html.ipac-dark div[data-notify="container"].alert > span[data-notify="message"] {
+  color: #e7eef7 !important;
+}
+html.ipac-dark div[data-notify="container"].alert:has(> span[data-notify="title"]:not(:empty)) > span[data-notify="message"] {
+  color: #94a3b8 !important;
+}
+html.ipac-dark div[data-notify="container"].alert::before,
+html.ipac-dark .toastify.ipac-toast::before {
+  background-color: #1e3a8a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23bfdbfe' stroke-width='2.2'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M12 11v5'/%3E%3Ccircle cx='12' cy='8' r='0.8' fill='%23bfdbfe'/%3E%3C/svg%3E");
+}
+html.ipac-dark div[data-notify="container"].alert-success,
+html.ipac-dark .toastify.ipac-toast-success { border-left-color: #059669 !important; }
+html.ipac-dark div[data-notify="container"].alert-success::before,
+html.ipac-dark .toastify.ipac-toast-success::before {
+  background-color: #064e3b;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236ee7b7' stroke-width='2.4'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7'/%3E%3C/svg%3E");
+}
+html.ipac-dark div[data-notify="container"].alert-warning,
+html.ipac-dark .toastify.ipac-toast-warning { border-left-color: #d97706 !important; }
+html.ipac-dark div[data-notify="container"].alert-warning::before,
+html.ipac-dark .toastify.ipac-toast-warning::before {
+  background-color: #451a03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fcd34d' stroke-width='2.2'%3E%3Cpath d='M12 8v5'/%3E%3Ccircle cx='12' cy='16.5' r='0.8' fill='%23fcd34d'/%3E%3Cpath d='M10.3 4.8L3.3 17a2 2 0 0 0 1.7 3h14a2 2 0 0 0 1.7-3L13.7 4.8a2 2 0 0 0-3.4 0z'/%3E%3C/svg%3E");
+}
+html.ipac-dark div[data-notify="container"].alert-danger,
+html.ipac-dark .toastify.ipac-toast-danger { border-left-color: #dc2626 !important; }
+html.ipac-dark div[data-notify="container"].alert-danger::before,
+html.ipac-dark .toastify.ipac-toast-danger::before {
+  background-color: #450a0a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fca5a5' stroke-width='2.2'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M9 9l6 6M15 9l-6 6'/%3E%3C/svg%3E");
+}
+html.ipac-dark .toastify.ipac-toast:has(.toast-progress-bar) { border-left-color: #3b82f6 !important; }
+html.ipac-dark .toastify.ipac-toast:has(.toast-progress-bar)::before {
+  background-color: #1a2740;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2.2'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M12 8v5l3 2'/%3E%3C/svg%3E");
+}
+html.ipac-dark .toastify.ipac-toast .toast-progress-bar { background: #2a3a52 !important; }
+html.ipac-dark .toastify.ipac-toast .toast-progress-bar-inner { background: #3b82f6 !important; }
+
+/* BlockInteraction — same working card, screen stays blocked */
+.blockInteraction-container {
+  background-color: rgba(15, 23, 42, 0.08) !important;
+}
+.blockInteraction-progress-bar {
+  height: 2px !important;
+  background: #e2e8f0 !important;
+  background-image: none !important;
+}
+.blockInteraction-progress-bar-value {
+  background-color: #1e3a5f !important;
+}
+.blockInteraction-container:has(.blockInteraction-loading-prompt:not(:empty)) .blockInteraction-progress-bar {
+  display: none !important;
+}
+.blockInteraction-loading-prompt {
+  position: relative !important;
+  top: 16px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  width: 320px !important;
+  max-width: calc(100vw - 32px) !important;
+  display: block !important;
+  overflow: hidden !important;
+  padding: 10px 14px 14px 44px !important;
+  background: #fff !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  border-left: 3px solid #1e3a5f !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16) !important;
+  font-family: Montserrat, system-ui, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  line-height: 1.35 !important;
+  text-align: left !important;
+  white-space: pre-line !important;
+}
+.blockInteraction-loading-prompt:empty {
+  display: none !important;
+}
+.blockInteraction-loading-prompt::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 11px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background-color: #f1f5f9;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 14px 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231e3a5f' stroke-width='2.2'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M12 8v5l3 2'/%3E%3C/svg%3E");
+}
+.blockInteraction-loading-prompt::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 40%;
+  background: #1e3a5f;
+  animation: ipac-block-progress 1.2s ease-in-out infinite;
+}
+@keyframes ipac-block-progress {
+  0% { transform: translateX(-10%); }
+  100% { transform: translateX(220%); }
+}
+html.ipac-dark .blockInteraction-container {
+  background-color: rgba(0, 0, 0, 0.28) !important;
+}
+html.ipac-dark .blockInteraction-progress-bar { background: #2a3a52 !important; }
+html.ipac-dark .blockInteraction-progress-bar-value { background-color: #3b82f6 !important; }
+html.ipac-dark .blockInteraction-loading-prompt {
+  background: #151e2e !important;
+  color: #e7eef7 !important;
+  border-color: #2a3a52 !important;
+  border-left-color: #3b82f6 !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35) !important;
+}
+html.ipac-dark .blockInteraction-loading-prompt::before {
+  background-color: #1a2740;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2.2'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M12 8v5l3 2'/%3E%3C/svg%3E");
+}
+html.ipac-dark .blockInteraction-loading-prompt::after { background: #3b82f6; }
+
+/* Shared dark surfaces: chips, tinted week boxes, table text, inputs. */
+html.ipac-dark .ipac-chip,
+html.ipac-dark .ipac-tone {
+  background-color: color-mix(in srgb, var(--ink) 22%, #121a2b) !important;
+  color: color-mix(in srgb, var(--ink) 68%, #fff) !important;
+  border-color: color-mix(in srgb, var(--ink) 46%, #2a3a52) !important;
+}
+html.ipac-dark .tabulator-row .tabulator-cell {
+  color: #e7eef7;
+}
+html.ipac-dark .ipac-ink,
+html.ipac-dark .product-title,
+html.ipac-dark .vs-overview-metric-plain {
+  color: #dbe4f0 !important;
+}
+html.ipac-dark .anvil-m3-textbox,
+html.ipac-dark .anvil-m3-textinput-input,
+html.ipac-dark .anvil-textbox input,
+html.ipac-dark .tabulator input,
+html.ipac-dark .tabulator textarea {
+  background-color: #121a2b !important;
+  color: #e7eef7 !important;
+  -webkit-text-fill-color: #e7eef7 !important;
+  border-color: #2a3a52 !important;
+  caret-color: #e7eef7;
+}
+
+/* Component: Button — mockup pills */
+
+.btn, .btn-default, .file-loader>label,
+.content [class*="anvil-m3-button"]:not(.anvil-role-ae-ms-btn),
+.content [class*="anvil-m3-icon-button"] {
+  font-family: inherit;
+  box-sizing: border-box;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 14px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  line-height: 30px;
+  letter-spacing: 0;
+  text-transform: none;
+  border: 1px solid #e2e8f0;
+  background-image: none;
+  background-color: #fff;
+  color: #1e3a5f;
+  text-shadow: none;
+  box-shadow: none;
+  -webkit-box-shadow: none;
+  position: relative;
+  cursor: pointer;
+}
+
+.content [class*="anvil-m3-button"] button,
+.content [class*="anvil-m3-icon-button"] button {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  font: inherit !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  text-transform: none !important;
+}
+
+.btn:hover, .btn:focus, .file-loader>label:hover,
+.content [class*="anvil-m3-button"]:hover,
+.content [class*="anvil-m3-icon-button"]:hover {
+  background-color: #f0f6fc;
+  background-image: none;
+  outline: none;
+  color: #1e3a5f;
+  border-color: #9bb6d3;
+}
+
+.btn:active, .btn:active:focus,
+.content [class*="anvil-m3-button"]:active,
+.content [class*="anvil-m3-icon-button"]:active {
+  background-color: #e8f1fb;
+  background-image: none;
+  outline: none;
+  box-shadow: none;
+  color: #1e3a5f;
+}
+
+.content [class*="anvil-m3-icon-button"] {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.anvil-role-link-raised {
+  box-shadow: 0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12), 0 5px 5px -3px rgba(0, 0, 0, 0.2);  
+  top: -1px;
+  border-radius: 5px;
+}
+
+.btn[disabled], .btn[disabled]:hover, .file-loader>label[disabled] {
+  color: #94a3b8;
+  background-color: #fff;
+  border-color: #e2e8f0;
+  opacity: 0.55;
+  cursor: default;
+}
+.anvil-role-raised > .btn[disabled], .anvil-role-primary-color > .btn[disabled], .anvil-role-secondary-color > .btn[disabled] {
+  background-color: #e2e8f0 !important;
+  color: #94a3b8 !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: none !important;
+  opacity: 0.7;
+}
+
+.anvil-role-raised > .btn, .anvil-role-primary-color > .btn, .anvil-role-secondary-color > .btn, .anvil-role-raised.file-loader>label, .anvil-role-primary-color.file-loader>label, .anvil-role-secondary-color.file-loader>label,
+.btn-primary, .btn-success, .btn-info, .btn-warning, .btn-danger,
+.content [class*="anvil-m3-filled"],
+.content [class*="anvil-m3-button"][class*="filled"]
+{
+  box-shadow: none;
+}
+
+.anvil-role-raised > .btn:active, .anvil-role-primary-color > .btn:active, .anvil-role-secondary-color > .btn:active, .btn-primary:active,
+.btn-primary:active, .btn-success:active, .btn-info:active, .btn-warning:active, .btn-danger:active {
+  box-shadow: none;
+  top: 0;
+}
+
+.anvil-role-primary-color > .btn, .btn-primary, .anvil-role-primary-color.file-loader>label,
+.content [class*="anvil-m3-filled"],
+.content [class*="anvil-m3-button"][class*="filled"] {
+  color: #fff;
+  background-color: #1e3a5f;
+  border-color: #1e3a5f;
+}
+
+.anvil-role-secondary-color > .btn, .anvil-role-secondary-color.file-loader>label {
+  color: #fff;
+  background-color: %color:Secondary 500%;
+  border-color: %color:Secondary 500%;
+}
+
+.btn-success, .btn-info, .btn-warning, .btn-danger {
+  color: white;
+}
+
+.anvil-role-primary-color > .btn:hover, .anvil-role-primary-color > .btn:active, .anvil-role-primary-color > .btn:focus,
+.btn-primary:hover, .btn-primary:active, .btn-primary:focus,
+.content [class*="anvil-m3-filled"]:hover,
+.content [class*="anvil-m3-button"][class*="filled"]:hover {
+  color: #fff;
+  background-color: #0f2744;
+  border-color: #0f2744;
+}
+
+.anvil-role-secondary-color > .btn:hover, .anvil-role-secondary-color > .btn:active, .anvil-role-secondary-color > .btn:focus {
+  color: #fff;
+  background-color: %color:Secondary 700%;
+}
+
+/* Component: Card */
+
+
+.anvil-role-card {
+  overflow: hidden;
+  background-color: white;
+  border-radius: 8px;
+  padding: 12px 12px; 
+  margin-top: 0px;
+  border: 1px #1f497d30 solid;
+  box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 3px 1px -2px rgba(0, 0, 0, 0.2), 0 1px 5px 0 rgba(0, 0, 0, 0.12); 
+  flex: 1;
+  text-align: center;
+}
+
+.anvil-role-big_card {
+  overflow: hidden;
+  background-color: white;
+  border-radius: 0px!important;
+  padding: 12px 12px; 
+  padding: 2px!important;
+  border: 1px #1f497d30 solid;
+  flex: 1;
+  text-align: center;
+}
+
+.anvil-role-card-footer {
+  overflow: hidden;
+  background-color: white;
+  border-radius: 0px;
+  padding: 12px 12px; 
+  flex: 1;
+  text-align: center;
+  position: fixed;
+  bottom: 0;
+  left: 0; 
+  width: 100%; 
+}
+
+  
+.anvil-role-card-header {
+  overflow: hidden;
+  background-color: white;
+  border-radius: 8px;
+  padding: 12px 12px; 
+  box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 3px 1px -2px rgba(0, 0, 0, 0.2), 0 1px 5px 0 rgba(0, 0, 0, 0.12); 
+  flex: 1;
+  text-align: center;
+  position: fixed;
+  top: 0;
+  left: 0; /* You can adjust the left position if needed */
+  width: 100%; /* Optionally, you can set the width to 100% to span the entire width of the viewport */
+}
+
+.anvil-container{}
+
+.anvil-role-card-link {
+  /*overflow: auto;*/
+  border-radius: 4px;
+  border: solid 0.5px %color:Secondary 400%;
+  background-color: white;
+  margin-left: 0px;
+  margin-top: 0px;
+  margin-bottom: 0px;
+  padding: 0px 0px 0px 0px;
+  box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.14), 0 1px 1px 1px rgba(0, 0, 0, 0.2), 0 1px 1px 0 rgba(0, 0, 0, 0.12);
+  overflow:hidden;
+}
+
+/* full_width_row sections go full bleed */
+.column-panel.anvil-role-card > .anvil-panel-section > .anvil-panel-section-container.full-width-row {
+  margin-left: -12px;
+  margin-right: -12px;
+  width: initial;
+  max-width: initial;
+}
+
+/* If the first row of a card is a full_width_row, it goes to the top */
+.column-panel.anvil-role-card > .anvil-panel-section:first-child > .anvil-panel-section-container.full-width-row {
+  margin-top: -8px;
+}
+.column-panel.anvil-role-card > .anvil-panel-section:last-child > .anvil-panel-section-container.full-width-row {
+  margin-bottom: -8px;
+}
+
+
+
+/* Component: TextBox + TextArea */
+
+/* Rounded border selection boxes and text boxes
+input.anvil-component, textarea.anvil-component, .anvil-component select, .anvil-datepicker input {
+  font-size: 16px;
+  line-height: 1.5;
+  border: 2px solid %color:iPac Primary% !important;
+  border-radius: 10px;
+  background-color: transparent;
+  color: rgba(0,0,0,0.87);
+  
+  box-shadow: none;
+}
+*/
+
+input.anvil-component, textarea.anvil-component, .anvil-component select, .anvil-datepicker input {
+  font-size: 16px;
+  line-height: 1.5;
+  background-color: transparent;
+  color: rgba(0,0,0,0.87);
+  
+  box-shadow: none;
+}
+
+.anvil-dropdown {
+  position: relative;
+  width: 100%;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  margin: 0;
+  box-sizing: border-box;
+  background: #fff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px;
+  box-shadow: none !important;
+  overflow: hidden;
+  font-size: 12px;
+}
+.anvil-dropdown:hover {
+  border-color: #9bb6d3 !important;
+}
+.anvil-dropdown:focus-within {
+  border-color: #9bb6d3 !important;
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12) !important;
+}
+.anvil-dropdown.anvil-role-rounded-border,
+.anvil-dropdown.anvil-role-rounded-border_2 {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+}
+.anvil-component select {
+  font-size: inherit;
+}
+
+input.anvil-component:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+textarea.anvil-component {
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #0f172a !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  font-family: inherit !important;
+  line-height: 30px;
+  box-shadow: none !important;
+}
+textarea.anvil-component {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 12px;
+  line-height: 1.4;
+}
+input.anvil-component:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+textarea.anvil-component:focus {
+  border-color: #9bb6d3 !important;
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12) !important;
+  outline: none;
+}
+input.anvil-component.anvil-role-rounded-border,
+textarea.anvil-component.anvil-role-rounded-border,
+input.anvil-component.anvil-role-rounded-border_2,
+textarea.anvil-component.anvil-role-rounded-border_2 {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+}
+.app-bar input.anvil-component {
+  height: auto;
+  min-height: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 4px 8px;
+  color: %color:iPac Primary% !important;
+}
+.anvil-datepicker input.anvil-component,
+.anvil-datepicker input.anvil-component:focus {
+  height: 30px !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.anvil-component select, .anvil-datepicker input {
+  padding: 4px 8px;
+  border: 0;
+}
+
+.anvil-dropdown select,
+.anvil-dropdown select.form-control {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  width: 100% !important;
+  height: 30px !important;
+  min-height: 0 !important;
+  max-height: 30px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 28px 0 12px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  font-family: inherit !important;
+  color: #0f172a !important;
+  line-height: 30px !important;
+}
+
+.anvil-dropdown form:before {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -5px;
+  border-right: 1.5px solid #64748b;
+  border-bottom: 1.5px solid #64748b;
+  transform: rotate(45deg);
+  pointer-events: none;
+  padding: 0;
+  font-size: 0;
+  line-height: 0;
+  color: transparent;
+}
+
+.anvil-component select, .anvil-datepicker input { margin-bottom: 0px; } /*changed*/
+input.anvil-component.anvil-spacing-below-none { margin-bottom: 4px; }
+input.anvil-component.anvil-spacing-below-small { margin-bottom: 8px; }
+input.anvil-component.anvil-spacing-below-medium { margin-bottom: 12px; }
+input.anvil-component.anvil-spacing-below-large { margin-bottom: 20px; }
+
+input.anvil-component::-webkit-input-placeholder, textarea.anvil-component::-webkit-input-placeholder {
+  color: rgba(0,0,0,0.54);
+}
+input.anvil-component::-moz-placeholder, textarea.anvil-component::-moz-placeholder {
+  color: rgba(0,0,0,0.54);
+}
+input.anvil-component::placeholder, textarea.anvil-component::placeholder  {
+  color: rgba(0,0,0,0.54);
+}
+
+.app-bar input.anvil-component::-webkit-input-placeholder, .app-bar textarea.anvil-component::-webkit-input-placeholder {
+  color: rgba(255,255,255,0.8);
+}
+.app-bar input.anvil-component::-moz-placeholder, .app-bar textarea.anvil-component::-moz-placeholder {
+  color: rgba(255,255,255,0.8);
+}
+.app-bar input.anvil-component::placeholder, .app-bar textarea.anvil-component::placeholder  {
+  color: rgba(255,255,255,0.8);
+}
+
+/* input.anvil-component:hover, .anvil-component select:hover, .anvil-datepicker input:hover {   
+	border-bottom: 2px solid rgba(0,0,0,.87);
+   	padding-bottom: 3px;
+} */
+
+/* input.anvil-component:focus, .anvil-component select:focus, .anvil-datepicker input:focus {
+   border-bottom: 2px solid %color:Primary 700%;
+  padding-bottom: 3px;
+  box-shadow: none;
+} */
+
+input.anvil-component[disabled], .anvil-component select[disabled], .anvil-datepicker input[disabled] {
+  border-bottom: 1px dashed #888;
+  padding-bottom: 4px;
+  background-color: transparent;
+}
+
+/* textarea.anvil-component:hover {
+  border: 2px solid rgba(0,0,0,0.87);
+  padding: 3px 7px;
+}
+
+textarea.anvil-component:focus {
+  border: 2px solid %color:Primary 700%;
+  padding: 3px 7px;
+  box-shadow: none;
+} */
+
+textarea.anvil-component[disabled] {
+  border: 1px dashed #888;
+  padding: 4px 8px;
+  background-color: transparent;
+}
+
+.daterangepicker td.active {
+  background-color: %color:iPac Primary%;
+}
+
+.daterangepicker td.active:hover {
+  background-color: %color:Primary 700%;
+}
+
+.daterangepicker .btn-success {
+  color: %color:iPac Primary%;
+}
+
+/* Component: CheckBox, RadioButton */
+/* Ugh. These are definitely TODO right now. */
+
+.checkbox, .radio {
+  font-size: 16px;
+}
+
+/* Shadow values taken from 
+https://stackoverflow.com/questions/30533055/calculating-shadow-values-for-all-material-design-elevations
+*/
+
+
+/* Brand hero: navy mesh + faint grid. Form panel stays solid. */
+.anvil-role-login-page > .anvil-panel-section > .anvil-panel-section-container > .anvil-panel-section-gutter > .anvil-panel-row {
+  display: flex !important;
+  min-height: 100dvh;
+  align-items: stretch;
+}
+.anvil-role-login-page .anvil-role-login-hero,
+.anvil-role-login-page .anvil-role-login-card {
+  flex: 1 1 50%;
+  min-width: 0;
+}
+@media (max-width: 768px) {
+  .anvil-role-login-page > .anvil-panel-section > .anvil-panel-section-container > .anvil-panel-section-gutter > .anvil-panel-row {
+    flex-direction: column;
+    min-height: 0;
+  }
+}
+
+.anvil-role-login-page {
+  background-color: #10253f;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    radial-gradient(ellipse 70% 55% at 22% 28%, rgba(70, 128, 160, 0.38), transparent 62%),
+    radial-gradient(ellipse 55% 45% at 78% 88%, rgba(31, 73, 125, 0.55), transparent 58%),
+    linear-gradient(155deg, #0c1c32 0%, #16365c 46%, #1f497d 100%);
+  background-size: 56px 56px, 56px 56px, auto, auto, auto;
+  background-position: center;
+  background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat;
+}
+
+/* .app-bar is already hidden by `html:not(.designer) .structure > .app-bar`.
+   A body:has() rule here made the browser re-check the whole document on every
+   DOM insert, which stalled pages that mount many components (Master Plan). */
+
+.anvil-role-home-header {
+  background: transparent !important;
+  background-image: none !important;
+  min-height: 100dvh;
+  height: 100dvh;
+  box-sizing: border-box;
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.anvil-role-home-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.1), transparent 46%);
+  pointer-events: none;
+}
+
+.anvil-role-home-header > .anvil-panel-section,
+.anvil-role-home-header > .anvil-panel-section > .anvil-panel-section-container,
+.anvil-role-home-header > .anvil-panel-section > .anvil-panel-section-container > .anvil-panel-section-gutter {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+.anvil-role-home-header .anvil-panel-row {
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.anvil-role-login-card {
+  overflow: hidden;
+  background-color: #f4f6f8 !important;
+  border-radius: 0;
+  padding: 32px 16px 56px;
+  margin: 0;
+  border: none;
+  border-left: 1px solid rgba(16, 37, 63, 0.08);
+  box-shadow: none;
+  text-align: left;
+  min-height: 100dvh;
+  height: 100dvh;
+  box-sizing: border-box;
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.anvil-role-login-card > .anvil-panel-section {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.anvil-role-login-card > .anvil-panel-section > .anvil-panel-section-container {
+  width: auto;
+  max-width: calc(100% - 24px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.anvil-role-login-card .anvil-role-card {
+  width: 400px;
+  max-width: calc(100% - 16px);
+  margin-left: auto;
+  margin-right: auto;
+  text-align: left;
+  background-color: #ffffff;
+  border: 1px solid #e6ebf0;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(16, 37, 63, 0.04), 0 12px 32px rgba(16, 37, 63, 0.08);
+  padding: 36px 32px 28px;
+  overflow: visible;
+}
+
+.anvil-role-login-card .anvil-role-card > .anvil-panel-section > .anvil-panel-section-container {
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.anvil-role-login-heading,
+.anvil-role-login-heading .anvil-label-text {
+  font-family: Montserrat, Roboto, sans-serif;
+  font-size: 28px !important;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: #10253f !important;
+}
+
+.anvil-role-login-hero .anvil-role-login-heading,
+.anvil-role-login-hero .anvil-role-login-heading .anvil-label-text {
+  font-size: 42px !important;
+  color: #ffffff !important;
+}
+
+.anvil-role-login-hero .anvil-role-login-subtitle,
+.anvil-role-login-hero .anvil-role-login-subtitle .anvil-label-text {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+.anvil-role-login-subtitle,
+.anvil-role-login-subtitle .anvil-label-text {
+  font-size: 14px !important;
+  font-weight: 400;
+  line-height: 1.45;
+  color: #5b6775 !important;
+  margin-bottom: 8px;
+}
+
+.anvil-role-login-field-label,
+.anvil-role-login-field-label .anvil-label-text {
+  font-size: 12px !important;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #2c3a4a !important;
+  margin-bottom: 2px;
+}
+
+.anvil-role-login-divider {
+  display: flex !important;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 4px 0;
+  color: #7a8694 !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.anvil-role-login-divider::before,
+.anvil-role-login-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: #e2e7ed;
+}
+
+.anvil-role-login-card .anvil-textbox,
+.anvil-role-login-card input.form-control,
+.anvil-role-login-card .anvil-component.anvil-textbox,
+.anvil-role-login-card .anvil-btn,
+.anvil-role-login-card .btn {
+  width: 100% !important;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.anvil-role-login-input input.form-control,
+.anvil-role-login-card .anvil-role-login-input input,
+input.anvil-role-login-input.anvil-form-control {
+  height: 44px;
+  border: 1px solid #d5dbe3 !important;
+  border-radius: 8px !important;
+  padding: 0 14px;
+  font-size: 15px;
+  color: #12263f;
+  text-align: left;
+  background: #fff;
+  box-shadow: none;
+}
+
+.anvil-role-login-input input.form-control::placeholder {
+  color: #9aa6b2;
+}
+
+.anvil-role-login-input input.form-control:focus {
+  border-color: #1f497d !important;
+  box-shadow: 0 0 0 3px rgba(31, 73, 125, 0.16);
+  outline: none;
+}
+
+.anvil-role-login-link,
+.anvil-role-login-link a {
+  color: #1f497d !important;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none !important;
+}
+
+.anvil-role-login-link:hover,
+.anvil-role-login-link a:hover {
+  color: #16365c !important;
+  text-decoration: underline !important;
+}
+
+.anvil-role-login-primary-btn.anvil-btn,
+.anvil-role-login-primary-btn > .anvil-btn,
+.anvil-role-login-primary-btn > .btn,
+.anvil-role-login-primary-btn.file-loader > label {
+  background-color: #1f497d !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.anvil-role-login-primary-btn.anvil-btn:hover,
+.anvil-role-login-primary-btn.anvil-btn:focus,
+.anvil-role-login-primary-btn.anvil-btn:active,
+.anvil-role-login-primary-btn > .anvil-btn:hover,
+.anvil-role-login-primary-btn > .anvil-btn:focus,
+.anvil-role-login-primary-btn > .anvil-btn:active,
+.anvil-role-login-primary-btn > .btn:hover,
+.anvil-role-login-primary-btn > .btn:focus,
+.anvil-role-login-primary-btn > .btn:active {
+  background-color: #16365c !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  top: 0;
+}
+
+.anvil-role-login-card .anvil-role-card .anvil-spacing-above-small {
+  margin-top: 8px;
+}
+
+.anvil-role-login-card .anvil-role-card .anvil-spacing-below-small {
+  margin-bottom: 8px;
+}
+
+.anvil-role-login-sso-btn.anvil-btn,
+.anvil-role-login-sso-btn > .anvil-btn,
+.anvil-role-login-sso-btn > .btn {
+  background-color: #ffffff !important;
+  color: #1a2b3c !important;
+  border: 1px solid #d5dbe3 !important;
+  border-radius: 8px !important;
+  min-height: 42px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.anvil-role-login-sso-btn.anvil-btn:hover,
+.anvil-role-login-sso-btn.anvil-btn:focus,
+.anvil-role-login-sso-btn.anvil-btn:active,
+.anvil-role-login-sso-btn > .anvil-btn:hover,
+.anvil-role-login-sso-btn > .anvil-btn:focus,
+.anvil-role-login-sso-btn > .anvil-btn:active,
+.anvil-role-login-sso-btn > .btn:hover,
+.anvil-role-login-sso-btn > .btn:focus,
+.anvil-role-login-sso-btn > .btn:active {
+  background-color: #f6f8fb !important;
+  color: #1a2b3c !important;
+  border-color: #b8c3d0 !important;
+  box-shadow: none !important;
+  top: 0;
+}
+
+.anvil-role-login-text-btn > .btn {
+  background: transparent !important;
+  color: #5b6775 !important;
+  border: none !important;
+  box-shadow: none !important;
+  min-height: 28px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 0;
+}
+
+.anvil-role-login-text-btn > .btn:hover,
+.anvil-role-login-text-btn > .btn:focus,
+.anvil-role-login-text-btn > .btn:active {
+  background: transparent !important;
+  color: #1f497d !important;
+  box-shadow: none !important;
+  top: 0;
+}
+
+.anvil-role-login-card .btn img {
+  width: 18px !important;
+  height: 18px !important;
+  object-fit: contain;
+  margin-right: 8px;
+}
+
+.anvil-role-login-hero {
+  position: relative !important;
+  overflow: hidden;
+  min-height: 100dvh;
+  height: 100dvh;
+  box-sizing: border-box;
+}
+
+.anvil-role-login-hero .anvil-panel-row:has(.anvil-role-login-footer-left),
+.anvil-role-login-card .anvil-panel-row:has(.anvil-role-login-footer-copy) {
+  position: absolute !important;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100% !important;
+  height: 44px !important;
+  margin: 0 !important;
+  z-index: 5;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.anvil-role-login-footer-left,
+.anvil-role-login-footer-left > .flow-panel-gutter {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+  height: 44px;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.anvil-role-login-footer-left > .flow-panel-gutter > .flow-panel-item {
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+
+.anvil-role-login-footer-left > .flow-panel-gutter > .flow-panel-item:not(:last-child)::after {
+  content: "·";
+  margin: 0 12px;
+  color: rgba(255, 255, 255, 0.28);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.anvil-role-login-hero-link,
+.anvil-role-login-hero-link a,
+.anvil-role-login-hero-link .link-text {
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-size: 12px !important;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-decoration: none !important;
+}
+
+.anvil-role-login-hero-link:hover,
+.anvil-role-login-hero-link:hover .link-text {
+  color: #ffffff !important;
+  text-decoration: none !important;
+}
+
+.anvil-role-login-footer-copy,
+.anvil-role-login-footer-copy a,
+.anvil-role-login-footer-copy .link-text {
+  color: #8b97a4 !important;
+  font-size: 12px !important;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-decoration: none !important;
+}
+
+.anvil-role-login-footer-copy {
+  height: 44px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+}
+
+.anvil-role-login-footer-copy:hover,
+.anvil-role-login-footer-copy:hover .link-text {
+  color: #5b6775 !important;
+  text-decoration: none !important;
+}
+
+@media (max-width: 768px) {
+  .anvil-role-home-header {
+    min-height: 168px !important;
+    height: 168px !important;
+  }
+
+  .anvil-role-login-card {
+    min-height: auto !important;
+    height: auto !important;
+    border-left: none;
+    padding: 12px 12px 16px;
+    background-color: #f4f6f8 !important;
+  }
+
+  .anvil-role-login-footer-left,
+  .anvil-role-login-footer-copy {
+    position: static !important;
+  }
+
+  .anvil-role-login-card .anvil-role-card {
+    width: 100%;
+    padding: 24px 20px 20px;
+  }
+
+  .anvil-role-login-heading,
+  .anvil-role-login-heading .anvil-label-text {
+    font-size: 24px !important;
+  }
+}
+
+.anvil-role-top-border {
+  border-top: 2px solid %color:iPac Primary%;
+}
+
+.anvil-role-bottom-border {
+  border-bottom: 2px solid %color:iPac Primary%;
+}
+
+.anvil-role-rounded-border {
+  border: 2px solid %color:iPac Primary% !important;
+  border-radius: 5px !important;
+}
+
+.anvil-role-rounded-border_2 {
+  border: 2px solid %color:White% !important;
+  border-radius: 10px !important;
+}
+
+.anvil-role-wide-alert {
+    width: 90vw;
+}
+
+
+/* ROles for muuri */
+.anvil-role-muuri-grid {
+  position: relative;
+  padding-left: 10%;
+  padding-right: 10%;
+/*   overflow: scroll; */
+  overflow-x: auto;
+}
+
+.anvil-role-drag-grid-footer {
+  padding-right: 4px;
+  z-index: 10;
+}
+
+.anvil-role-datagrid-col {
+  border-radius: 6px;
+  padding-left: 2px;
+  z-index: 0;
+}
+
+
+ .anvil-role-drag-grid-item {
+  padding-left: 4px;
+  display: block;
+  position: absolute;
+/*   margin-top: 0px;
+  margin-bottom: 0px;
+  padding: 0px 0px 0px 4px; */
+  z-index: 1;
+  overflow:hidden;
+}
+  
+.anvil-role-drag-grid-item.muuri-item-dragging {
+  z-index: 3;
+}
+.anvil-role-drag-grid-item.muuri-item-releasing {
+  z-index: 2;
+}
+.anvil-role-drag-grid-item.muuri-item-hidden {
+  z-index: 0;
+}
+
+.anvil-role-no-padding-panel {
+  /*overflow: auto;*/
+  border: solid 0.5px %color:Secondary 400%;
+  background-color: white;
+  margin-left: 0px;
+  margin-top: 0px;
+  margin-bottom: 0px;
+  padding: 0px 0px 0px 0px;
+}
+
+.anvil-role-horizontal-scroll {
+  display: flex;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding: 4px 4px 4px 4px;
+} 
+
+.anvil-role-xy-panel-pointer:hover {
+    cursor: pointer;
+    border-radius: 4px;
+    border: solid 0.5px %color:Secondary 400%;
+    background-color: white;
+    margin-left: 0px;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    padding: 0px 0px 0px 0px;
+    box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.14), 0 1px 1px 1px rgba(0, 0, 0, 0.2), 0 1px 1px 0 rgba(0, 0, 0, 0.12);
+    overflow:hidden;
+}
+
+.anvil-role-xy {
+  overflow: hidden;
+}
+
+.anvil-role-full-height {
+  height: 100vh;
+}
+
+.anvil-role-small-padding {
+  padding-left: 1px;
+  padding-right: 1px;
+  margin-left: 1px;
+  margin-right: 1px;
+  overflow-x: visible;
+}
+
+.anvil-role-canvas-pointer:hover {
+    cursor: pointer !important;
+}
+
+/* 
+horizontal scrolling
+*/
+.anvil-role-wide .data-grid-child-panel {
+  overflow-x: auto;
+}
+
+.anvil-role-wide .anvil-data-row-panel {
+  flex-wrap: nowrap;
+  min-width: -moz-min-content;
+  min-width: min-content;
+}
+
+.anvil-role-wide-fix .data-grid-child-panel {
+  overflow-x: auto;
+  margin-left:100px;
+}
+
+.anvil-role-wide-fix .anvil-data-row-panel {
+  flex-wrap: nowrap;
+  min-width: -moz-min-content;
+  min-width: min-content;
+  margin-left:-100px;
+}
+
+.anvil-role-fix {
+  position: absolute;
+  margin-left: 0px;
+  width: 95px;
+  word-break: break-word;
+}
+
+.anvil-role-fixed-height {
+  max-height: 450px;
+  overflow-y: scroll;
+  overflow-anchor: none;
+  overflow-x: hidden;
+}
+
+.anvil-role-bom-popup {
+  max-height: 360px;
+  overflow-y: auto;
+  width: auto !important;
+  max-width: 340px;
+  overflow-anchor: none;
+  overflow-x: hidden;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.ae-popover:has(.anvil-role-bom-popup) {
+  border-radius: 14px !important;
+  border: 1px solid #e2e8f0 !important;
+  padding: 12px 14px !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12) !important;
+  background: #fff !important;
+}
+
+.anvil-role-bom-popup .anvil-data-grid,
+.anvil-role-bom-popup .anvil-data-grid-child-panel {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.anvil-role-bom-popup .anvil-data-grid-header,
+.anvil-role-bom-popup .anvil-data-row-panel {
+  border-bottom: 1px solid #f1f5f9 !important;
+  background: transparent !important;
+  min-height: 0 !important;
+}
+
+.anvil-role-bom-popup .anvil-data-grid-header {
+  font-size: 10px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b !important;
+  display: flex !important;
+  align-items: center;
+}
+.anvil-role-bom-popup .anvil-data-grid-header > .anvil-data-row-col,
+.anvil-role-bom-popup .anvil-data-row-panel > .anvil-data-row-col {
+  min-width: 0;
+  overflow: hidden;
+}
+.anvil-role-bom-popup .anvil-data-grid-header > .anvil-data-row-col:last-child,
+.anvil-role-bom-popup .anvil-data-row-panel > .anvil-data-row-col:last-child {
+  flex: 0 0 72px !important;
+  width: 72px !important;
+  text-align: right;
+}
+
+.anvil-role-bom-popup .anvil-pagination,
+.anvil-role-bom-popup [class*="pagination"] {
+  display: none !important;
+}
+
+.anvil-role-bom-popup a,
+.anvil-role-bom-popup .anvil-role-text {
+  color: #1e3a5f !important;
+  font-weight: 650;
+  text-decoration: none !important;
+}
+
+.anvil-role-footer {
+    background:%color:iPac Primary%;
+    /* position: sticky;
+    bottom: 0;
+    width: 100%; */
+    /* z-index: 999;
+    padding: 10px;
+    box-sizing: border-box; */
+}
+
+/* 
+color every second row in data grid
+*/
+.anvil-data-grid .anvil-data-row-panel:nth-child(even) {
+  background-color: #eee;
+}
+
+
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 7px !important;
+  height: 7px !important;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 999px;
+  min-height: 24px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Small ring while the app is waiting. No logo, no halo. */
+#loadingSpinner {
+  width: 48px;
+  height: 48px;
+  top: 50%;
+  left: 50%;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  background: none !important;
+  box-shadow: none !important;
+  -webkit-mask: none;
+  mask: none;
+  border: 3px solid rgba(31, 73, 125, 0.18);
+  border-top-color: %color:iPac Primary%;
+  animation: ipac-spinner 0.7s linear infinite;
+}
+
+#loadingSpinner::before,
+#loadingSpinner::after {
+  content: none !important;
+  background: none !important;
+  animation: none !important;
+}
+
+@keyframes ipac-spinner {
+  to { transform: rotate(360deg); }
+}
+
+
+.anvil-role-link-no-hover:hover {
+  cursor: pointer;
+  background-color: transparent !important;
+}
+
+.anvil-role-flow-panel-nav {
+  border-radius: 10px;
+  margin: 2px 0;
+}
+
+.anvil-role-flow-panel-nav:hover {
+  background-color: #f0f6fc !important;
+  cursor: pointer;
+}
+
+
+/* Roles for S&0P Dashboards  */
+.anvil-role-sop-subheading {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: %color:iPac Primary%!important;
+  text-align: center!important;
+}
+
+.anvil-role-sop-headline {
+  font-size: 30px;
+  line-height: 32px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: white;
+  background: %color:iPac Primary%!important;
+  border-radius: 10px!important;
+}
+
+.anvil-role-sop-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: %color:iPac Primary%!important;
+
+}
+
+.anvil-role-sop-card {
+  padding: 1.5em;
+  background: %color:White%;
+}
+
+@media(max-width:998px) {
+.anvil-role-sop-subheading {
+  font-size: 15px;
+}
+
+.anvil-role-sop-headline {
+  font-size: 18px!important;
+}
+  
+.anvil-role-sop-text {
+font-size: 12px;
+font-weight: 600;
+color: %color:White%;
+}
+
+.anvil-role-bryntum-card{
+    overflow: hidden;
+    background-color: white;
+    border-radius: 8px;
+    padding: 12px 12px; 
+    margin-top: 0px;
+    border: 1px #1f497d30 solid;
+    box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 3px 1px -2px rgba(0, 0, 0, 0.2), 0 1px 5px 0 rgba(0, 0, 0, 0.12); 
+    flex: 1;
+    text-align: center;
+    height: 100%;
+}
+
+
+.anvil-role-scroll-in-alert {
+  overflow-y: auto;
+  max-height: 80vh;
+  max-height: calc(100vh - 200px);
+}
+    
+
+
+
+/* Scheduler */
+#scheduler-container {
+    max-height: 75vh;
+    /* overflow: hidden; */
+    display: flex;
+    flex-direction: column;
+}
+
+#app {
+    flex: 1;
+    overflow: auto;
+    max-height: 70vh;
+}
+
+.b-scheduler {
+    height: 100%;
+}
+
+.b-sch-header-row {
+    position: sticky;
+    top: 0;
+    background-color: white;
+    z-index: 2;
+}
+
+.b-sch-timeaxis-cell {
+    background-color: white;
+}
+
+.b-sch-header-timeaxis-cell {
+    background-color: white;
+}
+
+#notification {
+    position: fixed;
+    top: 5%;
+    left: 50%;
+    padding: 16px;
+    background-color: #f0ad4e;
+    color: black;
+    border-radius: 10px;
+    z-index: 999;
+}
+.hidden {
+    display: none;
+}
+.b-grid-header .b-sch-timerange.b-sch-current-time {
+    background-color: #fa5252c7 !important;
+}
+.b-timeline-subgrid .b-sch-range {
+    background-color: #ff000012 !important;
+    pointer-events: none;
+}
+.b-grid-header .b-sch-timerange {
+    flex-direction: row;
+    justify-content: center;
+    bottom: 0;
+    background-color: #ff000012 !important;
+    color: #fff;
+    line-height: 1;
+    justify-content: center;
+    bottom: -24px;
+    padding: 1.88em 0;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.b-stripe .b-timeline-subgrid .b-grid-row.b-selected.b-odd,
+.b-stripe .b-timeline-subgrid .b-grid-row.b-odd,
+.b-gridbase.b-stripe
+    .b-timeline-subgrid
+    .b-grid-row.b-selected.b-odd,
+.b-gridbase.b-stripe .b-timeline-subgrid .b-grid-row.b-odd {
+    background-color: #00d3ff4d !important;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);
+    }
+    70% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(255, 0, 0, 0);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
+    }
+}
+
+.highlighted-task {
+    background-color: #00d500 !important;
+    opacity: 1 !important;
+    border: 2px solid white !important;
+    font-weight: bold !important;
+    z-index: 10 !important;
+    /* animation: pulse 1.5s infinite; */
+    transition: all 0.3s ease-in-out;
+}
+
+.highlighted-task:hover {
+    transform: scale(1.5);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.highlighted-task .b-sch-event-content {
+    color: white !important;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+@keyframes dash {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+.highlighted-dependency {
+    stroke: #00d500 !important;
+    stroke-width: 2px !important;
+    opacity: 1 !important;
+    /* filter: drop-shadow(0 0 3px rgba(255, 0, 0, 0.7)); */
+    /* stroke-linecap: round;
+stroke-linejoin: round;
+stroke-dasharray: 10;
+stroke-dashoffset: 20; */
+    /* animation: dash 1s linear infinite; */
+}
+
+.highlighted-dependency:hover {
+    stroke-width: 2px !important;
+    /* filter: drop-shadow(0 0 5px rgba(255, 0, 0, 0.9)); */
+}
+
+.b-dependencies.b-highlighting .b-sch-event-wrap .b-sch-event,
+.b-dependencies.b-highlighting .b-sch-dependency {
+    opacity: 0.1 !important;
+}
+
+/* New rule to override opacity for highlighted elements */
+.b-dependencies.b-highlighting
+    .b-sch-event-wrap
+    .b-sch-event.highlighted-task,
+.b-dependencies.b-highlighting
+    .b-sch-dependency.highlighted-dependency,
+.b-dependencies.b-highlighting
+    .b-sch-event-wrap
+    .b-sch-event.highlighted-task.highlighted-dependency {
+    opacity: 1 !important;
+}
+
+.b-sch-dependency {
+    opacity: 0.4;
+    stroke: black !important;
+    transition: opacity 0.3s ease;
+}
+
+.b-sch-dependency.highlighted-dependency {
+    opacity: 1;
+}
+
+.b-grid-row {
+    border: none !important;
+}
+
+.anvil-role-dashed-top-border {
+    border-top: 2px dashed %color:iPac Primary%;
+}
+
+.anvil-role-bottom-border {
+    border-bottom: 2px solid %color:iPac Primary%;
+}
+
+/* ECharts HTML overlay (tooltip / legend). Series shapes are themed in JS/Python. */
+div[_echarts_instance_] {
+  font-family: Montserrat, system-ui, sans-serif;
+}
+
+/* Data Sheets */
+.anvil-role-data-sheets-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.anvil-role-data-sheets-header,
+.anvil-role-data-sheets-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  margin-bottom: 16px;
+}
+.anvil-role-data-sheets-header .anvil-role-subheading {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: #1e3a5f;
+}
+.anvil-role-data-sheets-section-title,
+.anvil-role-data-sheets-section-title .anvil-label-text {
+  font-size: 15px;
+  font-weight: 650;
+  color: #1e3a5f;
+}
+.anvil-role-data-sheet-meta,
+.anvil-role-data-sheet-meta .anvil-label-text {
+  font-size: 12px;
+  color: #64748b;
+  letter-spacing: 0;
+}
+.anvil-role-data-sheets-actions {
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.anvil-role-data-sheet-chips {
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.anvil-role-data-sheet-chip a,
+.anvil-role-data-sheet-chip-active a {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none !important;
+}
+.anvil-role-data-sheet-chip a {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #475569 !important;
+}
+.anvil-role-data-sheet-chip-active a {
+  background: #e8f1fb;
+  border: 1px solid #c5d8ef;
+  color: #1e3a5f !important;
+}
+.anvil-role-data-sheet-tab > button,
+.anvil-role-data-sheet-tab-active > button {
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 650;
+  min-height: 36px;
+  padding: 8px 14px;
+}
+.anvil-role-data-sheet-tab > button {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+.anvil-role-data-sheet-tab-active > button {
+  background: #1e3a5f;
+  border-color: #1e3a5f;
+  color: #fff;
+}
+.anvil-role-data-sheet-row {
+  align-items: center;
+  border-top: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 4px;
+  width: 100%;
+}
+.anvil-role-data-sheet-identity {
+  min-width: 180px;
+  flex: 1 1 180px;
+}
+.anvil-role-data-sheet-title,
+.anvil-role-data-sheet-title .anvil-label-text {
+  font-size: 13px;
+  font-weight: 650;
+  color: #1e293b;
+}
+.anvil-role-data-sheet-badge,
+.anvil-role-data-sheet-badge .anvil-label-text {
+  background: #eef2f7;
+  border-radius: 999px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  width: auto;
+}
+.anvil-role-data-sheet-status-wrap {
+  align-items: center;
+  flex: 1 1 200px;
+  gap: 8px;
+}
+.anvil-role-data-sheet-status-ok,
+.anvil-role-data-sheet-status-ok .anvil-label-text {
+  color: #059669;
+  font-size: 12px;
+  font-weight: 600;
+}
+.anvil-role-data-sheet-status-off,
+.anvil-role-data-sheet-status-off .anvil-label-text {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+}
+.anvil-role-data-sheet-status,
+.anvil-role-data-sheet-status .anvil-label-text {
+  color: #334155;
+  font-size: 12px;
+}
+.anvil-role-data-sheet-actions {
+  margin-left: auto;
+}
+.anvil-role-data-sheet-list > .anvil-panel-section > .anvil-panel-section-container.full-width-row {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* DSI shares Monthly card chrome so Filters + titled tables stay consistent. */
+.anvil-role-monthly-dash,
+.anvil-role-dsi-dash {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  text-align: left;
+}
+
+.anvil-role-monthly-dash > .anvil-role-card,
+.anvil-role-monthly-dash .anvil-role-card,
+.anvil-role-dsi-dash > .anvil-role-card,
+.anvil-role-dsi-dash .anvil-role-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: none;
+  padding: 10px 10px 0;
+  text-align: left;
+}
+
+.anvil-role-monthly-dash .anvil-role-subheading,
+.anvil-role-monthly-dash .anvil-role-subheading .anvil-label-text {
+  color: #1e3a5f !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.01em;
+}
+
+.anvil-role-dsi-dash .anvil-role-subheading,
+.anvil-role-dsi-dash .anvil-role-subheading .anvil-label-text {
+  color: #1e3a5f !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.01em;
+}
+
+.anvil-role-dsi-dash .anvil-role-card {
+  flex: none;
+  padding-bottom: 0 !important;
+}
+
+.anvil-role-dsi-dash .anvil-role-card > .anvil-panel-section:last-child > .anvil-panel-section-container {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Stacked tables only. On-hand does not have this role. */
+.anvil-role-dsi-no-footer,
+.anvil-role-dsi-no-footer.tabulator {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.anvil-role-dsi-no-footer .tabulator-tableholder {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: visible !important;
+}
+
+.anvil-role-dsi-no-footer .tabulator-footer {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.anvil-role-dsi-no-footer-host,
+.anvil-role-dsi-no-footer-host > .anvil-panel-section,
+.anvil-role-dsi-no-footer-host > .anvil-panel-section > .anvil-panel-section-container {
+  height: auto !important;
+  min-height: 0 !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.anvil-role-monthly-dash [class*="anvil-m3-card"],
+.anvil-role-monthly-dash .anvil-m3-card {
+  background: #e8f1fb !important;
+  border: none !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.anvil-role-monthly-dash [class*="anvil-m3-card"] [class*="anvil-m3-text"],
+.anvil-role-monthly-dash [class*="anvil-m3-card"] .anvil-label,
+.anvil-role-monthly-dash [class*="anvil-m3-card"] span {
+  color: #1e3a5f !important;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+html.designer .ia-fab,
+html.designer .ia-drawer {
+  display: none !important;
+}
+
+.ia-fab {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 40;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #1e3a5f;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ia-fab:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.16), 0 10px 28px rgba(15, 23, 42, 0.16);
+}
+
+.ia-spark {
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M12 3.6l1.45 5.5 5.5 1.45-5.5 1.45L12 17.5l-1.45-5.5-5.5-1.45 5.5-1.45z'/%3E%3Cpath d='M18.35 4.15l.6 1.85 1.85.6-1.85.6-.6 1.85-.6-1.85-1.85-.6 1.85-.6z'/%3E%3Ccircle cx='7.15' cy='16.85' r='1.05'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M12 3.6l1.45 5.5 5.5 1.45-5.5 1.45L12 17.5l-1.45-5.5-5.5-1.45 5.5-1.45z'/%3E%3Cpath d='M18.35 4.15l.6 1.85 1.85.6-1.85.6-.6 1.85-.6-1.85-1.85-.6 1.85-.6z'/%3E%3Ccircle cx='7.15' cy='16.85' r='1.05'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.ia-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, 100vw);
+  z-index: 41;
+  background: #fff;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  font-family: Montserrat, system-ui, sans-serif;
+  color: #0f172a;
+}
+
+.ia-drawer[hidden] {
+  display: none !important;
+}
+
+.ia-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ia-title {
+  font-size: 16px;
+  font-weight: 650;
+  color: #1e3a5f;
+}
+
+.ia-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.ia-close {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ia-body {
+  flex: 1 1 auto;
+  padding: 16px;
+  overflow: auto;
+}
+
+.ia-copy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #334155;
+}
+
+.ia-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ia-chip {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e3a5f;
+  cursor: pointer;
+}
+
+.ia-chip:hover {
+  background: #f0f6fc;
+}
+
+.ia-foot {
+  padding: 12px 16px 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.ia-ask {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  color: #0f172a;
+  background: #fff;
+}
+
+.ia-ask:focus {
+  outline: none;
+  border-color: #9bb6d3;
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.08);
+}
+
+.ia-send-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.ia-send {
+  background: #1e3a5f;
+  color: #fff;
+  border: 1px solid #1e3a5f;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ipac-subtabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 3px;
+}
+.ipac-subtabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: Montserrat, system-ui, sans-serif;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.ipac-subtabs button .material-symbols-outlined {
+  font-size: 16px;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20;
+}
+.ipac-subtabs button.is-on {
+  background: #1e3a5f;
+  color: #fff;
+}
+.ipac-subtabs button.is-disabled,
+.ipac-subtabs button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.anvil-html-component:has(.ipac-subtabs),
+.anvil-html-component:has(.ipac-metric-strip) {
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+}
+
+.ipac-metric-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+.ipac-metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  min-height: 0;
+}
+.ipac-metric-chip .material-symbols-outlined {
+  font-size: 16px;
+  color: #1e3a5f;
+}
+.ipac-metric-chip b {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 650;
+}
+.ipac-metric-chip strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  color: #1e3a5f;
+  line-height: 1.2;
+}
+.ipac-metric-chip.is-good strong { color: #059669; }
+.ipac-metric-chip.is-warn strong { color: #d97706; }
+.ipac-metric-chip.is-bad strong { color: #dc2626; }
+
+.anvil-role-rccp-chart-head,
+.anvil-role-rccp-chart-head.flow-panel {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  width: 100%;
+  padding: 12px 14px 2px !important;
+  margin: 0 !important;
+}
+.anvil-role-rccp-chart-head > * {
+  flex: 0 1 auto;
+  width: auto !important;
+}
+.anvil-role-rccp-chart-title,
+.anvil-role-rccp-chart-title.anvil-label {
+  font-size: 16px !important;
+  font-weight: 650 !important;
+  color: #1e3a5f !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.3;
+}
+.anvil-role-rccp-chart-sub,
+.anvil-role-rccp-chart-sub.anvil-label {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: #64748b !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  margin-left: auto !important;
+  text-align: right;
+}
+
+.anvil-role-rccp-board-head,
+.anvil-role-rccp-board-head.flow-panel {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  width: 100%;
+  padding: 10px 0 6px !important;
+  margin: 0 !important;
+}
+.anvil-role-rccp-board-head > * {
+  flex: 0 0 auto;
+  width: auto !important;
+}
+.anvil-role-rccp-board-head .anvil-html-component,
+.anvil-role-rccp-board-head .anvil-html-component > .anvil-html-content {
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+}
+.anvil-role-rccp-board-head .ipac-metric-strip {
+  width: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.anvil-role-rccp-board-head .ipac-metric-chip {
+  padding: 6px 10px;
+}
+.anvil-role-rccp-board-head .ipac-metric-chip b {
+  font-size: 9px;
+}
+.anvil-role-rccp-board-head .ipac-metric-chip strong {
+  font-size: 14px;
+}
+
+.anvil-role-imp-toggle {
+  width: auto !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+}
+
+.anvil-role-imp-toggle .anvil-html-component,
+.anvil-role-imp-toggle .anvil-html-component > .anvil-html-content {
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+}
+
+.anvil-role-filters-extra .flow-panel,
+.anvil-role-filters-extra .flow-panel.flow-spacing-tiny,
+.anvil-role-filters-extra .flow-panel.flow-spacing-small,
+.anvil-role-filters-extra .flow-panel.flow-spacing-medium {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: flex-end !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+}
+
+.anvil-role-filters-extra .flow-panel-gutter {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: flex-end !important;
+  flex: 0 0 auto !important;
+  width: auto !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  gap: 12px !important;
+}
+
+.anvil-role-filters-extra .flow-panel-gutter > .flow-panel-item {
+  display: flex !important;
+  align-items: flex-end !important;
+  margin: 0 !important;
+  width: fit-content !important;
+  max-width: none !important;
+}
+
+.anvil-role-filters-extra .anvil-role-imp-toggle,
+.anvil-role-filters-extra .anvil-role-imp-util,
+.anvil-role-filters-extra .anvil-role-product-chip {
+  width: fit-content !important;
+  max-width: none !important;
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  align-self: flex-end !important;
+}
+
+.anvil-role-filters-extra .anvil-role-imp-util,
+.anvil-role-product-toolbar .anvil-role-imp-util {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  max-width: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.anvil-role-imp-pair {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+}
+
+.anvil-role-imp-pair > .flow-panel-gutter {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+  align-items: stretch !important;
+}
+
+.anvil-role-imp-pair:not(.imp-pair-split) > .flow-panel-gutter {
+  flex-direction: column !important;
+}
+
+.anvil-role-imp-pair:not(.imp-pair-split) > .flow-panel-gutter > .flow-panel-item {
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+}
+
+.anvil-role-imp-pair.imp-pair-split,
+.imp-pair-split-row {
+  overflow: hidden !important;
+}
+
+.anvil-role-imp-pair.imp-pair-split > .flow-panel-gutter,
+.imp-pair-split-row {
+  flex-direction: row !important;
+  gap: 12px;
+}
+
+.anvil-role-imp-pair.imp-pair-split > .flow-panel-gutter > .flow-panel-item,
+.imp-pair-split-row > * {
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+}
+
+.imp-pair-split-row .tabulator,
+.anvil-role-imp-pair.imp-pair-split .tabulator {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.anvil-role-imp-pair:not(.imp-pair-split) {
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.anvil-role-card .anvil-role-imp-pair ~ .anvil-role-imp-pair {
+  border-top: 1px solid #f1f5f9;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.anvil-role-imp-pair:not(.imp-pair-split) > * {
+  overflow: visible !important;
+  width: 100% !important;
+}
+
+.tabulator-cell:hover .ipac-row-delete {
+  background: #fef2f2 !important;
+  border-color: #fecaca !important;
+  color: #dc2626 !important;
+}
+
+.rt-host .ts-card {
+  overflow: visible;
+}
+.rt-tree .node {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+.rt-loc,
+.rt-link {
+  font-family: Montserrat, system-ui, sans-serif;
+  color: #0f172a;
+}
+.rt-loc {
+  min-width: 200px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.rt-loc:hover {
+  border-color: #bfd3ea;
+  background: #f8fbff;
+}
+.rt-name {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #1e3a5f;
+}
+.rt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.rt-row span { color: #64748b; }
+.rt-row b { font-weight: 650; }
+.rt-link {
+  min-width: 120px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.rt-link .rt-row {
+  padding: 1px 0;
+  font-size: 11px;
+}
+.rt-root {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

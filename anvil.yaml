@@ -1,13 +1,184 @@
 allow_embedding: false
-metadata: {description: Cyclops App, title: Cyclops App}
+db_schema:
+  colors:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: label_code, type: string}
+    - {name: name, type: string}
+    - {name: label, type: string}
+    - {name: account, type: string}
+    - {name: shade, type: string}
+    - {name: link, type: string}
+    - {name: catalog, type: bool}
+    server: full
+    title: Colors
+  links:
+    client: none
+    columns:
+    - {name: lid_code, type: string}
+    - {name: part_code, type: string}
+    - {name: basis, type: string}
+    server: full
+    title: Lid links
+  materials:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: text, type: string}
+    - {name: supplier, type: string}
+    - {name: mfi, type: string}
+    - {name: family, type: string}
+    - {name: account, type: string}
+    - {name: invoice_code, type: string}
+    - {name: description, type: string}
+    - {name: link, type: string}
+    - {name: catalog, type: bool}
+    - {name: kind, type: string}
+    server: full
+    title: Raw materials
+  meta:
+    client: none
+    columns:
+    - {name: name, type: string}
+    - {name: seeded, type: bool}
+    server: full
+    title: Plant meta
+  molds:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: name, type: string}
+    - {name: product_code, type: string}
+    - {name: cavities, type: number}
+    - {name: shot_weight, type: number}
+    - {name: location, type: string}
+    - {name: status, type: string}
+    server: full
+    title: Molds
+  presses:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: name, type: string}
+    - {name: alias, type: string}
+    - {name: aa, type: number}
+    - {name: serial, type: string}
+    - {name: robot, type: string}
+    - {name: robot_serial, type: string}
+    - {name: euromap, type: string}
+    - {name: mounted, type: string}
+    - {name: board_location, type: string}
+    - {name: board_note, type: string}
+    - {name: changeover_min, type: number}
+    - {name: lifecycle, type: string}
+    server: full
+    title: Presses
+  products:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: name, type: string}
+    - {name: legacy_id, type: string}
+    - {name: erp_code, type: string}
+    - {name: item_type, type: string}
+    - {name: notes, type: string}
+    - {name: lifecycle, type: string}
+    - {name: only_on_cards, type: bool}
+    server: full
+    title: Products
+  recipes:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: legacy_id, type: number}
+    - {name: product_code, type: string}
+    - {name: mold_code, type: string}
+    - {name: press_code, type: string}
+    - {name: temps_json, type: string}
+    - {name: settings_json, type: string}
+    - {name: material_slots_json, type: string}
+    - {name: color_slots_json, type: string}
+    - {name: cycle, type: string}
+    - {name: cooling, type: string}
+    - {name: screw_rpm, type: string}
+    - {name: px, type: string}
+    - {name: py, type: string}
+    - {name: product_lot, type: string}
+    - {name: print_pieces, type: string}
+    - {name: print_total, type: string}
+    - {name: comment, type: string}
+    - {name: status_text, type: string}
+    - {name: trial, type: bool}
+    - {name: standard, type: bool}
+    server: full
+    title: Recipes
+  users:
+    client: none
+    columns:
+    - {name: email, type: string}
+    - {name: enabled, type: bool}
+    - {name: last_login, type: datetime}
+    - {name: role, type: string}
+    - {name: confirmed_email, type: bool}
+    - {name: signed_up, type: datetime}
+    - {name: password_hash, type: string}
+    - {name: n_password_failures, type: number}
+    - admin_ui: {order: 8, width: 200}
+      client_hidden: true
+      name: remembered_logins
+      type: simpleObject
+    - admin_ui: {order: 9, width: 200}
+      client_hidden: true
+      name: mfa
+      type: simpleObject
+    server: full
+    title: Users
+dependencies:
+- dep_id: dep_wkevhfjmozeq0f
+  resolution_hints: {app_id: ST3GINETRT4QJYDC, name: craftify-library, package_name: craftify_library}
+  version: {branch: master}
+metadata: {description: Cyclops production records, title: Cyclops}
 name: cyclops_app
+native_deps:
+  head_html: |
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,500,0,0" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/treant-js@1.0.1/Treant.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <script src="_/theme/echarts_theme.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/treant-js@1.0.1/vendor/raphael.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/treant-js@1.0.1/Treant.js"></script>
+    <script src="_/theme/cyclops-tree.js"></script>
+    <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("craftify-theme") || "light";
+        var dark = stored === "dark" || (stored === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("ipac-dark", dark);
+        document.documentElement.classList.toggle("craftify-theme-dark", dark);
+        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      } catch (e) {}
+    })();
+    </script>
+    <link rel="stylesheet" href="_/theme/craftify-full-theme.css">
+    <link rel="stylesheet" href="_/theme/tabulator_styles.css">
+    <link rel="stylesheet" href="_/theme/coach.css">
+    <link rel="stylesheet" href="_/theme/craftify-theme.css">
+    <link rel="stylesheet" href="_/theme/cyclops.css">
 package_name: cyclops_app
 runtime_options:
   client_version: '3'
-  server_spec: {base: python314}
+  server_spec: {base: python312}
   version: 3
 services:
 - client_config: {enable_v2: true}
   server_config: {}
   source: /runtime/services/tables.yml
-startup: {module: Form1, type: form}
+- client_config: {allow_remember_me: true, allow_signup: true, confirm_email: false, enable_automatic_sign_in: true, mfa_timeout_days: 0, remember_me_days: 30, require_mfa: false, use_email: true}
+  server_config: {user_table: users}
+  source: /runtime/services/anvil/users.yml
+startup: {module: launch, type: module}
+startup_form: null

@@ -1,0 +1,664 @@
+/* Shared Anvil v3 controls + buttons. Loaded last so it wins over runner + full-theme. */
+
+input.anvil-form-control:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+input.anvil-text-box,
+input.anvil-component:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]) {
+  -webkit-appearance: none;
+  appearance: textfield;
+  box-sizing: border-box !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  padding: 0 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #0f172a !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  font-family: inherit !important;
+  line-height: 30px !important;
+  box-shadow: none !important;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.anvil-datepicker,
+.anvil-component.anvil-datepicker,
+.anvil-dropdown {
+  display: flex !important;
+  align-items: center;
+  box-sizing: border-box !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  padding: 0 8px 0 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  overflow: hidden;
+}
+
+.anvil-dropdown select,
+.anvil-dropdown select.form-control,
+.anvil-datepicker input,
+.anvil-datepicker input.form-control,
+.anvil-datepicker input.anvil-form-control,
+.anvil-datepicker input.anvil-component,
+.anvil-datepicker input.anvil-form-control:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+.anvil-datepicker input.anvil-component:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]) {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 30px !important;
+  min-height: 0 !important;
+  max-height: 30px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  line-height: 30px !important;
+}
+
+.anvil-datepicker > i,
+.anvil-datepicker > .fa {
+  flex: 0 0 16px;
+  margin: 0 0 0 8px !important;
+  color: #64748b !important;
+}
+
+.anvil-button {
+  display: inline-block !important;
+  width: auto !important;
+  max-width: none !important;
+  vertical-align: middle;
+}
+
+.anvil-button > .anvil-btn,
+button.anvil-btn,
+.btn,
+.btn-default,
+.cs-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: 999px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #fff !important;
+  color: #1e3a5f !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  box-shadow: none !important;
+  text-decoration: none !important;
+  cursor: pointer;
+}
+
+.anvil-button > .anvil-btn:hover,
+button.anvil-btn:hover,
+.btn:hover,
+.cs-btn:hover {
+  background: #f0f6fc !important;
+  border-color: #9bb6d3 !important;
+  color: #1e3a5f !important;
+}
+
+.anvil-role-primary-color > .anvil-btn,
+.anvil-button.anvil-role-primary-color > .anvil-btn,
+.btn-primary,
+.cs-btn-primary {
+  background: #1e3a5f !important;
+  border-color: #1e3a5f !important;
+  color: #fff !important;
+}
+
+.anvil-role-primary-color > .anvil-btn:hover,
+.anvil-button.anvil-role-primary-color > .anvil-btn:hover,
+.btn-primary:hover,
+.cs-btn-primary:hover {
+  background: #0f2744 !important;
+  border-color: #0f2744 !important;
+  color: #fff !important;
+}
+
+a.anvil-file-loader,
+.file-loader,
+.file-loader > label {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: auto !important;
+  min-width: 220px !important;
+  max-width: 320px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 0 16px !important;
+  border: 1.5px dashed #9bb6d3 !important;
+  border-radius: 12px !important;
+  background: #f8fafc !important;
+  color: #1e3a5f !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  line-height: 1 !important;
+  text-decoration: none !important;
+  box-shadow: none !important;
+}
+
+a.anvil-file-loader .fa,
+a.anvil-file-loader i,
+.file-loader > label .fa {
+  font-size: 15px !important;
+  color: #1e3a5f !important;
+}
+
+a.anvil-file-loader:hover,
+.file-loader > label:hover {
+  background: #e8f1fb !important;
+  border-color: #1e3a5f !important;
+}
+
+.daterangepicker,
+.datepicker,
+.datepicker-dropdown,
+.datepicker.dropdown-menu {
+  z-index: 200 !important;
+  box-sizing: border-box !important;
+  width: auto !important;
+  min-width: 280px !important;
+  padding: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 16px !important;
+  background: #fff !important;
+  box-shadow: 0 18px 48px rgba(15, 39, 68, 0.16) !important;
+  font-family: Montserrat, system-ui, sans-serif !important;
+}
+
+.daterangepicker:before,
+.daterangepicker:after,
+.datepicker:before,
+.datepicker:after {
+  display: none !important;
+}
+
+.daterangepicker .drp-calendar,
+.daterangepicker .drp-calendar.left {
+  max-width: none !important;
+  padding: 0 !important;
+}
+
+.daterangepicker .calendar-table {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.daterangepicker table,
+.datepicker table {
+  border-collapse: separate !important;
+  border-spacing: 2px !important;
+}
+
+.daterangepicker th,
+.datepicker th {
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  color: #64748b !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.daterangepicker th.month {
+  padding: 0 4px 8px !important;
+}
+
+.daterangepicker select.monthselect,
+.daterangepicker select.yearselect {
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  margin: 0 3px !important;
+  padding: 0 8px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  font: inherit !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  line-height: 26px !important;
+}
+
+.daterangepicker th.prev,
+.daterangepicker th.next,
+.datepicker th.prev,
+.datepicker th.next {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 8px !important;
+}
+
+.daterangepicker th.prev:hover,
+.daterangepicker th.next:hover {
+  background: #e8f1fb !important;
+}
+
+.daterangepicker td,
+.datepicker td {
+  width: 34px !important;
+  height: 34px !important;
+  line-height: 34px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #0f172a !important;
+  background: transparent !important;
+}
+
+.daterangepicker td.available:hover,
+.datepicker td.day:hover {
+  background: #e8f1fb !important;
+  color: #1e3a5f !important;
+}
+
+.daterangepicker td.off,
+.datepicker td.old,
+.datepicker td.new {
+  color: #cbd5e1 !important;
+  background: transparent !important;
+}
+
+.daterangepicker td.today,
+.datepicker td.today {
+  box-shadow: inset 0 0 0 1px #1e3a5f;
+}
+
+.daterangepicker td.active,
+.daterangepicker td.active:hover,
+.datepicker td.active,
+.datepicker td.active:hover {
+  background: #1e3a5f !important;
+  color: #fff !important;
+  text-shadow: none !important;
+}
+
+/* Shared light/dark tokens. Dark class is html.ipac-dark (also craftify-theme-dark). */
+
+html.ipac-dark,
+html.craftify-theme-dark,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e7eef7;
+  --muted: #94a3b8;
+  --line: #2a3a52;
+  --panel: #151e2e;
+  --sidebar: #111a2e;
+  --page: #0b1220;
+  --accent: #93c5fd;
+  --accent-soft: #1e3a5f;
+  --hover: #1a2740;
+  --navy: #93c5fd;
+}
+
+html.ipac-dark,
+html.ipac-dark body,
+html.ipac-dark .anvil-root-container,
+html.ipac-dark .structure,
+html.ipac-dark .nav-holder,
+html.ipac-dark .nav-holder .content,
+html.ipac-dark .content {
+  background: #0b1220 !important;
+  color: #e7eef7;
+}
+
+html.ipac-dark .nav-holder .left-nav,
+html.ipac-dark .left-nav-placeholder {
+  background-color: #111a2e !important;
+  border-right-color: #2a3a52 !important;
+}
+
+html.ipac-dark .left-nav-footer {
+  background: #111a2e !important;
+  border-top-color: #2a3a52 !important;
+}
+
+html.ipac-dark .nav-collapse,
+html.ipac-dark .sidebar-toggle {
+  background: #151e2e !important;
+  border-color: #2a3a52 !important;
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .nav-collapse:hover {
+  background: #1a2740 !important;
+  border-color: #3b4d68 !important;
+}
+
+html.ipac-dark .left-nav a,
+html.ipac-dark .left-nav a .link-text,
+html.ipac-dark .left-nav .anvil-component-icon,
+html.ipac-dark .left-nav i.fa {
+  color: #dbe4f0 !important;
+}
+
+html.ipac-dark .left-nav a.anvil-role-selected,
+html.ipac-dark .left-nav a.anvil-role-selected .link-text,
+html.ipac-dark .left-nav a.anvil-role-selected .anvil-component-icon {
+  background: #1e3a5f !important;
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .left-nav a:hover {
+  background: #1a2740 !important;
+}
+
+html.ipac-dark .nav-brand-text strong,
+html.ipac-dark .bc-brand-text strong {
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .nav-brand-text span,
+html.ipac-dark .bc-brand-text span {
+  color: #94a3b8 !important;
+}
+
+html.ipac-dark .kc-card,
+html.ipac-dark .cc-card,
+html.ipac-dark .ts-card,
+html.ipac-dark .bc-phase,
+html.ipac-dark .anvil-role-card,
+html.ipac-dark .anvil-role-filters-bar,
+html.ipac-dark .anvil-role-configure-setting,
+html.ipac-dark .anvil-role-configure-header,
+html.ipac-dark .anvil-role-configure-table-card {
+  background: #151e2e !important;
+  border-color: #2a3a52 !important;
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .kc-page,
+html.ipac-dark .cc-page,
+html.ipac-dark .ts-page,
+html.ipac-dark .kc-card strong,
+html.ipac-dark .cc-head h3,
+html.ipac-dark .ts-head h3,
+html.ipac-dark .bc-page-head h2,
+html.ipac-dark .bc-progress-head strong,
+html.ipac-dark .bc-phase-kcal,
+html.ipac-dark .bc-week,
+html.ipac-dark .bc-dl dd {
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .kc-card b,
+html.ipac-dark .kc-card em,
+html.ipac-dark .cc-head p,
+html.ipac-dark .ts-head p,
+html.ipac-dark .bc-page-desc,
+html.ipac-dark .bc-eyebrow,
+html.ipac-dark .bc-note,
+html.ipac-dark .bc-dl dt,
+html.ipac-dark .bc-muted {
+  color: #94a3b8 !important;
+}
+
+html.ipac-dark .kc-icon,
+html.ipac-dark .kc-card:not(.is-good):not(.is-warn):not(.is-bad) strong {
+  color: #93c5fd !important;
+}
+
+html.ipac-dark .ts-head,
+html.ipac-dark .cc-head {
+  border-bottom-color: #2a3a52 !important;
+}
+
+html.ipac-dark .am-menu,
+html.ipac-dark .am-box,
+html.ipac-dark .am-item {
+  background: #151e2e !important;
+  border-color: #2a3a52 !important;
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .am-item:hover,
+html.ipac-dark .am-box:hover {
+  background: #1a2740 !important;
+}
+
+html.ipac-dark .am-email,
+html.ipac-dark .am-item .am-ico {
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .am-ava {
+  background: #1e3a5f !important;
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .am-rule {
+  background: #2a3a52 !important;
+}
+
+html.ipac-dark .btn,
+html.ipac-dark .btn-default,
+html.ipac-dark [class*="anvil-m3-button"]:not(.anvil-role-ae-ms-btn),
+html.ipac-dark .anvil-button > .anvil-btn,
+html.ipac-dark button.anvil-btn,
+html.ipac-dark .cs-btn,
+html.ipac-dark .bc-row-edit {
+  background: #151e2e !important;
+  border-color: #2a3a52 !important;
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .btn:hover,
+html.ipac-dark .anvil-button > .anvil-btn:hover,
+html.ipac-dark button.anvil-btn:hover,
+html.ipac-dark .cs-btn:hover,
+html.ipac-dark .bc-row-edit:hover {
+  background: #1a2740 !important;
+  border-color: #3b4d68 !important;
+}
+
+html.ipac-dark .anvil-role-primary-color > .anvil-btn,
+html.ipac-dark .anvil-button.anvil-role-primary-color > .anvil-btn,
+html.ipac-dark .btn-primary,
+html.ipac-dark .cs-btn-primary {
+  background: #1e3a5f !important;
+  border-color: #1e3a5f !important;
+  color: #fff !important;
+}
+
+html.ipac-dark .form-control,
+html.ipac-dark select,
+html.ipac-dark textarea,
+html.ipac-dark input[type="text"],
+html.ipac-dark input[type="number"],
+html.ipac-dark input[type="email"],
+html.ipac-dark input[type="password"],
+html.ipac-dark input[type="date"],
+html.ipac-dark input[type="search"],
+html.ipac-dark .anvil-textbox input,
+html.ipac-dark .anvil-text-area textarea,
+html.ipac-dark .anvil-dropdown select,
+html.ipac-dark .anvil-m3-textbox,
+html.ipac-dark .anvil-m3-textinput-input,
+html.ipac-dark input.anvil-form-control,
+html.ipac-dark input.anvil-component:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+html.ipac-dark textarea.anvil-component,
+html.ipac-dark .anvil-component select,
+html.ipac-dark .anvil-datepicker,
+html.ipac-dark .anvil-dropdown,
+html.ipac-dark .anvil-dropdown .anvil-dropdown-outlined {
+  background-color: #121a2b !important;
+  color: #e7eef7 !important;
+  -webkit-text-fill-color: #e7eef7 !important;
+  border-color: #2a3a52 !important;
+  caret-color: #e7eef7;
+}
+
+html.ipac-dark .content label,
+html.ipac-dark .content .anvil-label,
+html.ipac-dark .content .anvil-checkbox label,
+html.ipac-dark .bc-field-label,
+html.ipac-dark .bc-rules {
+  color: #dbe4f0 !important;
+}
+
+html.ipac-dark .tabulator,
+html.ipac-dark .tabulator-header,
+html.ipac-dark .tabulator-tableholder,
+html.ipac-dark .tabulator-footer {
+  background-color: #151e2e !important;
+  border-color: #2a3a52 !important;
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .tabulator-col,
+html.ipac-dark .tabulator-col-content,
+html.ipac-dark .tabulator .tabulator-header .tabulator-col {
+  background-color: #111a2e !important;
+  color: #dbe4f0 !important;
+  border-color: #2a3a52 !important;
+}
+
+html.ipac-dark .tabulator-row,
+html.ipac-dark .tabulator-row .tabulator-cell {
+  background-color: #151e2e !important;
+  color: #e7eef7 !important;
+  border-color: #2a3a52 !important;
+}
+
+html.ipac-dark .tabulator-row.tabulator-row-even .tabulator-cell {
+  background-color: #121a2b !important;
+}
+
+html.ipac-dark .tabulator-row.tabulator-selectable:hover .tabulator-cell {
+  background-color: #1a2740 !important;
+}
+
+html.ipac-dark .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+html.ipac-dark .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select {
+  background-color: #121a2b !important;
+  color: #e7eef7 !important;
+  border-color: #2a3a52 !important;
+}
+
+html.ipac-dark .tabulator-row.bc-week-current,
+html.ipac-dark .tabulator-row.bc-week-current .tabulator-cell {
+  background-color: #1a2740 !important;
+}
+
+html.ipac-dark .tabulator-cell.bc-col-target {
+  background: #121a2b !important;
+}
+
+html.ipac-dark .tabulator-cell.bc-col-actual {
+  background: #1e3a5f !important;
+}
+
+html.ipac-dark .bc-week-badge,
+html.ipac-dark .bc-macros-chip,
+html.ipac-dark .bc-pill-muted {
+  background: #1a2740 !important;
+  border-color: #2a3a52 !important;
+  color: #dbe4f0 !important;
+}
+
+html.ipac-dark .bc-progress-track {
+  background: #1a2740 !important;
+}
+
+html.ipac-dark .bc-progress-fill {
+  background: #93c5fd !important;
+}
+
+html.ipac-dark a.anvil-file-loader,
+html.ipac-dark .file-loader,
+html.ipac-dark .file-loader > label {
+  background: #121a2b !important;
+  border-color: #3b4d68 !important;
+  color: #93c5fd !important;
+}
+
+html.ipac-dark .daterangepicker,
+html.ipac-dark .datepicker,
+html.ipac-dark .datepicker-dropdown {
+  background: #151e2e !important;
+  border-color: #2a3a52 !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.ipac-dark .daterangepicker th,
+html.ipac-dark .daterangepicker td {
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .daterangepicker td.off {
+  color: #475569 !important;
+}
+
+html.ipac-dark .daterangepicker select.monthselect,
+html.ipac-dark .daterangepicker select.yearselect {
+  background: #121a2b !important;
+  border-color: #2a3a52 !important;
+  color: #e7eef7 !important;
+}
+
+html.ipac-dark .daterangepicker td.available:hover,
+html.ipac-dark .daterangepicker th.prev:hover,
+html.ipac-dark .daterangepicker th.next:hover {
+  background: #1a2740 !important;
+  color: #93c5fd !important;
+}
+
+html.ipac-dark .daterangepicker td.active,
+html.ipac-dark .daterangepicker td.active:hover {
+  background: #1e3a5f !important;
+  color: #fff !important;
+}
+
+html.ipac-dark .anvil-datepicker,
+html.ipac-dark .anvil-component.anvil-datepicker {
+  background: #121a2b !important;
+  border-color: #2a3a52 !important;
+}
+
+html.ipac-dark .anvil-datepicker input,
+html.ipac-dark .anvil-datepicker input.form-control,
+html.ipac-dark .anvil-datepicker input.anvil-form-control,
+html.ipac-dark .anvil-datepicker input.anvil-component,
+html.ipac-dark .anvil-datepicker input.anvil-form-control:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+html.ipac-dark .anvil-datepicker input.anvil-component:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]) {
+  color: #e7eef7 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html.ipac-dark .anvil-datepicker .fa,
+html.ipac-dark .anvil-datepicker i,
+html.ipac-dark .anvil-datepicker .fa::before,
+html.ipac-dark .anvil-datepicker i::before {
+  color: #94a3b8 !important;
+}

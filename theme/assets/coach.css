@@ -1,0 +1,475 @@
+/* Body coach on the Craftify standard page. Tokens match iPac (theme.css). */
+
+:root {
+  --bc-navy: #1e3a5f;
+  --bc-navy-deep: #0f2744;
+  --bc-ink: #0f172a;
+  --bc-muted: #64748b;
+  --bc-line: #e2e8f0;
+  --bc-soft: #e8f1fb;
+  --bc-page: #f6f8fb;
+  --bc-ok: #059669;
+  --bc-warn: #d97706;
+  --bc-bad: #dc2626;
+}
+
+html, body, .anvil-root-container {
+  height: 100%;
+  min-height: 100dvh;
+}
+body,
+.nav-holder .content {
+  background: var(--bc-page);
+}
+.structure {
+  min-height: 100dvh;
+  height: 100%;
+}
+.nav-holder {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.nav-holder .content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+}
+
+/* ---------- Content area ---------- */
+.anvil-role-bc-content {
+  padding: 16px 20px 16px !important;
+  max-width: none !important;
+  width: 100% !important;
+  box-sizing: border-box;
+  min-height: 100%;
+  flex: 1 1 auto;
+}
+.anvil-role-bc-content,
+.anvil-role-bc-content > .anvil-panel-section,
+.anvil-role-bc-content > .anvil-panel-section > .anvil-panel-section-container,
+.anvil-role-bc-content .bc-stack,
+.anvil-role-bc-content .ts-page,
+.anvil-role-bc-content .ts-card,
+.anvil-role-bc-content .tabulator {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.bc-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.bc-grid {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  align-items: stretch;
+}
+.bc-grid > .bc-grid-item:empty,
+.bc-grid > .bc-grid-item:not(:has(.anvil-component)) { display: none !important; }
+.bc-grid > .bc-grid-item { min-width: 0; display: flex; flex-direction: column; }
+.bc-grid > .bc-grid-item > .anvil-component { flex: 1 1 auto; }
+.bc-grid > .bc-grid-item .ts-page,
+.bc-grid > .bc-grid-item .ts-card,
+.bc-grid > .bc-grid-item .cc-page,
+.bc-grid > .bc-grid-item .cc-card { height: 100%; }
+
+@media (max-width: 900px) {
+  .bc-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ---------- Page header ---------- */
+.bc-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 4px 0 2px;
+  font-family: Montserrat, system-ui, sans-serif;
+}
+.bc-page-titles { flex: 1 1 320px; min-width: 0; }
+.bc-eyebrow {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bc-muted);
+}
+.bc-eyebrow:empty { display: none; }
+.bc-page-head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--bc-navy);
+  line-height: 1.2;
+}
+.bc-page-desc {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--bc-muted);
+  max-width: 760px;
+}
+.bc-page-desc:empty { display: none; }
+.bc-page-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.bc-page-actions.is-empty { display: none; }
+
+/* ---------- Section card body content ---------- */
+.ts-body.is-padded > .anvil-component + .anvil-component { margin-top: 12px; }
+.ts-body .tabulator {
+  border: 0 !important;
+  border-radius: 0 !important;
+}
+
+.bc-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--bc-muted);
+  font-family: Montserrat, system-ui, sans-serif;
+}
+.bc-note-ink { color: var(--bc-ink); }
+
+.bc-dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px 20px;
+  margin: 0;
+  font-family: Montserrat, system-ui, sans-serif;
+}
+.bc-dl dt {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--bc-muted);
+}
+.bc-dl dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bc-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.bc-rules {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #334155;
+  font-family: Montserrat, system-ui, sans-serif;
+}
+.bc-rules li + li { margin-top: 6px; }
+
+/* Body fat progress */
+.bc-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: Montserrat, system-ui, sans-serif;
+}
+.bc-progress-head strong { font-size: 22px; font-weight: 650; color: var(--bc-navy); letter-spacing: -0.02em; }
+.bc-progress-head span { font-size: 12px; color: var(--bc-muted); font-variant-numeric: tabular-nums; }
+.bc-progress-track {
+  height: 8px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: #eef2f6;
+  overflow: hidden;
+}
+.bc-progress-fill { height: 100%; border-radius: 999px; background: var(--bc-navy); }
+
+/* Phase cards */
+.bc-phase {
+  height: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid var(--bc-line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-family: Montserrat, system-ui, sans-serif;
+}
+.bc-phase.is-current { border-color: var(--bc-navy); box-shadow: inset 0 0 0 1px var(--bc-navy); }
+.bc-phase-dates { margin: 10px 0 0; font-size: 14px; font-weight: 600; color: var(--bc-ink); }
+.bc-phase-kcal { margin: 4px 0 0; font-size: 13px; font-weight: 600; color: var(--bc-navy); font-variant-numeric: tabular-nums; }
+.bc-phase-summary { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--bc-muted); }
+
+/* ---------- Form fields ---------- */
+.bc-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px 16px;
+}
+.bc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: Montserrat, system-ui, sans-serif;
+}
+.bc-field-label {
+  display: flex;
+  align-items: flex-end;
+  min-height: 32px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #334155;
+}
+.bc-field-input {
+  display: flex;
+  align-items: stretch;
+  min-height: 32px;
+}
+.bc-field-input:has(.cf-drop) {
+  min-height: 112px;
+}
+.bc-field-hint {
+  font-size: 11px;
+  color: var(--bc-muted);
+  line-height: 1.4;
+}
+.bc-field-hint:empty { display: none; }
+.bc-field,
+.bc-field-input { width: 100%; }
+.bc-field-input > .anvil-component,
+.bc-field-input .anvil-datepicker,
+.bc-field-input .anvil-dropdown,
+.bc-field-input .anvil-form-control,
+.bc-field-input select,
+.bc-field-input input {
+  margin: 0 !important;
+  width: 100% !important;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.bc-field-input > a.anvil-file-loader,
+.bc-field-input > .anvil-file-loader,
+.bc-field-input .file-loader {
+  width: auto !important;
+  max-width: max-content !important;
+}
+.bc-actions-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ---------- Buttons: theme styles .btn; Anvil v3 renders .anvil-btn ---------- */
+.content .anvil-button > .anvil-btn {
+  font-family: inherit;
+  box-sizing: border-box;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 14px;
+  height: 32px;
+  min-height: 32px;
+  line-height: 30px;
+  letter-spacing: 0;
+  text-transform: none;
+  border: 1px solid var(--bc-line);
+  background: #fff;
+  color: var(--bc-navy);
+  box-shadow: none;
+}
+.content .anvil-button > .anvil-btn:hover {
+  background: #f0f6fc;
+  border-color: #9bb6d3;
+  color: var(--bc-navy);
+}
+.content .anvil-role-primary-color > .anvil-btn {
+  background: var(--bc-navy);
+  border-color: var(--bc-navy);
+  color: #fff;
+}
+.content .anvil-role-primary-color > .anvil-btn:hover {
+  background: var(--bc-navy-deep);
+  border-color: var(--bc-navy-deep);
+  color: #fff;
+}
+.content .ts-body > .anvil-button,
+.content .ts-body .anvil-button.anvil-align-center {
+  display: inline-block !important;
+  width: auto !important;
+  text-align: left !important;
+}
+.content .anvil-checkbox label { font-size: 13px; color: #334155; }
+
+/* ---------- Sidebar ---------- */
+.bc-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 16px 10px;
+  font-family: Montserrat, system-ui, sans-serif;
+}
+.bc-brand-mark {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--bc-navy);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.bc-brand-text strong { display: block; font-size: 14px; font-weight: 700; color: var(--bc-navy); line-height: 1.2; }
+.bc-brand-text span { display: block; font-size: 11px; color: var(--bc-muted); margin-top: 2px; }
+.structure.nav-collapsed .bc-brand { padding: 4px 0 14px; justify-content: center; }
+.structure.nav-collapsed .bc-brand-text { display: none; }
+
+.left-nav-footer .anvil-role-sidebar-actions { padding: 8px 10px 12px; }
+.left-nav a.anvil-role-selected {
+  background: var(--bc-soft);
+  font-weight: 650;
+}
+
+/* ---------- Weekly tracker cells (bootstrap3 Tabulator, iPac compact rows) ---------- */
+.bc-empty { color: #cbd5e1; }
+.bc-week { font-weight: 650; color: var(--bc-navy); font-variant-numeric: tabular-nums; }
+.bc-ico { width: 16px; height: 16px; display: inline-block; vertical-align: -3px; }
+.bc-week-badge {
+  display: inline-flex;
+  min-width: 2.25rem;
+  justify-content: center;
+  border-radius: 6px;
+  background: #f1f5f9;
+  border: 1px solid var(--bc-line);
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bc-navy);
+  font-variant-numeric: tabular-nums;
+}
+.bc-dexa-mark {
+  display: inline-flex;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #5b21b6;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.bc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 2px 8px 2px 6px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.bc-pill-cut { color: var(--bc-navy); background: var(--bc-soft); }
+.bc-pill-reverse { color: #92400e; background: #fef3c7; }
+.bc-pill-bulk { color: #065f46; background: #d1fae5; }
+.bc-pill-recomp { color: #5b21b6; background: #ede9fe; }
+.bc-pill-muted { color: var(--bc-muted); background: #f1f5f9; }
+.bc-pill-accent { color: var(--bc-navy); background: var(--bc-soft); }
+.bc-pill-warn { color: #92400e; background: #fef3c7; }
+.bc-pill-danger { color: #991b1b; background: #fee2e2; }
+.bc-pill-ok { color: #065f46; background: #d1fae5; }
+.bc-target,
+.bc-val-target { color: var(--bc-muted); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 500; }
+.bc-actual,
+.bc-val-actual { color: var(--bc-ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+.bc-delta { font-weight: 650; font-variant-numeric: tabular-nums; }
+.bc-delta-good { color: var(--bc-ok); }
+.bc-delta-bad { color: var(--bc-warn); }
+.bc-kcal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--bc-navy);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.bc-macros { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.bc-macros-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--bc-line);
+  background: #f8fafc;
+  padding: 2px 7px;
+  color: var(--bc-ink);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.bc-macros-chip .bc-ico { color: var(--bc-navy); }
+
+.tabulator-row.bc-week-current,
+.tabulator-row.bc-week-current .tabulator-cell {
+  background-color: #f0f6fc !important;
+}
+.tabulator-row.bc-week-current .tabulator-cell:first-child {
+  box-shadow: inset 3px 0 0 var(--bc-navy);
+}
+.bc-row-edit {
+  appearance: none;
+  border: 1px solid var(--bc-line);
+  background: #fff;
+  color: var(--bc-navy);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  height: 24px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.bc-row-edit:hover {
+  background: var(--bc-soft);
+  border-color: #9bb6d3;
+}
+.tabulator-cell.bc-col-edit {
+  text-align: right;
+}
+.tabulator .tabulator-header .tabulator-col.bc-col-group-actual .tabulator-col-title { color: var(--bc-navy); }
+.tabulator-cell.bc-col-target { background: #f8fafc !important; }
+.tabulator-cell.bc-col-actual { background: #e8f1fb !important; }
+
+html.ipac-dark {
+  --bc-navy: #93c5fd;
+  --bc-navy-deep: #bfdbfe;
+  --bc-ink: #e7eef7;
+  --bc-muted: #94a3b8;
+  --bc-line: #2a3a52;
+  --bc-soft: #1e3a5f;
+  --bc-page: #0b1220;
+}
+
+html.ipac-dark body,
+html.ipac-dark .nav-holder .content {
+  background: var(--bc-page);
+}
+
+html.ipac-dark .left-nav a.anvil-role-selected {
+  background: var(--bc-soft);
+}

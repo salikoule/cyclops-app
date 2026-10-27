@@ -1,0 +1,1358 @@
+
+/* Customise tabulator scrollbars */
+.tabulator{
+    border-radius: 10px;
+    background-color: white !important;
+    font-size: 12px !important;
+}
+
+/* Modern header filter inputs — replaces default browser inset textbox look */
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter {
+  padding: 3px 0 0;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter select {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  font-family: inherit;
+  color: #334155;
+  background-color: #fff;
+  border: 1px solid #d1d9e6;
+  border-radius: 6px;
+  box-shadow: none;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input:hover,
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter select:hover {
+  border-color: #aebcca;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input:focus,
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  background-color: #fff;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input:disabled,
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter select:disabled {
+  background-color: #f1f5f9;
+  color: #94a3b8;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.tabulator-page[data-page='first'], .tabulator-page[data-page='last'] {
+  display: none !important;
+}
+
+.tabulator .tabulator-tableholder {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.tabulator .tabulator-tableholder::-webkit-scrollbar {
+  width: 7px !important;
+  height: 7px !important;
+  background: transparent !important;
+}
+
+.tabulator .tabulator-tableholder::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.tabulator .tabulator-tableholder::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1 !important;
+  border-radius: 999px !important;
+}
+
+.tabulator .tabulator-tableholder::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8 !important;
+}
+
+.tabulator .tabulator-tableholder::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/*
+ * RCCP metrics uses dataTree; Tabulator keeps a short fixed header row so
+ * headerWordWrap titles (e.g. "Jun 01" / "2025") get clipped. Orders has no
+ * dataTree and does not hit this. Allow header cells to grow vertically.
+ */
+.tabulator-rccp-metrics .tabulator-header .tabulator-col:not(.rccp-frozen-period) {
+  height: auto !important;
+  min-height: 42px;
+}
+.tabulator-rccp-metrics .tabulator-header .tabulator-col:not(.rccp-frozen-period) .tabulator-col-content {
+  height: auto !important;
+  min-height: 38px;
+  padding: 4px 6px;
+  white-space: normal;
+  overflow: visible !important;
+}
+.tabulator-rccp-metrics .tabulator-header .tabulator-col:not(.rccp-frozen-period) .tabulator-col-title {
+  white-space: normal;
+  line-height: 1.25;
+  overflow: visible !important;
+}
+.tabulator-rccp-metrics .tabulator-header .tabulator-col.rccp-frozen-period {
+  background-color: #ede9fe !important;
+}
+.tabulator-rccp-metrics .tabulator-header .tabulator-col.rccp-frozen-period .tabulator-col-content {
+  height: 100% !important;
+  min-height: 100% !important;
+  padding: 4px 6px;
+  background-color: #ede9fe !important;
+  color: #5b21b6;
+  white-space: normal;
+  overflow: visible !important;
+}
+.tabulator-rccp-metrics .tabulator-header .tabulator-col.rccp-frozen-period .tabulator-col-title {
+  white-space: normal;
+  line-height: 1.25;
+  color: #5b21b6;
+}
+
+
+/* Gross Load drill-down cells — same link look as orders Prod. ID (link_appearance) */
+.tabulator-rccp-metrics .tabulator-cell.rccp-co-drilldown-link {
+  text-decoration: underline !important;
+  color: #279195 !important;
+  cursor: pointer;
+}
+
+/* RCCP orders breakdown tooltip (HTML from rccp_shared.build_rccp_order_breakdown_tooltip_html) */
+.tabulator-rccp-orders ~ .tabulator-tooltip .rccp-orders-tooltip,
+.tabulator.tabulator-rccp-orders ~ .tabulator-tooltip .rccp-orders-tooltip {
+  border: 1px solid #E2E8F0;
+  font-family: inherit;
+  line-height: 1.35;
+}
+
+/* Primary Calculate action — RCCPForm & Capacity Overview footers */
+button.ipac-calc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4338ca 0%, #6366f1 45%, #7c3aed 100%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow:
+    0 2px 10px rgba(79, 70, 229, 0.38),
+    0 1px 2px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+  white-space: nowrap;
+}
+
+button.ipac-calc-btn:hover {
+  filter: brightness(1.07);
+  box-shadow:
+    0 4px 16px rgba(79, 70, 229, 0.48),
+    0 2px 4px rgba(15, 23, 42, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+button.ipac-calc-btn:active {
+  filter: brightness(0.96);
+  transform: translateY(0);
+  box-shadow:
+    0 1px 6px rgba(79, 70, 229, 0.32),
+    inset 0 1px 2px rgba(15, 23, 42, 0.15);
+}
+
+button.ipac-calc-btn .fa-bolt {
+  font-size: 13px;
+  opacity: 0.95;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.45));
+}
+
+button.ipac-calc-btn .ipac-calc-btn-label {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Secondary footer actions — RCCP calendar / download / clear-filters pattern */
+button.ipac-footer-btn,
+.tabulator .tabulator-footer button:not(.ipac-calc-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  margin: 0;
+  height: 25px;
+  min-height: 25px;
+  padding: 0 10px;
+  border: 1px solid #ccd5df;
+  border-radius: 4px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Icon-only buttons — square (equal width and height) */
+button.ipac-footer-btn:has(> .fa:only-child),
+.tabulator .tabulator-footer button:not(.ipac-calc-btn):has(> .fa:only-child) {
+  width: 35px;
+  min-width: 35px;
+  padding: 0;
+}
+
+button.ipac-footer-btn:hover,
+.tabulator .tabulator-footer button:not(.ipac-calc-btn):hover {
+  border-color: #aebcca;
+  background: #f8fafc;
+}
+
+button.ipac-footer-btn:focus,
+.tabulator .tabulator-footer button:not(.ipac-calc-btn):focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+button.ipac-footer-btn:active,
+.tabulator .tabulator-footer button:not(.ipac-calc-btn):active {
+  background: #f1f5f9;
+}
+
+button.ipac-footer-btn:disabled,
+.tabulator .tabulator-footer button:not(.ipac-calc-btn):disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+button.ipac-footer-btn.ipac-footer-btn--end {
+  margin-left: auto;
+}
+
+/* Tabulator footer layout — breathing room between actions, counter, and pagination */
+.tabulator .tabulator-footer .tabulator-footer-contents {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tabulator .tabulator-footer-contents > .ipac-footer-btn + .ipac-footer-btn {
+  margin-left: 4px;
+}
+
+.tabulator .tabulator-footer .tabulator-page-counter {
+  margin-left: 2px;
+  font-weight: 500;
+}
+
+.tabulator .tabulator-footer .tabulator-paginator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tabulator .tabulator-footer .tabulator-page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.tabulator .tabulator-footer .tabulator-page-size select {
+  margin-left: 0 !important;
+}
+
+.tabulator .tabulator-footer .tabulator-pages {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 !important;
+}
+
+.tabulator .tabulator-footer .tabulator-page {
+  margin: 0 !important;
+}
+
+.ipac-tabulator-footer-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ipac-tabulator-footer-actions .ipac-footer-btn {
+  margin-left: 0 !important;
+}
+
+.tabulator-footer:has(.overview-footer-filters),
+.tabulator-footer:has(.overview-footer-filters) .tabulator-footer-contents {
+  overflow: visible;
+}
+
+.overview-footer-filters {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.overview-footer-filters-menu {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  width: 280px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  flex-direction: column;
+  gap: 8px;
+}
+
+.overview-footer-filters.is-open .overview-footer-filters-menu {
+  display: flex;
+}
+
+.overview-filter-row,
+.overview-filter-threshold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+}
+
+.overview-filter-field,
+.overview-filter-label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 650;
+  color: #64748b;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+.overview-filter-hint {
+  margin: -4px 0 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.overview-switch {
+  position: relative;
+  display: inline-flex;
+  width: 42px;
+  height: 24px;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.overview-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.overview-switch span {
+  display: block;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  cursor: pointer;
+  position: relative;
+}
+
+.overview-switch span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s ease;
+}
+
+.overview-switch input:checked + span {
+  background: #1e3a5f;
+}
+
+.overview-switch input:checked + span::after {
+  left: 21px;
+}
+
+.overview-switch input:focus-visible + span {
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12);
+}
+
+.overview-select {
+  position: relative;
+  height: 32px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.overview-select:hover,
+.overview-select:focus-within {
+  border-color: #9bb6d3;
+}
+
+.overview-select:focus-within {
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12);
+}
+
+.overview-select::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -5px;
+  border-right: 1.5px solid #64748b;
+  border-bottom: 1.5px solid #64748b;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.overview-select select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0 28px 0 12px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  color: #0f172a;
+  line-height: 30px;
+}
+
+.overview-filter-threshold {
+  font-size: 12px;
+  font-weight: 650;
+  color: #64748b;
+}
+
+.overview-filter-threshold input {
+  box-sizing: border-box;
+  width: 72px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+}
+
+.overview-filter-threshold input:focus {
+  outline: none;
+  border-color: #9bb6d3;
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12);
+}
+
+.overview-footer-filters-rule {
+  height: 1px;
+  margin: 2px 0;
+  background: #e2e8f0;
+}
+
+.overview-mark-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.overview-mark-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.overview-mark-option:has(input:checked) {
+  border-color: #1e3a5f;
+  background: #f8fafc;
+}
+
+.overview-mark-option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #1e3a5f;
+  flex: 0 0 auto;
+}
+
+button.ipac-footer-btn.overview-footer-filters-btn.is-active {
+  border-color: #1f497d;
+  background: #f4f7fb;
+  color: #1f497d;
+}
+
+button.ipac-footer-btn.overview-pending-review {
+  position: relative;
+  width: 35px;
+  min-width: 35px;
+  height: 35px;
+  min-height: 35px;
+  padding: 0;
+  overflow: visible;
+}
+
+.overview-pending-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: #b45309;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.tabulator-row.vs-mark-1 .tabulator-cell:first-child {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #dc2626 0 3px,
+    transparent 3px 6px
+  );
+  background-size: 3px 100%;
+  background-repeat: no-repeat;
+}
+
+.tabulator-row.vs-mark-2 .tabulator-cell:first-child {
+  box-shadow: inset 3px 0 0 #ea580c;
+}
+
+.tabulator-row.vs-mark-3 .tabulator-cell:first-child {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #15803d 0 3px,
+    transparent 3px 6px
+  );
+  background-size: 3px 100%;
+  background-repeat: no-repeat;
+}
+
+.tabulator-row.vs-mark-4 .tabulator-cell:first-child {
+  box-shadow: inset 3px 0 0 #15803d;
+}
+
+.tabulator-row.vs-mark-1-approve .tabulator-cell:first-child {
+  background-image:
+    linear-gradient(to bottom, transparent 0 50%, #15803d 50% 100%),
+    repeating-linear-gradient(
+      to bottom,
+      #dc2626 0 3px,
+      transparent 3px 6px
+    );
+  background-size: 3px 100%, 3px 100%;
+  background-repeat: no-repeat, no-repeat;
+}
+
+.tabulator-row.vs-mark-2-approve .tabulator-cell:first-child {
+  background-image: linear-gradient(
+    to bottom,
+    #ea580c 0 50%,
+    #15803d 50% 100%
+  );
+  background-size: 3px 100%;
+  background-repeat: no-repeat;
+}
+
+.overview-marks-legend {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tabulator .tabulator-footer .overview-marks-legend-card,
+.overview-marks-legend-card {
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 50;
+  box-sizing: border-box;
+  width: min(320px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  padding: 12px 14px 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.tabulator .tabulator-footer .overview-marks-legend-card * {
+  white-space: normal;
+}
+
+.overview-marks-legend-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 10px;
+}
+
+.tabulator .tabulator-footer .overview-marks-legend:hover .overview-marks-legend-card,
+.tabulator .tabulator-footer .overview-marks-legend:focus-within .overview-marks-legend-card,
+.overview-marks-legend:hover .overview-marks-legend-card,
+.overview-marks-legend:focus-within .overview-marks-legend-card {
+  display: block;
+}
+
+.overview-marks-legend-title {
+  font-size: 13px;
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.overview-marks-legend-lead,
+.overview-marks-legend-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #64748b;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.overview-marks-legend-note {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.overview-marks-legend-row {
+  display: grid;
+  grid-template-columns: 16px 1fr 16px auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.overview-marks-legend-no {
+  font-size: 12px;
+  font-weight: 650;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-marks-legend-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.overview-marks-legend-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.overview-marks-legend-hint {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.overview-marks-swatch {
+  width: 14px;
+  height: 18px;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.overview-marks-swatch.is-1 {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #dc2626 0 3px,
+    transparent 3px 6px
+  );
+  background-size: 3px 100%;
+  background-repeat: no-repeat;
+}
+
+.overview-marks-swatch.is-2 {
+  box-shadow: inset 3px 0 0 #ea580c, inset 0 0 0 1px #e2e8f0;
+}
+
+.overview-marks-swatch.is-3 {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #15803d 0 3px,
+    transparent 3px 6px
+  );
+  background-size: 3px 100%;
+  background-repeat: no-repeat;
+}
+
+.overview-marks-swatch.is-4 {
+  box-shadow: inset 3px 0 0 #15803d, inset 0 0 0 1px #e2e8f0;
+}
+
+.overview-marks-swatch.is-mix {
+  background-image:
+    linear-gradient(to bottom, transparent 0 50%, #15803d 50% 100%),
+    repeating-linear-gradient(
+      to bottom,
+      #dc2626 0 3px,
+      transparent 3px 6px
+    );
+  background-size: 3px 100%, 3px 100%;
+  background-repeat: no-repeat, no-repeat;
+}
+
+.overview-marks-sample {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  min-height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-marks-sample .fa-check {
+  margin-right: 3px;
+  font-size: 11px;
+  color: #15803d;
+}
+
+.overview-marks-sample.is-1 {
+  border: 1px dashed #dc2626;
+  background: #fef2f2;
+}
+
+.overview-marks-sample.is-2 {
+  border: 1px solid #ea580c;
+  background: #fff7ed;
+}
+
+.overview-marks-sample.is-3 {
+  border: 1px dashed #15803d;
+  background: #f0fdf4;
+}
+
+.overview-marks-sample.is-4 {
+  border: 1px solid #15803d;
+  background: #f0fdf4;
+}
+
+.vs-overview-changes {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  max-width: 280px;
+}
+
+.vs-overview-changes-title {
+  font-size: 11px;
+  font-weight: 650;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.vs-overview-change-line {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 6px;
+}
+
+.vs-overview-change-tick {
+  width: 3px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.vs-overview-change-tick-1 {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #dc2626 0 3px,
+    transparent 3px 6px
+  );
+}
+.vs-overview-change-tick-2 { background: #ea580c; }
+.vs-overview-change-tick-3 {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #15803d 0 3px,
+    transparent 3px 6px
+  );
+}
+.vs-overview-change-tick-4 { background: #15803d; }
+
+.vs-overview-change-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.vs-overview-change-value {
+  font-size: 12px;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+.vs-overview-change-meta,
+.vs-overview-change-more {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.vs-overview-change-more { margin-top: 6px; }
+
+.approved-orders-tip {
+  min-width: 180px;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.approved-orders-tip-title {
+  font-size: 11px;
+  font-weight: 650;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.approved-orders-tip-line,
+.approved-orders-tip-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.approved-orders-tip-line + .approved-orders-tip-line {
+  margin-top: 4px;
+}
+
+.approved-orders-tip-total {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #e2e8f0;
+  font-weight: 650;
+}
+
+.approved-verify {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.approved-verify-box {
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: inset 0 1px 1px rgba(15, 23, 42, 0.05);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.approved-verify-box.is-on {
+  background: #15803d;
+  border-color: #15803d;
+}
+
+.approved-verify-box.is-on::after {
+  content: "";
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.approved-verify-name {
+  font-size: 12px;
+  color: #334155;
+}
+
+.tabulator .tabulator-footer .approved-orders-footer {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  margin-right: auto;
+}
+
+.approved-orders-footer-total {
+  font-size: 12px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.approved-orders-footer-verified {
+  font-size: 12px;
+  font-weight: 650;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* RCCP frozen planning horizon — purple header + tinted body cells */
+.tabulator .tabulator-header .tabulator-col.rccp-frozen-period {
+  background-color: #ede9fe !important;
+}
+.tabulator .tabulator-header .tabulator-col.rccp-frozen-period .tabulator-col-content {
+  background-color: #ede9fe !important;
+  height: 100% !important;
+  box-sizing: border-box;
+  color: #5b21b6;
+}
+.tabulator .tabulator-header .tabulator-col.rccp-frozen-period .tabulator-col-title,
+.tabulator .tabulator-header .tabulator-col.rccp-frozen-period .tabulator-header-filter {
+  background-color: #ede9fe !important;
+  color: #5b21b6;
+}
+.tabulator .tabulator-header .tabulator-col.rccp-frozen-period .tabulator-header-filter:empty {
+  padding: 0 !important;
+  min-height: 0 !important;
+}
+.tabulator .tabulator-cell.rccp-frozen-period {
+  background-color: rgba(124, 58, 237, 0.10) !important;
+}
+
+/* Ajax / lazy-load overlay — replaces default Tabulator loading banner */
+.tabulator .tabulator-loader,
+.tabulator .tabulator-alert {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: rgba(248, 250, 252, 0.78) !important;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.tabulator .tabulator-loader .tabulator-loader-msg,
+.tabulator .tabulator-alert .tabulator-alert-msg {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 auto !important;
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  font-weight: normal !important;
+  font-size: inherit !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+
+.ipac-tabulator-loader {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 148px;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #e2e8f0;
+  box-shadow:
+    0 10px 28px rgba(15, 23, 42, 0.12),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.ipac-tabulator-loader-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #6366f1;
+  border-right-color: #4338ca;
+  border-radius: 50%;
+  animation: ipac-tabulator-spin 0.8s linear infinite;
+}
+
+.ipac-tabulator-loader-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.ipac-tabulator-loader--error .ipac-tabulator-loader-icon {
+  font-size: 22px;
+  color: #dc2626;
+}
+
+.ipac-tabulator-loader--error .ipac-tabulator-loader-label {
+  color: #991b1b;
+}
+
+@keyframes ipac-tabulator-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Fallback when default Tabulator loading text is still rendered */
+.tabulator .tabulator-loader .tabulator-loader-msg.tabulator-loading:not(:has(.ipac-tabulator-loader)),
+.tabulator .tabulator-alert .tabulator-alert-msg:not(:has(.ipac-tabulator-loader)) {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 148px;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #e2e8f0;
+  box-shadow:
+    0 10px 28px rgba(15, 23, 42, 0.12),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+  font-size: 0;
+  color: transparent;
+}
+
+.tabulator .tabulator-loader .tabulator-loader-msg.tabulator-loading:not(:has(.ipac-tabulator-loader))::before,
+.tabulator .tabulator-alert .tabulator-alert-msg:not(:has(.ipac-tabulator-loader))::before {
+  content: "";
+  width: 30px;
+  height: 30px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #6366f1;
+  border-right-color: #4338ca;
+  border-radius: 50%;
+  animation: ipac-tabulator-spin 0.8s linear infinite;
+}
+
+.tabulator .tabulator-loader .tabulator-loader-msg.tabulator-loading:not(:has(.ipac-tabulator-loader))::after {
+  content: "Loading data…";
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.tabulator .tabulator-loader .tabulator-loader-msg.tabulator-error:not(:has(.ipac-tabulator-loader)),
+.tabulator .tabulator-alert .tabulator-alert-msg.tabulator-alert-state-error:not(:has(.ipac-tabulator-loader)) {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 148px;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #fecaca;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+  font-size: 12px;
+  font-weight: 600;
+  color: #991b1b;
+}
+
+/* Data tree expand/collapse — replace default +/- boxes with chevron arrows */
+.tabulator .tabulator-data-tree-control {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin-right: 6px !important;
+  border: none !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+.tabulator .tabulator-data-tree-control:hover {
+  background: rgba(99, 102, 241, 0.1) !important;
+  cursor: pointer;
+}
+
+.tabulator .tabulator-data-tree-control-expand,
+.tabulator .tabulator-data-tree-control-collapse {
+  display: block !important;
+  position: relative;
+  width: 7px !important;
+  height: 7px !important;
+  background: transparent !important;
+  border-right: 2px solid #64748b;
+  border-bottom: 2px solid #64748b;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.tabulator .tabulator-data-tree-control-expand::after,
+.tabulator .tabulator-data-tree-control-collapse::after {
+  display: none !important;
+}
+
+.tabulator .tabulator-data-tree-control-expand {
+  transform: rotate(-45deg);
+  margin-left: -1px;
+}
+
+.tabulator .tabulator-data-tree-control-collapse {
+  transform: rotate(45deg);
+  margin-top: -2px;
+}
+
+.tabulator .tabulator-data-tree-control:hover .tabulator-data-tree-control-expand,
+.tabulator .tabulator-data-tree-control:hover .tabulator-data-tree-control-collapse {
+  border-color: #4338ca;
+}
+
+.tabulator .tabulator-data-tree-branch {
+  border-color: #cbd5e1 !important;
+}
+/* .tabulator .tabulator-header .tabulator-col-title .nn-intro {
+background: yellow !important;
+} */
+
+
+
+
+.tabulator-menu {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  padding: 4px;
+  font-family: inherit;
+}
+.tabulator-menu .tabulator-menu-item {
+  color: #1e3a5f;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.tabulator-menu .tabulator-menu-item:hover,
+.tabulator-menu .tabulator-menu-item.tabulator-menu-item-active {
+  background: #f8fafc;
+  color: #1e3a5f;
+}
+
+/*  Tabulator Footer Stylings */
+
+/* Base Container Alignment & Variables */
+.tabulator-footer-switch-container {
+    text-align: right;
+    margin-top: 4px;     /* Mimics anvil-spacing-above-small */
+    margin-bottom: 4px;  /* Mimics anvil-spacing-below-small */
+    margin-left: 5px;
+    display: inline-block; /* Mimics anvil-inlinable */
+    width: auto;
+}
+
+/* Hide the native ugly browser checkbox box */
+.tabulator-footer-switch label input[type="checkbox"] {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+/* Wrapper Label layout */
+.tabulator-footer-switch label {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    user-select: none;
+    padding: 7px 0px;
+    gap: 8px;
+}
+
+.tabulator-footer-switch-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #334155;
+    white-space: nowrap;
+}
+
+/* The Switch Track Background */
+.tabulator-footer-switch-lever {
+    content: "";
+    display: inline-block;
+    position: relative;
+    width: 36px;
+    height: 14px;
+    background-color: rgba(0, 0, 0, 0.26); /* Default gray track */
+    border-radius: 15px;
+    transition: background 0.3s ease;
+    vertical-align: middle;
+}
+
+/* The Circular Knob (Thumb) */
+.tabulator-footer-switch-lever::after {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background-color: #f1f1f1; /* Default white knob */
+    top: -3px;
+    left: -5px;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    transition: transform 0.3s ease, background-color 0.3s ease;
+}
+
+/* Checked State Styles: Changes Track and Knob Color */
+.tabulator-footer-switch label input[type="checkbox"]:checked + .tabulator-footer-switch-lever {
+    /* Falls back to default gray if --color variable isn't read */
+    background-color: var(--color, rgb(31, 73, 125)); 
+    opacity: 1; /* Traditional material track transparency */
+}
+
+.tabulator-footer-switch label input[type="checkbox"]:checked + .tabulator-footer-switch-lever::after {
+    background-color: var(--color, rgb(31, 73, 125));
+    transform: translateX(26px); /* Moves knob to the right side */
+}
+
+/* Disabled State Styling */
+.to-disable:disabled + .tabulator-footer-switch-lever {
+    background-color: rgba(0, 0, 0, 0.12) !important;
+    cursor: not-allowed;
+}
+.to-disable:disabled + .tabulator-footer-switch-lever::after {
+    background-color: #bdbdbd !important;
+}
+
+.tabulator-cell.vs-overview-woc-cell input.tabulator-editor {
+  box-sizing: border-box;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  padding: 1px 6px;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* Compact rows: half the bootstrap theme's 8px vertical cell padding. */
+.tabulator-row {
+  min-height: 0 !important;
+}
+.tabulator-row .tabulator-cell {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+
+.tabulator-cell .product-id-link {
+  color: #4680A0;
+  text-decoration: none;
+  cursor: pointer;
+}
+.tabulator-cell:hover .product-id-link {
+  text-decoration: underline;
+}
+.tabulator-cell .product-cell {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.25;
+}
+.tabulator-cell .product-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-style: italic;
+  font-weight: normal;
+  line-height: 1.25;
+  color: #64748b;
+  text-decoration: none;
+}
+
+.tabulator.master-plan-grid .tabulator-header .tabulator-col.tabulator-frozen,
+.tabulator.master-plan-grid .tabulator-row .tabulator-cell.tabulator-frozen {
+  border-right: 1px solid #ddd !important;
+}
+.tabulator.master-plan-grid .tabulator-row .tabulator-cell.tabulator-frozen {
+  border-bottom: 1px solid #ddd !important;
+}

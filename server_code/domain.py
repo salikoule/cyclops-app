@@ -1,3 +1,5 @@
+import anvil.google.auth, anvil.google.drive, anvil.google.mail
+from anvil.google.drive import app_files
 """Cyclops production records.
 
 Pure Python port of the sketch in cyclops/sketch/template.html. No Anvil imports,

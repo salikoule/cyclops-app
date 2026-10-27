@@ -1,5 +1,7 @@
 from ._anvil_designer import CyclopsShellTemplate
 from anvil import *
+import anvil.google.auth, anvil.google.drive
+from anvil.google.drive import app_files
 import anvil.server
 import anvil.users
 from craftify_library.Startup import configure as configure_craftify_client

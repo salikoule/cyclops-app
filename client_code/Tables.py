@@ -1,6 +1,8 @@
 """Tabulator lists. A row click opens the record."""
 
 from anvil import *
+import anvil.google.auth, anvil.google.drive
+from anvil.google.drive import app_files
 from tabulator.Tabulator import Tabulator
 
 from cyclops_app import Format, Layout, Nav

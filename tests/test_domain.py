@@ -1,9 +1,5 @@
-import json
-from pathlib import Path
-
 import domain
-
-SEED = Path(__file__).resolve().parents[1] / "server_code" / "seed.json"
+import seed_data
 
 
 def plant():
@@ -158,17 +154,8 @@ def test_edits_do_not_alias_clones_and_confirm_trials():
     assert rejected["error"]
 
 
-def test_seed_file_loads_the_workbook_clone():
-    raw = json.loads(SEED.read_text(encoding="utf-8"))
-    graph = {
-        "products": raw["products"],
-        "molds": raw["molds"],
-        "presses": raw["presses"],
-        "materials": raw["materials"],
-        "colors": raw["colors"],
-        "recipes": raw["recipes"],
-        "links": raw["links"],
-    }
+def test_seed_module_loads_the_workbook_import():
+    graph = seed_data.load()
     domain.normalize(graph)
     domain.reindex(graph)
     counted = domain.counts(graph)
@@ -179,7 +166,10 @@ def test_seed_file_loads_the_workbook_clone():
     assert counted["materials"] == 66
     assert counted["colors"] == 75
     assert counted["links"] == 18
-    assert len(domain.gaps(graph)) == 14
+    assert counted["stoppages"] == 26
+    assert len(graph["workers"]) > 40
+    assert sum(len(product["approvedPressIds"]) for product in graph["products"]) == 364
+    assert len(domain.gaps(graph)) == 16
     overview = domain.overview(graph, "engineer")
     assert overview["presses"]
     assert all(item["count"] > 0 for item in overview["gaps"])
@@ -187,3 +177,59 @@ def test_seed_file_loads_the_workbook_clone():
     assert detail["name"] == "CAVE 11 lt"
     assert detail["missing"] is False
     assert domain.search(graph, "nova")
+
+
+def test_stoppages_downtime_and_states():
+    assert domain.downtime_hours({"startDate": "2026-05-25", "startTime": "22:00", "endDate": "2026-05-26", "endTime": "07:30"}) == 9.5
+    assert domain.issue_state({"startDate": "2027-07-28", "startTime": "06:30", "endDate": "2026-07-28", "endTime": "09:15"}) == "check dates"
+    assert domain.issue_state({"startDate": "2026-07-08", "startTime": "-", "endDate": "", "endTime": ""}) == "open"
+    graph = plant()
+    added = domain.dispatch(graph, "add-issue", {
+        "contextId": "REC-0021", "startDate": "2026-06-03", "startTime": "17:30", "cause": "Power cut",
+        "worker": "IRA VLAEVA", "fix": "Restarted", "endDate": "2026-06-03", "endTime": "18:00",
+    })
+    assert added.get("error") is None
+    detail = domain.detail(graph, "recipe", "REC-0021")
+    assert detail["issues"][0]["hours"] == 0.5
+    assert domain.counts(graph)["stoppages"] == 1
+    backwards = domain.dispatch(graph, "add-issue", {
+        "contextId": "REC-0021", "startDate": "2026-06-03", "startTime": "17:30", "cause": "x",
+        "endDate": "2026-06-02", "endTime": "18:00",
+    })
+    assert backwards["error"]
+    open_one = domain.dispatch(graph, "add-issue", {"contextId": "REC-0021", "startDate": "2026-06-04", "startTime": "08:00", "cause": "Nozzle"})
+    assert open_one.get("error") is None
+    gap = [item for item in domain.gaps(graph) if item["key"] == "stoppage-open"][0]
+    assert gap["ids"] == ["REC-0021"]
+    cloned = domain.dispatch(graph, "clone-recipe", {"contextId": "REC-0021"})
+    assert graph["_ix"]["recipe"][cloned["redirect"]["code"]]["issues"] == []
+    removed = domain.dispatch(graph, "remove-issue", {"contextId": "REC-0021", "index": "1"})
+    assert removed.get("error") is None
+    assert len(graph["_ix"]["recipe"]["REC-0021"]["issues"]) == 1
+
+
+def test_approvals_material_color_edits_and_delete():
+    graph = plant()
+    graph["presses"].append({"id": "PRS-02", "name": "VE 300"})
+    domain.normalize(graph)
+    domain.reindex(graph)
+    domain.dispatch(graph, "set-approved", {"contextId": "PRD-0001", "presses": "PRS-01,PRS-02,PRS-99"})
+    product = graph["_ix"]["product"]["PRD-0001"]
+    assert product["approvedPressIds"] == ["PRS-01", "PRS-02"]
+    assert domain.approved_without_recipe(graph, product) == ["PRS-02"]
+    gap = [item for item in domain.gaps(graph) if item["key"] == "approved-no-recipe"][0]
+    assert gap["ids"] == ["PRD-0001"]
+    press = domain.detail(graph, "press", "PRS-02")
+    assert press["approved"][0]["status"] == "No recipe here"
+
+    edited = domain.dispatch(graph, "edit-material", {"contextId": "MAT-002", "text": "ροή", "kind": "additive", "account": "9100"})
+    assert edited.get("error") is None
+    assert graph["_ix"]["material"]["MAT-002"]["account"] == "9100"
+    assert domain.dispatch(graph, "edit-color", {"contextId": "COL-001", "code": ""})["error"]
+    domain.dispatch(graph, "edit-color", {"contextId": "COL-001", "code": "10692", "notes": "mix"})
+    assert graph["_ix"]["color"]["COL-001"]["notes"] == "mix"
+
+    deleted = domain.dispatch(graph, "delete-recipe", {"contextId": "REC-0002"})
+    assert deleted["redirect"] == {"kind": "product", "code": "PRD-0001"}
+    assert deleted["dirty"] == {"recipes": ["REC-0002"]}
+    assert "REC-0002" not in graph["_ix"]["recipe"]

@@ -9,6 +9,7 @@ db_schema:
     - {name: label, type: string}
     - {name: account, type: string}
     - {name: shade, type: string}
+    - {name: notes, type: string}
     - {name: link, type: string}
     - {name: catalog, type: bool}
     server: full
@@ -32,6 +33,7 @@ db_schema:
     - {name: account, type: string}
     - {name: invoice_code, type: string}
     - {name: description, type: string}
+    - {name: notes, type: string}
     - {name: link, type: string}
     - {name: catalog, type: bool}
     - {name: kind, type: string}
@@ -42,6 +44,9 @@ db_schema:
     columns:
     - {name: name, type: string}
     - {name: seeded, type: bool}
+    - {name: version, type: number}
+    - {name: snapshot, type: media}
+    - {name: updated, type: datetime}
     server: full
     title: Plant meta
   molds:
@@ -66,6 +71,7 @@ db_schema:
     - {name: serial, type: string}
     - {name: robot, type: string}
     - {name: robot_serial, type: string}
+    - {name: robot_year, type: string}
     - {name: euromap, type: string}
     - {name: mounted, type: string}
     - {name: board_location, type: string}
@@ -85,6 +91,7 @@ db_schema:
     - {name: notes, type: string}
     - {name: lifecycle, type: string}
     - {name: only_on_cards, type: bool}
+    - {name: approved_presses_json, type: string}
     server: full
     title: Products
   recipes:
@@ -99,6 +106,8 @@ db_schema:
     - {name: settings_json, type: string}
     - {name: material_slots_json, type: string}
     - {name: color_slots_json, type: string}
+    - {name: issues_json, type: string}
+    - {name: settings_note, type: string}
     - {name: cycle, type: string}
     - {name: cooling, type: string}
     - {name: screw_rpm, type: string}
@@ -134,6 +143,12 @@ db_schema:
       type: simpleObject
     server: full
     title: Users
+  workers:
+    client: none
+    columns:
+    - {name: name, type: string}
+    server: full
+    title: Workers
 dependencies:
 - dep_id: dep_wkevhfjmozeq0f
   resolution_hints: {app_id: ST3GINETRT4QJYDC, name: craftify-library, package_name: craftify_library}

@@ -1,12 +1,14 @@
-import anvil.google.auth, anvil.google.drive, anvil.google.mail
-from anvil.google.drive import app_files
 """Server API for the Cyclops plant record."""
+
+import json
+import zlib
 
 import anvil.server
 from anvil.tables import app_tables
 from craftify_library.CraftifyAuth import craftify_require_user
 
 import domain
+import seed_data
 import store
 
 
@@ -94,3 +96,32 @@ def cyclops_choices():
 def cyclops_apply(action, payload=None):
     _guard()
     return store.apply_action(action, _payload(payload))
+
+
+@anvil.server.callable
+def cyclops_data_status():
+    _guard()
+    row = app_tables.meta.get(name="plant")
+    counted = domain.counts(store.graph())
+    return {
+        "version": (row["version"] if row else None) or 0,
+        "updated": row["updated"] if row else None,
+        "counts": counted,
+        "source": seed_data.SOURCE,
+    }
+
+
+@anvil.server.callable
+def cyclops_reload_from_tables():
+    """Pick up rows changed by hand in the Anvil editor's Data Tables view."""
+    _guard()
+    return store.reload_from_tables()
+
+
+@anvil.server.callable
+def cyclops_import_plant(media):
+    """Replace the plant record with a workbook import. Server Uplink only: scripts/import_workbook.py."""
+    if anvil.server.context.client.type != "uplink":
+        raise anvil.server.PermissionDenied("The workbook import runs from scripts/import_workbook.py with the server Uplink key.")
+    graph = json.loads(zlib.decompress(media.get_bytes()).decode("utf-8"))
+    return store.replace_all(graph)

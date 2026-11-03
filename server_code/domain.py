@@ -1,5 +1,3 @@
-import anvil.google.auth, anvil.google.drive, anvil.google.mail
-from anvil.google.drive import app_files
 """Cyclops production records.
 
 Pure Python port of the sketch in cyclops/sketch/template.html. No Anvil imports,
@@ -7,6 +5,7 @@ so the status rules, gaps, and edits can be tested on their own.
 """
 
 import copy
+import datetime
 import re
 
 TYPES = {
@@ -153,6 +152,7 @@ def normalize(graph):
         if not product.get("lifecycle"):
             product["lifecycle"] = "active"
         product["onlyOnCards"] = bool(product.get("onlyOnCards"))
+        product["approvedPressIds"] = uniq(list(product.get("approvedPressIds") or []))
     for mold in graph.get("molds") or []:
         if "cavities" not in mold or mold.get("cavities") == "":
             mold["cavities"] = None
@@ -182,6 +182,7 @@ def normalize(graph):
         press["serial"] = press.get("serial") or ""
         press["robot"] = press.get("robot") or ""
         press["robotSerial"] = press.get("robotSerial") or ""
+        press["robotYear"] = press.get("robotYear") or ""
         press["euromap"] = press.get("euromap") or ""
     for recipe in graph.get("recipes") or []:
         temps = recipe.get("temps") or {}
@@ -189,22 +190,59 @@ def normalize(graph):
         recipe["settings"] = list(recipe.get("settings") or [])
         recipe["materialSlots"] = list(recipe.get("materialSlots") or [])
         recipe["colorSlots"] = list(recipe.get("colorSlots") or [])
-        for key in ("cycle", "cooling", "screwRpm", "px", "py", "productLot", "printPieces", "printTotal", "comment", "status"):
+        for key in ("cycle", "cooling", "screwRpm", "px", "py", "productLot", "printPieces", "printTotal", "comment", "status", "settingsNote"):
             recipe[key] = recipe.get(key) or ""
         recipe["trial"] = bool(recipe.get("trial"))
         recipe["standard"] = bool(recipe.get("standard"))
+        recipe["issues"] = [_issue(item) for item in recipe.get("issues") or [] if item]
     for material in graph.get("materials") or []:
         if not material.get("kind"):
             material["kind"] = derive_material_kind(material)
-        for key in ("supplier", "mfi", "family", "account", "invoiceCode", "description", "link"):
+        for key in ("supplier", "mfi", "family", "account", "invoiceCode", "description", "link", "notes"):
             material[key] = material.get(key) or ""
         material["catalog"] = bool(material.get("catalog"))
     for color in graph.get("colors") or []:
-        for key in ("code", "name", "label", "account", "shade", "link"):
+        for key in ("code", "name", "label", "account", "shade", "link", "notes"):
             color[key] = color.get(key) or ""
         color["catalog"] = bool(color.get("catalog"))
     graph["links"] = list(graph.get("links") or [])
+    graph["workers"] = uniq([str(name).strip() for name in graph.get("workers") or [] if str(name or "").strip()])
     return graph
+
+
+ISSUE_KEYS = ("startDate", "startTime", "cause", "worker", "fix", "endDate", "endTime")
+
+
+def _issue(item):
+    return {key: str(item.get(key) or "").strip() for key in ISSUE_KEYS}
+
+
+def _moment(date_text, time_text):
+    try:
+        return datetime.datetime.strptime("%s %s" % (date_text, (time_text or "").replace(".", ":")), "%Y-%m-%d %H:%M")
+    except (TypeError, ValueError):
+        return None
+
+
+def downtime_hours(issue):
+    """Hours from stop to restart, or None when a time is missing or the dates run backwards."""
+    start = _moment(issue.get("startDate"), issue.get("startTime"))
+    end = _moment(issue.get("endDate"), issue.get("endTime"))
+    if start is None or end is None or end < start:
+        return None
+    return round((end - start).total_seconds() / 3600.0, 1)
+
+
+def issue_state(issue):
+    if not issue.get("endDate") and not issue.get("endTime"):
+        return "open"
+    start = _moment(issue.get("startDate"), issue.get("startTime"))
+    end = _moment(issue.get("endDate"), issue.get("endTime"))
+    if start is None or end is None:
+        return "no restart time"
+    if end < start:
+        return "check dates"
+    return "closed"
 
 
 def reindex(graph):
@@ -479,6 +517,8 @@ def gaps(graph):
         {"key": "mat-unused", "route": "materials", "who": ["manager"], "title": "Catalog materials never used on a recipe", "benefit": "The stock list matches what production uses; the rest is questioned.", "ids": [material["id"] for material in graph["materials"] if not (index["recipesByMaterial"].get(material["id"]) or [])]},
         {"key": "board-mismatch", "route": "presses", "who": ["engineer", "planner"], "title": "Board shows a product with no recipe on that press", "benefit": "The floor board and the recipes agree; a mounted mold always has its setting sheet.", "ids": [press["id"] for press in board_mismatch]},
         {"key": "press-no-recipe", "route": "presses", "who": ["planner"], "title": "Presses with no recipe at all", "benefit": "Either the press is retired from planning or its capabilities are recorded.", "ids": [press["id"] for press in graph["presses"] if not (index["recipesByPress"].get(press["id"]) or [])]},
+        {"key": "approved-no-recipe", "route": "products", "who": ["planner", "engineer"], "title": "Approved on a press in the product sheet, but no recipe there", "benefit": "Every press a planner may book has a setting sheet, so a job can move presses without a trial run.", "ids": [product["id"] for product in graph["products"] if approved_without_recipe(graph, product)]},
+        {"key": "stoppage-open", "route": "recipes", "who": ["engineer", "manager"], "title": "Stoppages without a usable restart time", "benefit": "Downtime per press and per mold can be totalled, and repeat faults show up by hours lost.", "ids": uniq([recipe["id"] for recipe in graph["recipes"] if any(issue_state(issue) != "closed" for issue in recipe.get("issues") or [])])},
     ]
     published = []
     for item in items:
@@ -510,7 +550,59 @@ def counts(graph):
         "materials": len(graph.get("materials") or []),
         "colors": len(graph.get("colors") or []),
         "links": len(graph.get("links") or []),
+        "stoppages": sum(len(recipe.get("issues") or []) for recipe in graph.get("recipes") or []),
+        "downtimeHours": round(sum(downtime_hours(issue) or 0 for recipe in graph.get("recipes") or [] for issue in recipe.get("issues") or []), 1),
     }
+
+
+def approved_without_recipe(graph, product):
+    index = _ix(graph)
+    running = set(recipe.get("pressId") for recipe in live(index["recipesByProduct"].get(product["id"]) or []))
+    return [code for code in product.get("approvedPressIds") or [] if code in index["press"] and code not in running]
+
+
+def approved_presses(graph, product):
+    index = _ix(graph)
+    running = set(recipe.get("pressId") for recipe in live(index["recipesByProduct"].get(product["id"]) or []))
+    approved = set(product.get("approvedPressIds") or [])
+    rows = []
+    for press in graph.get("presses") or []:
+        if press["id"] in approved or press["id"] in running:
+            rows.append({
+                "id": press["id"],
+                "name": press.get("name") or press["id"],
+                "approved": press["id"] in approved,
+                "hasRecipe": press["id"] in running,
+            })
+    return rows
+
+
+def issue_rows(graph, recipes):
+    index = _ix(graph)
+    rows = []
+    for recipe in recipes or []:
+        for position, issue in enumerate(recipe.get("issues") or []):
+            hours = downtime_hours(issue)
+            state = issue_state(issue)
+            rows.append({
+                "id": recipe["id"],
+                "index": position,
+                "product": product_name(index, recipe.get("productId")),
+                "productId": recipe.get("productId") or "",
+                "press": press_name(index, recipe.get("pressId")),
+                "pressId": recipe.get("pressId") or "",
+                "start": " ".join(part for part in (issue.get("startDate"), issue.get("startTime")) if part),
+                "end": " ".join(part for part in (issue.get("endDate"), issue.get("endTime")) if part),
+                "cause": issue.get("cause") or "",
+                "worker": issue.get("worker") or "",
+                "fix": issue.get("fix") or "",
+                "hours": hours,
+                "state": state,
+                "status": "Closed" if state == "closed" else cap(state),
+                "tone": "ok" if state == "closed" else "warn",
+            })
+    rows.sort(key=lambda row: row["start"], reverse=True)
+    return rows
 
 
 def _status_row(status):
@@ -581,6 +673,7 @@ def _product_rows(graph):
             "trial": len(all_recipes) - len(live_recipes),
             "materials": uniq([material_name(index, code) for recipe in live_recipes for code in material_ids(recipe)]),
             "colors": uniq([color_short(index, code) for recipe in live_recipes for code in color_ids(recipe)]),
+            "approved": [press_name(index, code) for code in product.get("approvedPressIds") or [] if code in index["press"]],
             "links": len(product_links(graph, product)),
             "status": status,
             "tone": tone(status),
@@ -760,8 +853,12 @@ def overview(graph, who="all"):
         "gaps": [_public_gap(item) for item in shown],
         "done": done,
         "counts": counts(graph),
-        "chart": {"labels": chart_labels, "values": chart_values},
+        "chart": {"labels": chart_labels, "values": chart_values, "downtime": [
+            round(sum(downtime_hours(issue) or 0 for recipe in index["recipesByPress"].get(press["id"]) or [] for issue in recipe.get("issues") or []), 1)
+            for press in graph.get("presses") or []
+        ]},
         "liveRecipes": len(live_all),
+        "stoppages": issue_rows(graph, graph.get("recipes") or [])[:6],
     }
 
 
@@ -780,6 +877,7 @@ def choices(graph):
         "kinds": [{"value": key, "label": label} for key, label in MATERIAL_KINDS.items()],
         "lifecycles": [{"value": value, "label": cap(value)} for value in LIFECYCLES],
         "moldStatuses": [{"value": value, "label": value} for value in MOLD_STATUSES],
+        "workers": [{"value": name, "label": name} for name in graph.get("workers") or []],
     }
 
 
@@ -905,6 +1003,10 @@ def _product_missing(graph, product):
         missing.append({"what": "Cavities on the mold", "why": "Pieces per hour cannot be computed.", "action": "edit-mold"})
     if mold and not mold.get("shotWeight"):
         missing.append({"what": "Shot weight on the mold", "why": "Material per piece and cost are unknown.", "action": "edit-mold"})
+    unbooked = approved_without_recipe(graph, product)
+    if unbooked:
+        names = ", ".join(press_name(index, code) for code in unbooked)
+        missing.append({"what": "Recipe on %s" % names, "why": "The product sheet approves %s, but there is no setting sheet for it." % ("this press" if len(unbooked) == 1 else "these presses"), "action": "add-recipe"})
     without_cycle = [recipe for recipe in live_recipes if not num(recipe.get("cycle"))]
     if without_cycle:
         missing.append({"what": "Cycle time on %s" % _plural(len(without_cycle), "recipe"), "why": "Hours per order cannot be computed.", "action": ""})
@@ -958,6 +1060,9 @@ def detail_product(graph, code):
         "runs": _runs(graph, product),
         "links": product_links(graph, product),
         "missingBits": _product_missing(graph, product),
+        "approvedPresses": approved_presses(graph, product),
+        "approvedPressIds": list(product.get("approvedPressIds") or []),
+        "issues": issue_rows(graph, all_recipes),
         "recipes": [recipe_row(graph, recipe) for recipe in all_recipes],
         "trialCount": len(all_recipes) - len(live_recipes),
         "liveRecipes": [{
@@ -1011,13 +1116,39 @@ def detail_press(graph, code):
         "euromap": press.get("euromap") or "",
         "serial": press.get("serial") or "",
         "robot": "" if robot in ("", "-") else robot,
+        "robotSerial": press.get("robotSerial") or "",
+        "robotYear": press.get("robotYear") or "",
         "lifecycle": press.get("lifecycle") or "active",
         "changeoverMin": press.get("changeoverMin"),
         "mounted": board.get("mounted") or "",
         "location": board.get("location") or "",
         "products": summary_rows(graph, recipes),
+        "approved": _approved_on_press(graph, press),
         "recipes": [recipe_row(graph, recipe) for recipe in recipes],
+        "issues": issue_rows(graph, recipes),
     }
+
+
+def _approved_on_press(graph, press):
+    index = _ix(graph)
+    rows = []
+    for product in graph.get("products") or []:
+        if press["id"] not in (product.get("approvedPressIds") or []):
+            continue
+        listed = [recipe for recipe in live(index["recipesByProduct"].get(product["id"]) or []) if recipe.get("pressId") == press["id"]]
+        status = "Has recipe" if listed else "No recipe here"
+        rows.append({
+            "id": product["id"],
+            "name": product.get("name") or "",
+            "mold": ", ".join(mold["id"] for mold in index["moldsByProduct"].get(product["id"]) or []),
+            "presses": [press.get("name") or press["id"]],
+            "recipes": len(listed),
+            "cycle": best_cycle(listed),
+            "colors": uniq([color_short(index, code) for recipe in listed for code in color_ids(recipe)]),
+            "status": status,
+            "tone": "ok" if listed else "warn",
+        })
+    return rows
 
 
 def detail_recipe(graph, code):
@@ -1089,6 +1220,9 @@ def detail_recipe(graph, code):
         "printTotal": recipe.get("printTotal") or "",
         "statusText": recipe.get("status") or "",
         "comment": recipe.get("comment") or "",
+        "settingsNote": recipe.get("settingsNote") or "",
+        "issues": issue_rows(graph, [recipe]),
+        "rawIssues": [dict(issue, index=position) for position, issue in enumerate(recipe.get("issues") or [])],
     }
 
 
@@ -1114,8 +1248,13 @@ def detail_material(graph, code):
         "family": material.get("family") or "",
         "mfi": material.get("mfi") or "",
         "account": material.get("account") or "",
+        "invoiceCode": material.get("invoiceCode") or "",
         "description": material.get("description") or "",
+        "notes": material.get("notes") or "",
+        "kind": material.get("kind") or "resin",
+        "catalog": bool(material.get("catalog")),
         "link": link,
+        "rawLink": material.get("link") or "",
         "products": summary_rows(graph, recipes),
         "recipes": [recipe_row(graph, recipe) for recipe in recipes],
     }
@@ -1137,7 +1276,12 @@ def detail_color(graph, code):
         "tone": tone(status),
         "label": color.get("label") or "",
         "code": color.get("code") or "",
+        "colorName": color.get("name") or "",
         "account": color.get("account") or "",
+        "shade": color.get("shade") or "",
+        "notes": color.get("notes") or "",
+        "catalog": bool(color.get("catalog")),
+        "link": color.get("link") or "" if (color.get("link") or "").startswith(("https://", "http://")) else "",
         "products": summary_rows(graph, recipes),
         "recipes": [recipe_row(graph, recipe) for recipe in recipes],
     }
@@ -1215,6 +1359,8 @@ def _blank_recipe():
         "comment": "",
         "materialSlots": [],
         "colorSlots": [],
+        "issues": [],
+        "settingsNote": "",
         "trial": False,
         "standard": False,
     }
@@ -1388,6 +1534,7 @@ def action_clone_product(graph, payload):
             recipe["moldId"] = mold["id"]
             recipe["comment"] = "copy of %s" % source_recipe["id"]
             recipe["standard"] = False
+            recipe["issues"] = []
             graph["recipes"].append(recipe)
             dirty["recipes"].append(recipe["id"])
     result = _redirect("product", product["id"])
@@ -1431,6 +1578,7 @@ def _new_recipe(graph, product_id, press_id, source):
     recipe["pressId"] = press_id
     recipe["trial"] = False
     recipe["standard"] = False
+    recipe["issues"] = []
     recipe["comment"] = ("copy of %s" % source["id"]) if source else "created in Cyclops"
     graph["recipes"].append(recipe)
     return recipe, new_molds, ""
@@ -1549,11 +1697,126 @@ def action_edit_press(graph, payload):
     lifecycle = payload.get("lifecycle") or "active"
     press["lifecycle"] = lifecycle if lifecycle in LIFECYCLES else "active"
     press["changeoverMin"] = whole(payload.get("changeoverMin"))
+    for key in ("euromap", "serial", "robot", "robotSerial", "robotYear"):
+        if key in payload:
+            press[key] = (payload.get(key) or "").strip()
     board = press.get("board") or {}
     board["mounted"] = (payload.get("mounted") or "").strip()
     board["location"] = (payload.get("location") or "").strip()
     press["board"] = board
     return _refresh({"presses": [press["id"]]})
+
+
+def action_set_approved(graph, payload):
+    index = _ix(graph)
+    product = index["product"].get(payload.get("contextId"))
+    if product is None:
+        return {"error": "Product was not found."}
+    wanted = payload.get("presses") or []
+    if isinstance(wanted, str):
+        wanted = [code.strip() for code in wanted.split(",")]
+    product["approvedPressIds"] = [press["id"] for press in graph.get("presses") or [] if press["id"] in wanted]
+    return _refresh({"products": [product["id"]]})
+
+
+def _issue_from(payload):
+    issue = _issue(payload)
+    if not issue["cause"]:
+        return None, "Write what stopped the press."
+    if not issue["startDate"] or _moment(issue["startDate"], issue["startTime"] or "00:00") is None:
+        return None, "Give the stop date as YYYY-MM-DD and the time as HH:MM."
+    if issue["endDate"] and _moment(issue["endDate"], issue["endTime"] or "00:00") is None:
+        return None, "Give the restart date as YYYY-MM-DD and the time as HH:MM."
+    if downtime_hours(issue) is None and issue_state(issue) == "check dates":
+        return None, "The restart is before the stop."
+    return issue, ""
+
+
+def action_add_issue(graph, payload):
+    recipe = _ix(graph)["recipe"].get(payload.get("contextId"))
+    if recipe is None:
+        return {"error": "Recipe was not found."}
+    issue, error = _issue_from(payload)
+    if error:
+        return {"error": error}
+    recipe.setdefault("issues", []).append(issue)
+    return _refresh({"recipes": [recipe["id"]]})
+
+
+def action_edit_issue(graph, payload):
+    recipe = _ix(graph)["recipe"].get(payload.get("contextId"))
+    if recipe is None:
+        return {"error": "Recipe was not found."}
+    try:
+        position = int(payload.get("index"))
+    except (TypeError, ValueError):
+        return {"error": "That stoppage is no longer on the recipe."}
+    issues = recipe.get("issues") or []
+    if position < 0 or position >= len(issues):
+        return {"error": "That stoppage is no longer on the recipe."}
+    issue, error = _issue_from(payload)
+    if error:
+        return {"error": error}
+    issues[position] = issue
+    return _refresh({"recipes": [recipe["id"]]})
+
+
+def action_remove_issue(graph, payload):
+    recipe = _ix(graph)["recipe"].get(payload.get("contextId"))
+    if recipe is None:
+        return {"error": "Recipe was not found."}
+    try:
+        position = int(payload.get("index"))
+    except (TypeError, ValueError):
+        return {"error": "That stoppage is no longer on the recipe."}
+    issues = list(recipe.get("issues") or [])
+    if position < 0 or position >= len(issues):
+        return {"error": "That stoppage is no longer on the recipe."}
+    del issues[position]
+    recipe["issues"] = issues
+    return _refresh({"recipes": [recipe["id"]]})
+
+
+def action_edit_material(graph, payload):
+    material = _ix(graph)["material"].get(payload.get("contextId"))
+    if material is None:
+        return {"error": "Raw material was not found."}
+    text = (payload.get("text") or "").strip()
+    if not text:
+        return {"error": "Grade is required."}
+    material["text"] = text
+    kind = payload.get("kind") or material.get("kind") or "resin"
+    material["kind"] = kind if kind in MATERIAL_KINDS else "resin"
+    for key in ("supplier", "family", "mfi", "account", "invoiceCode", "description", "notes", "link"):
+        if key in payload:
+            material[key] = (payload.get(key) or "").strip()
+    material["catalog"] = True
+    return _refresh({"materials": [material["id"]]})
+
+
+def action_edit_color(graph, payload):
+    color = _ix(graph)["color"].get(payload.get("contextId"))
+    if color is None:
+        return {"error": "Color was not found."}
+    code = (payload.get("code") or "").strip()
+    if not code:
+        return {"error": "Label code is required."}
+    color["code"] = code
+    for key in ("name", "label", "account", "shade", "notes", "link"):
+        if key in payload:
+            color[key] = (payload.get(key) or "").strip()
+    color["catalog"] = True
+    return _refresh({"colors": [color["id"]]})
+
+
+def action_delete_recipe(graph, payload):
+    recipe = _ix(graph)["recipe"].get(payload.get("contextId"))
+    if recipe is None:
+        return {"error": "Recipe was not found."}
+    graph["recipes"] = [item for item in graph["recipes"] if item["id"] != recipe["id"]]
+    result = _redirect("product", recipe.get("productId"))
+    result["dirty"] = {"recipes": [recipe["id"]]}
+    return result
 
 
 def action_edit_recipe(graph, payload):
@@ -1568,6 +1831,9 @@ def action_edit_recipe(graph, payload):
     recipe["cooling"] = (payload.get("cooling") or "").strip()
     recipe["screwRpm"] = (payload.get("screwRpm") or "").strip()
     recipe["productLot"] = (payload.get("productLot") or "").strip()
+    for key in ("comment", "settingsNote"):
+        if key in payload:
+            recipe[key] = (payload.get(key) or "").strip()
     if recipe.get("trial"):
         recipe["trial"] = False
     return _refresh({"recipes": [recipe["id"]]})
@@ -1670,6 +1936,13 @@ ACTIONS = {
     "add-slot-material": action_add_slot_material,
     "add-slot-color": action_add_slot_color,
     "remove-slot": action_remove_slot,
+    "set-approved": action_set_approved,
+    "add-issue": action_add_issue,
+    "edit-issue": action_edit_issue,
+    "remove-issue": action_remove_issue,
+    "edit-material": action_edit_material,
+    "edit-color": action_edit_color,
+    "delete-recipe": action_delete_recipe,
 }
 
 

@@ -101,11 +101,11 @@ def cyclops_apply(action, payload=None):
 @anvil.server.callable
 def cyclops_data_status():
     _guard()
-    row = app_tables.meta.get(name="plant")
     counted = domain.counts(store.graph())
+    row = app_tables.meta.get(name="plant")
     return {
-        "version": (row["version"] if row else None) or 0,
-        "updated": row["updated"] if row else None,
+        "version": store.column(row, "version", 0) if row else 0,
+        "updated": store.column(row, "updated") if row else None,
         "counts": counted,
         "source": seed_data.SOURCE,
     }

@@ -27,6 +27,22 @@ def _rows(table):
     return list(table.search())
 
 
+def column(row, name, default=None):
+    """A column the cloud schema may not have yet. Writes create it (auto_create_missing_columns)."""
+    try:
+        value = row[name]
+    except Exception:
+        return default
+    return default if value is None else value
+
+
+def _workers_table():
+    try:
+        return getattr(app_tables, "workers")
+    except Exception:
+        return None
+
+
 def _loads(text, fallback):
     if not text:
         return fallback
@@ -182,7 +198,7 @@ def _read_tables():
         "notes": row["notes"] or "",
         "lifecycle": row["lifecycle"] or "",
         "onlyOnCards": bool(row["only_on_cards"]),
-        "approvedPressIds": _loads(row["approved_presses_json"], []),
+        "approvedPressIds": _loads(column(row, "approved_presses_json"), []),
     } for row in _rows(app_tables.products)]
     molds = [{
         "id": row["code"],
@@ -201,7 +217,7 @@ def _read_tables():
         "serial": row["serial"] or "",
         "robot": row["robot"] or "",
         "robotSerial": row["robot_serial"] or "",
-        "robotYear": row["robot_year"] or "",
+        "robotYear": column(row, "robot_year", ""),
         "euromap": row["euromap"] or "",
         "board": {
             "mounted": row["mounted"] or "",
@@ -221,7 +237,7 @@ def _read_tables():
         "account": row["account"] or "",
         "invoiceCode": row["invoice_code"] or "",
         "description": row["description"] or "",
-        "notes": row["notes"] or "",
+        "notes": column(row, "notes", ""),
         "link": row["link"] or "",
         "catalog": bool(row["catalog"]),
         "kind": row["kind"] or "",
@@ -233,7 +249,7 @@ def _read_tables():
         "label": row["label"] or "",
         "account": row["account"] or "",
         "shade": row["shade"] or "",
-        "notes": row["notes"] or "",
+        "notes": column(row, "notes", ""),
         "link": row["link"] or "",
         "catalog": bool(row["catalog"]),
     } for row in _rows(app_tables.colors)]
@@ -247,8 +263,8 @@ def _read_tables():
         "settings": _loads(row["settings_json"], []),
         "materialSlots": _loads(row["material_slots_json"], []),
         "colorSlots": _loads(row["color_slots_json"], []),
-        "issues": _loads(row["issues_json"], []),
-        "settingsNote": row["settings_note"] or "",
+        "issues": _loads(column(row, "issues_json"), []),
+        "settingsNote": column(row, "settings_note", ""),
         "cycle": row["cycle"] or "",
         "cooling": row["cooling"] or "",
         "screwRpm": row["screw_rpm"] or "",
@@ -269,7 +285,8 @@ def _read_tables():
         "partId": row["part_code"] or "",
         "basis": row["basis"] or "",
     } for row in _rows(app_tables.links)]
-    workers = [row["name"] for row in _rows(app_tables.workers) if row["name"]]
+    table = _workers_table()
+    workers = [row["name"] for row in _rows(table) if row["name"]] if table is not None else []
     return {
         "products": products,
         "molds": molds,
@@ -284,8 +301,11 @@ def _read_tables():
 
 def _write_tables(graph):
     """Replace every entity table with the graph, in batches."""
-    for name in ("links", "workers") + tuple(_WRITERS):
+    workers_table = _workers_table()
+    for name in ("links",) + tuple(_WRITERS):
         _table(name).delete_all_rows()
+    if workers_table is not None:
+        workers_table.delete_all_rows()
     for kind, writer in _WRITERS.items():
         rows = [writer(item) for item in graph.get(kind) or []]
         for start in range(0, len(rows), 200):
@@ -294,8 +314,8 @@ def _write_tables(graph):
     if links:
         app_tables.links.add_rows(links)
     workers = [{"name": name} for name in graph.get("workers") or []]
-    if workers:
-        app_tables.workers.add_rows(workers)
+    if workers and workers_table is not None:
+        workers_table.add_rows(workers)
 
 
 def _meta():
@@ -311,7 +331,7 @@ def _snapshot_media(graph):
 
 
 def _read_snapshot(row):
-    media = row["snapshot"]
+    media = column(row, "snapshot")
     if media is None:
         return None
     try:
@@ -321,7 +341,7 @@ def _read_snapshot(row):
 
 
 def _save_snapshot(meta, graph):
-    version = int(meta["version"] or 0) + 1
+    version = int(column(meta, "version", 0)) + 1
     meta.update(
         snapshot=_snapshot_media(graph),
         version=version,
@@ -345,7 +365,7 @@ def _ready(graph):
 
 def _load_unlocked():
     meta = _meta()
-    version = meta["version"] or 0
+    version = column(meta, "version", 0)
     if _CACHE["graph"] is not None and _CACHE["version"] == version:
         return _CACHE["graph"]
     loaded = _read_snapshot(meta)

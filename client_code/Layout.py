@@ -1,8 +1,6 @@
 """Page building blocks on the Craftify standard page."""
 
 from anvil import *
-import anvil.google.auth, anvil.google.drive
-from anvil.google.drive import app_files
 
 
 def esc(value):

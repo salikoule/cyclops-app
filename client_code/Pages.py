@@ -2,9 +2,7 @@
 
 import anvil.server
 from anvil import *
-import anvil.google.auth, anvil.google.drive
-from anvil.google.drive import app_files
-
+from craftify_library.CraftifyUtils import dialogs
 from craftify_library.CustomComponents.ChartCard import ChartCard
 from craftify_library.CustomComponents.EChart import EChart
 from craftify_library.CustomComponents.KpiCard import KpiCard
@@ -26,6 +24,24 @@ TITLES = {
     "recipe": "Recipes",
     "material": "Raw materials",
     "color": "Colors",
+}
+CONFIRM = {
+    "remove-link": ("Unlink these parts?", "The lid and the body stop showing each other.", "Unlink", True),
+    "remove-slot": ("Remove this feed?", "The material or color comes off this recipe. Its lot goes with it.", "Remove", True),
+    "remove-issue": ("Delete this stoppage?", "The record of this stop and its fix is removed from the recipe.", "Delete", True),
+    "delete-recipe": ("Delete this recipe?", "The setting sheet, its feeds, and its stoppages are removed. The product and the mold stay.", "Delete recipe", True),
+    "clone-product": ("Clone this product?", "A copy is made with its mold and every recipe. Stoppages are not copied.", "Clone", False),
+    "clone-recipe": ("Clone this recipe?", "A copy with the same settings and feeds is made on the same press.", "Clone", False),
+}
+DIRECT = ("remove-link", "remove-slot", "set-standard", "clone-product", "clone-recipe", "remove-issue", "delete-recipe")
+KPI_ICON = {
+    "product": ("inventory_2", "#1e3a5f"),
+    "mold": ("view_in_ar", "#7c3aed"),
+    "press": ("precision_manufacturing", "#0f766e"),
+    "recipe": ("tune", "#2563eb"),
+    "variant": ("palette", "#db2777"),
+    "material": ("science", "#d97706"),
+    "stoppage": ("build", "#dc2626"),
 }
 CREATE = {
     "product": ("New product", "new-product"),
@@ -98,27 +114,41 @@ class Screen:
             "index": dataset.get("index") or "",
             "slotKind": dataset.get("slotKind") or "",
         }
-        if action in ("remove-link", "remove-slot", "set-standard", "clone-product", "clone-recipe"):
-            self.apply(action, payload)
+        if action in DIRECT:
+            ask = CONFIRM.get(action)
+            if ask and not dialogs.confirm(ask[1], title=ask[0], confirm_text=ask[2], danger=ask[3]):
+                return
+            problem = self.apply(action, payload)
+            if problem:
+                Notification(problem, style="warning", timeout=5).show()
             return
-        if not Editor.open_editor(self, action):
+        if not Editor.open_editor(self, action, payload):
             Notification("That edit is not available on this record.", style="warning").show()
 
-    def apply(self, action, payload):
+    def apply(self, action, payload, close=None):
+        """Run an edit. Returns an error message, or None once the page shows the result."""
         body = {"contextKind": self.kind or "", "contextId": self.code or ""}
         body.update(payload or {})
-        result = _call("cyclops_apply", action, body)
+        try:
+            result = anvil.server.call("cyclops_apply", action, body)
+        except Exception as error:
+            return str(error) or "The change could not be saved."
         if not result:
-            return
+            return "The change could not be saved."
         if result.get("error"):
-            Notification(result["error"], style="warning", timeout=4).show()
-            return
+            return result["error"]
+        if close is not None:
+            close()
         Data.invalidate()
+        shell = get_open_form()
+        if hasattr(shell, "refresh_counts"):
+            shell.refresh_counts()
         redirect = result.get("redirect") or {}
         if redirect.get("kind"):
             Nav.go(redirect["kind"], redirect.get("code"))
-            return
+            return None
         self.render()
+        return None
 
     def block(self, markup):
         return Layout.interactive(markup, self.on_html)
@@ -138,35 +168,67 @@ class Screen:
             self._kpis(counts),
             self._chart(data.get("chart") or {}),
             self._board(data.get("presses") or []),
+            self._stoppages(data.get("stoppages") or []),
             self._gaps(data),
         )
 
+    def _stoppages(self, rows):
+        if not rows:
+            return None
+        items = []
+        for row in rows:
+            hours = ("%s h" % Format.trim(row.get("hours"))) if row.get("hours") is not None else row.get("status")
+            items.append(
+                '<a class="cy-row cy-stop" href="javascript:void(0)" data-nav="%s"><div class="cy-when">%s</div><div class="cy-grow"><b>%s</b> <span class="cy-muted">on %s</span><div class="cy-sub">%s</div></div>%s</a>'
+                % (
+                    Layout.esc(Nav.path("recipe", row.get("id"))),
+                    Layout.esc(row.get("start") or "—"),
+                    Layout.esc(row.get("product")),
+                    Layout.esc(row.get("press")),
+                    Layout.esc(Format.clip(row.get("cause"), 140)),
+                    Format.status(hours, row.get("tone")),
+                )
+            )
+        card = Layout.section("Latest stoppages", "From the Issues sheet and the floor. Open a row for the recipe, the fix, and the worker.")
+        Layout.body(card, self.block('<div class="cy-list">%s</div>' % "".join(items)))
+        return card
+
     def _kpis(self, counts):
         cards = (
-            ("Products", counts.get("products"), "%s with a recipe" % (counts.get("withRecipe") or 0), "product"),
-            ("Molds", counts.get("molds"), "One per product name today", "mold"),
-            ("Presses", counts.get("presses"), "%s on the board" % (counts.get("onBoard") or 0), "press"),
-            ("Recipes", counts.get("liveRecipes"), "+ %s trial" % (counts.get("trialRecipes") or 0), "recipe"),
-            ("Color variants", counts.get("variants"), "Distinct colors on live recipes", "product"),
-            ("Materials", counts.get("materials"), "%s colors" % (counts.get("colors") or 0), "material"),
+            ("Products", counts.get("products"), "%s with a recipe" % (counts.get("withRecipe") or 0), "product", "product", None),
+            ("Molds", counts.get("molds"), "One per product name today", "mold", "mold", None),
+            ("Presses", counts.get("presses"), "%s on the board" % (counts.get("onBoard") or 0), "press", "press", None),
+            ("Recipes", counts.get("liveRecipes"), "+ %s trial" % (counts.get("trialRecipes") or 0), "recipe", "recipe", None),
+            ("Color variants", counts.get("variants"), "Distinct colors on live recipes", "product", "variant", None),
+            ("Materials", counts.get("materials"), "%s colors" % (counts.get("colors") or 0), "material", "material", None),
+            ("Stoppages", counts.get("stoppages"), "%s h of downtime logged" % (Format.trim(counts.get("downtimeHours")) or "0"), "recipe", "stoppage", "stoppage-open"),
         )
         built = []
-        for title, value, subtitle, kind in cards:
-            card = KpiCard(title=title, value=Format.trim(value) or "0", subtitle=subtitle, clickable=True)
-            card.set_event_handler("click", lambda kind=kind, **e: Nav.go(kind))
+        for title, value, subtitle, kind, icon, gap in cards:
+            name, color = KPI_ICON[icon]
+            card = KpiCard(title=title, value=Format.trim(value) or "0", subtitle=subtitle, clickable=True, icon=name, icon_color=color)
+            card.set_event_handler("click", lambda kind=kind, gap=gap, **e: Nav.go(kind, query={"gap": gap} if gap else None))
             built.append(card)
         return Layout.grid("repeat(auto-fit, minmax(170px, 1fr))", *built)
 
     def _chart(self, chart):
-        card = ChartCard(title="Live recipes by press", subtitle="Trial rows are left out. Pieces per hour appear once a mold has cavities.")
+        card = ChartCard(title="Live recipes and downtime by press", subtitle="Bars: live recipes, trial rows left out. Line: hours of logged stoppages.")
         labels = chart.get("labels") or []
         values = chart.get("values") or []
+        downtime = chart.get("downtime") or []
         options = apply_craftify_echarts_theme({
             "tooltip": {"trigger": "axis"},
-            "grid": {"left": 44, "right": 16, "top": 16, "bottom": 64},
+            "legend": {"top": 0, "left": "center"},
+            "grid": {"left": 44, "right": 52, "top": 48, "bottom": 64},
             "xAxis": {"type": "category", "data": labels, "axisLabel": {"rotate": 40, "interval": 0}},
-            "yAxis": {"type": "value", "minInterval": 1},
-            "series": [{"type": "bar", "data": values, "name": "Recipes"}],
+            "yAxis": [
+                {"type": "value", "minInterval": 1, "name": "Recipes"},
+                {"type": "value", "name": "Hours", "splitLine": {"show": False}},
+            ],
+            "series": [
+                {"type": "bar", "data": values, "name": "Recipes"},
+                {"type": "line", "data": downtime, "name": "Downtime (h)", "yAxisIndex": 1, "smooth": False, "symbolSize": 7},
+            ],
         })
         card.mount(EChart(options=options, height="280px"))
         return Layout.flat(card)
@@ -190,7 +252,7 @@ class Screen:
             change = ("changeover %s min" % Format.trim(press.get("changeover"))) if press.get("changeover") else "changeover unknown"
             idle = " cy-idle" if press.get("idle") else ""
             cards.append(
-                '<a class="cy-press%s" href="javascript:void(0)" data-nav="%s"><div class="pn">%s<small>%s</small></div><div class="mounted">%s</div><div class="sub">%s%s</div><div class="sub">%s · %s</div></a>'
+                '<a class="cy-presscard%s" href="javascript:void(0)" data-nav="%s"><div class="pn">%s<small>%s</small></div><div class="mounted">%s</div><div class="sub">%s%s</div><div class="sub">%s · %s</div></a>'
                 % (
                     idle,
                     Layout.esc(Nav.path("press", press.get("id"))),
@@ -377,8 +439,10 @@ class Screen:
             )),
             self._flow_section(data),
             self._runs(data),
+            self._approved(data),
             self._missing(data),
             self._recipe_section("All recipes", "Including trial rows.", data.get("recipes") or [], hide=("product",)),
+            self._issue_section("Stoppages on this product", data.get("issues") or [], hide=("product",)),
             self.block('<div class="cy-card cy-notes"><b>Notes.</b> %s</div>' % Layout.esc(data.get("notes"))) if data.get("notes") else None,
         )
 
@@ -444,6 +508,39 @@ class Screen:
         Layout.body(card, self.block(body + goes))
         return card
 
+    def _approved(self, data):
+        rows = data.get("approvedPresses") or []
+        pills = []
+        for row in rows:
+            if row.get("approved") and row.get("hasRecipe"):
+                note, tone = "approved · has recipe", "ok"
+            elif row.get("approved"):
+                note, tone = "approved · no recipe yet", "warn"
+            else:
+                note, tone = "runs here · not on the sheet", "muted"
+            pills.append(
+                '<a class="cy-approval cy-tone-%s" href="javascript:void(0)" data-nav="%s"><b>%s</b><span>%s</span></a>'
+                % (tone, Layout.esc(Nav.path("press", row.get("id"))), Layout.esc(row.get("name")), Layout.esc(note))
+            )
+        body = '<div class="cy-approvals">%s</div>' % "".join(pills) if pills else '<p class="cy-muted">No press is approved on the product sheet yet.</p>'
+        card = Layout.section(
+            "Presses this product may run on",
+            "From the product sheet's press columns, next to where a recipe exists.",
+            actions=(Layout.button("Change", self.act("set-approved")),),
+        )
+        Layout.body(card, self.block(body))
+        return card
+
+    def _issue_section(self, title, rows, hide=(), actions=()):
+        if not rows and not actions:
+            return None
+        card = Layout.section(title, "%s logged · newest first. Open a row for the recipe." % len(rows), padded=False, actions=actions)
+        if rows:
+            Layout.body(card, Tables.mount(rows, "issue", Tables.columns_for("issue", hide), height="360px"))
+        else:
+            Layout.body(card, Layout.html('<p class="cy-muted cy-pad">No stoppages logged.</p>'))
+        return card
+
     def _missing(self, data):
         bits = data.get("missingBits") or []
         if not bits:
@@ -490,20 +587,23 @@ class Screen:
                 ("On the board", mounted, not data.get("mounted")),
                 ("EUROMAP", Format.text(data.get("euromap")), False),
                 ("Serial", Format.text(data.get("serial")), False),
-                ("Robot", Format.text(robot), False),
+                ("Robot", Format.text(robot) + ((" <small>· %s</small>" % Layout.esc(data.get("robotYear"))) if data.get("robotYear") else ""), False),
                 ("Changeover (min)", Format.text(data.get("changeoverMin"), "add → sequencing"), not data.get("changeoverMin")),
             )),
             self._tabs((
                 ("Products", "summary", data.get("products") or [], ("presses",)),
+                ("Approved products", "summary", data.get("approved") or [], ("presses",)),
                 ("Recipes", "recipe", data.get("recipes") or [], ("press",)),
+                ("Stoppages", "issue", data.get("issues") or [], ("press",)),
             )),
         )
 
     def _recipe(self, data):
         actions = [Layout.button("Edit settings", self.act("edit-recipe"), primary=True)]
-        if not data.get("standard"):
+        if not data.get("standard") and not data.get("trial"):
             actions.append(Layout.button("Mark as standard", self.act("set-standard")))
         actions.append(Layout.button("Clone", self.act("clone-recipe")))
+        actions.append(Layout.button("Delete", self.act("delete-recipe"), danger=True))
         siblings = data.get("siblings") or []
         sibling_html = " · ".join(Format.link("recipe", code, code) for code in siblings)
         pph = data.get("pph")
@@ -532,7 +632,34 @@ class Screen:
             self._zones(data, zones),
             self._feeds(data),
             self._settings(data),
+            self._recipe_issues(data),
         )
+
+    def _recipe_issues(self, data):
+        rows = []
+        for item in data.get("issues") or []:
+            hours = ("%s h" % Format.trim(item.get("hours"))) if item.get("hours") is not None else item.get("status")
+            who = (" · " + Layout.esc(item.get("worker"))) if item.get("worker") else ""
+            rows.append(
+                '<div class="cy-row cy-stop"><div class="cy-when">%s<small>%s</small></div><div class="cy-grow"><b>%s</b><div class="cy-sub">%s%s</div></div>%s'
+                '<button type="button" class="cy-mini" data-action="edit-issue" data-index="%s">Edit</button>'
+                '<button type="button" class="cy-mini cy-danger" data-action="remove-issue" data-index="%s">Delete</button></div>'
+                % (
+                    Layout.esc(item.get("start") or "—"),
+                    Layout.esc(("→ " + item.get("end")) if item.get("end") else "still down"),
+                    Layout.esc(item.get("cause")),
+                    Layout.esc(item.get("fix") or "No fix written"),
+                    who,
+                    Format.status(hours, item.get("tone")),
+                    item.get("index"),
+                    item.get("index"),
+                )
+            )
+        body = '<div class="cy-list">%s</div>' % "".join(rows) if rows else '<p class="cy-muted">No stoppages logged on this recipe.</p>'
+        card = Layout.section("Stoppages", "Breakdowns while this recipe ran: what stopped, who reported it, what was done.",
+                              actions=(Layout.button("Log a stoppage", self.act("add-issue")),))
+        Layout.body(card, self.block(body))
+        return card
 
     def _zones(self, data, zones):
         why = "Trial block: these temperatures step by 10 °C. Saving the settings confirms the row." if data.get("trial") else "Barrel temperatures in °C."
@@ -572,6 +699,8 @@ class Screen:
             setting_rows = "".join("<tr><td>%s</td><td>%s</td></tr>" % (Layout.esc(item.get("label")), Layout.esc(item.get("value"))) for item in settings)
         else:
             setting_rows = '<tr><td colspan="2" class="cy-muted">No injection row filled</td></tr>'
+        if data.get("settingsNote"):
+            setting_rows += '<tr><td>Note</td><td>%s</td></tr>' % Layout.esc(data.get("settingsNote"))
         written = (
             ("ΠΧ", data.get("px")),
             ("ΠΥ", data.get("py")),
@@ -598,9 +727,15 @@ class Screen:
         ]
         if link:
             facts.append(("Datasheet", link, False))
-        description = Layout.html('<div class="cy-card">%s</div>' % Layout.esc(data.get("description"))) if data.get("description") else None
+        if data.get("invoiceCode"):
+            facts.append(("Invoice code", Format.text(data.get("invoiceCode")), False))
+        lines = [("Description", data.get("description")), ("Notes", data.get("notes"))]
+        text = "<br>".join("<b>%s.</b> %s" % (label, Layout.esc(value)) for label, value in lines if value)
+        description = self.block('<div class="cy-card cy-notes">%s</div>' % text) if text else None
         self.show(
-            Layout.page_header(data.get("name") or "", eyebrow=data.get("id") or ""),
+            Layout.page_header(data.get("name") or "", eyebrow=data.get("id") or "",
+                               description="" if data.get("catalog") else "Written on recipes but not in the material sheet.",
+                               actions=(Layout.button("Edit", self.act("edit-material"), primary=not data.get("account")),)),
             self._meta(data),
             self._facts(tuple(facts)),
             description,
@@ -611,14 +746,20 @@ class Screen:
         )
 
     def _color(self, data):
+        link = ('<a href="%s" target="_blank" rel="noopener">Open</a>' % Layout.esc(data.get("link"))) if data.get("link") else ""
         self.show(
-            Layout.page_header(data.get("name") or "", eyebrow=data.get("id") or ""),
+            Layout.page_header(data.get("name") or "", eyebrow=data.get("id") or "",
+                               description="" if data.get("catalog") else "Written on recipes but not in the colour sheet.",
+                               actions=(Layout.button("Edit", self.act("edit-color"), primary=not data.get("account")),)),
             self._meta(data),
             self._facts((
                 ("Label", Format.text(data.get("label")), False),
                 ("Label code", Format.text(data.get("code")), False),
+                ("Shade", Format.text(data.get("shade")), False) if data.get("shade") else None,
                 ("Accounting", Format.text(data.get("account"), "<small>missing</small>"), not data.get("account")),
+                ("Sample", link, False) if link else None,
             )),
+            self.block('<div class="cy-card cy-notes"><b>Notes.</b> %s</div>' % Layout.esc(data.get("notes"))) if data.get("notes") else None,
             self._tabs((
                 ("Products", "summary", data.get("products") or [], ()),
                 ("Recipes", "recipe", data.get("recipes") or [], ()),
@@ -636,6 +777,7 @@ class Screen:
             bar.add_component(button)
             panel = ColumnPanel(spacing_above="none", spacing_below="none", visible=index == 0)
             table = Tables.mount(rows, "product" if kind == "summary" else kind, Tables.columns_for(kind, hide), height="480px")
+            button.text = "%s · %s" % (label, len(rows))
             panel.add_component(table, full_width_row=True)
             panels.append(panel)
             tables.append(table)
@@ -650,8 +792,10 @@ class Screen:
             except Exception:
                 pass
 
+        holder = Layout.html('<div class="cy-tabbar" anvil-slot="default"></div>')
+        holder.add_component(bar)
         card = Layout.section("Where it is used", padded=False)
-        Layout.body(card, bar, *panels)
+        Layout.body(card, holder, *panels)
         return card
 
 

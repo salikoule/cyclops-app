@@ -7,6 +7,7 @@ so the status rules, gaps, and edits can be tested on their own.
 import copy
 import datetime
 import re
+import unicodedata
 
 TYPES = {
     "part": "Molded part",
@@ -518,7 +519,7 @@ def gaps(graph):
         {"key": "board-mismatch", "route": "presses", "who": ["engineer", "planner"], "title": "Board shows a product with no recipe on that press", "benefit": "The floor board and the recipes agree; a mounted mold always has its setting sheet.", "ids": [press["id"] for press in board_mismatch]},
         {"key": "press-no-recipe", "route": "presses", "who": ["planner"], "title": "Presses with no recipe at all", "benefit": "Either the press is retired from planning or its capabilities are recorded.", "ids": [press["id"] for press in graph["presses"] if not (index["recipesByPress"].get(press["id"]) or [])]},
         {"key": "approved-no-recipe", "route": "products", "who": ["planner", "engineer"], "title": "Approved on a press in the product sheet, but no recipe there", "benefit": "Every press a planner may book has a setting sheet, so a job can move presses without a trial run.", "ids": [product["id"] for product in graph["products"] if approved_without_recipe(graph, product)]},
-        {"key": "stoppage-open", "route": "recipes", "who": ["engineer", "manager"], "title": "Stoppages without a usable restart time", "benefit": "Downtime per press and per mold can be totalled, and repeat faults show up by hours lost.", "ids": uniq([recipe["id"] for recipe in graph["recipes"] if any(issue_state(issue) != "closed" for issue in recipe.get("issues") or [])])},
+        {"key": "stoppage-open", "route": "recipes", "who": ["engineer", "manager"], "title": "Recipes with a stoppage that has no usable restart time", "benefit": "Downtime per press and per mold can be totalled, and repeat faults show up by hours lost.", "ids": uniq([recipe["id"] for recipe in graph["recipes"] if any(issue_state(issue) != "closed" for issue in recipe.get("issues") or [])])},
     ]
     published = []
     for item in items:
@@ -586,6 +587,7 @@ def issue_rows(graph, recipes):
             state = issue_state(issue)
             rows.append({
                 "id": recipe["id"],
+                "key": "%s:%s" % (recipe["id"], position),
                 "index": position,
                 "product": product_name(index, recipe.get("productId")),
                 "productId": recipe.get("productId") or "",
@@ -601,7 +603,7 @@ def issue_rows(graph, recipes):
                 "status": "Closed" if state == "closed" else cap(state),
                 "tone": "ok" if state == "closed" else "warn",
             })
-    rows.sort(key=lambda row: row["start"], reverse=True)
+    rows.sort(key=lambda row: (row["state"] != "check dates", row["start"]), reverse=True)
     return rows
 
 
@@ -1304,8 +1306,18 @@ def detail(graph, kind, code):
     return builder(graph, code)
 
 
+_LOOKALIKE = str.maketrans("αβεζηικμνορτυχς", "abezhikmnoptyxσ")
+
+
+def fold(text):
+    """Lower case without accents, with Greek capitals that look Latin read as Latin (Α100 = A100)."""
+    plain = unicodedata.normalize("NFD", str(text or "").lower())
+    plain = "".join(char for char in plain if not unicodedata.combining(char))
+    return plain.translate(_LOOKALIKE)
+
+
 def search(graph, term, limit=14):
-    query = (term or "").strip().lower()
+    query = fold(term).strip()
     if len(query) < 2:
         return []
     index = _ix(graph)
@@ -1316,29 +1328,27 @@ def search(graph, term, limit=14):
             return
         found.append({"kind": kind, "id": code, "label": label})
 
+    def hit(*parts):
+        return query in fold(" ".join(part or "" for part in parts))
+
     for product in graph.get("products") or []:
-        if query in (product.get("name") or "").lower() or query in product["id"].lower() or query in (product.get("erpCode") or "").lower():
+        if hit(product.get("name"), product["id"], product.get("erpCode")):
             push("product", product["id"], product.get("name") or product["id"])
     for mold in graph.get("molds") or []:
-        if query in mold["id"].lower() or query in (mold.get("name") or "").lower():
+        if hit(mold["id"], mold.get("name")):
             push("mold", mold["id"], mold.get("name") or mold["id"])
     for press in graph.get("presses") or []:
-        if query in (press.get("name") or "").lower() or query in press["id"].lower() or query in (press.get("alias") or "").lower():
+        if hit(press.get("name"), press["id"], press.get("alias")):
             push("press", press["id"], press.get("name") or press["id"])
     for recipe in graph.get("recipes") or []:
-        blob = " ".join((
-            recipe["id"],
-            product_name(index, recipe.get("productId")),
-            press_name(index, recipe.get("pressId")),
-        )).lower()
-        if query in blob:
-            push("recipe", recipe["id"], "%s on %s" % (product_name(index, recipe.get("productId")), press_name(index, recipe.get("pressId"))))
+        product, press = product_name(index, recipe.get("productId")), press_name(index, recipe.get("pressId"))
+        if hit(recipe["id"], product, press):
+            push("recipe", recipe["id"], "%s on %s" % (product, press))
     for material in graph.get("materials") or []:
-        if query in (material.get("text") or "").lower() or query in material["id"].lower() or query in (material.get("account") or "").lower():
+        if hit(material.get("text"), material["id"], material.get("account")):
             push("material", material["id"], material.get("text") or material["id"])
     for color in graph.get("colors") or []:
-        blob = " ".join((color_name(index, color["id"]), color["id"], color.get("account") or "")).lower()
-        if query in blob:
+        if hit(color_name(index, color["id"]), color["id"], color.get("account")):
             push("color", color["id"], color_name(index, color["id"]))
     return found
 
@@ -1674,6 +1684,18 @@ def action_remove_link(graph, payload):
     return _refresh({"links": ["*"]})
 
 
+def _number_error(payload, checks):
+    """Name the first changed field that is not a number. Unchanged sheet values pass as they are."""
+    for key, label, current in checks:
+        if key not in payload:
+            continue
+        text = str(payload.get(key) or "").strip()
+        if not text or text == str(current if current is not None else "").strip() or num(text) is not None:
+            continue
+        return "%s has to be a number." % label
+    return None
+
+
 def action_edit_mold(graph, payload):
     index = _ix(graph)
     if payload.get("contextKind") == "mold":
@@ -1682,6 +1704,9 @@ def action_edit_mold(graph, payload):
         mold = _first_mold(index, payload.get("contextId"))
     if mold is None:
         return {"error": "This record has no mold yet."}
+    error = _number_error(payload, [("cavities", "Cavities", mold.get("cavities")), ("shotWeight", "Shot weight", mold.get("shotWeight"))])
+    if error:
+        return {"error": error}
     mold["cavities"] = whole(payload.get("cavities"))
     mold["shotWeight"] = whole(payload.get("shotWeight"))
     mold["location"] = (payload.get("location") or "").strip()
@@ -1694,6 +1719,9 @@ def action_edit_press(graph, payload):
     press = _ix(graph)["press"].get(payload.get("contextId"))
     if press is None:
         return {"error": "Press was not found."}
+    error = _number_error(payload, [("changeoverMin", "Changeover time", press.get("changeoverMin"))])
+    if error:
+        return {"error": error}
     lifecycle = payload.get("lifecycle") or "active"
     press["lifecycle"] = lifecycle if lifecycle in LIFECYCLES else "active"
     press["changeoverMin"] = whole(payload.get("changeoverMin"))
@@ -1824,6 +1852,11 @@ def action_edit_recipe(graph, payload):
     if recipe is None:
         return {"error": "Recipe was not found."}
     temps = recipe.get("temps") or {}
+    checks = [("temp_" + key, "%s temperature" % ("Nozzle" if key == "nozzle" else key.upper()), temps.get(key)) for key in TEMP_KEYS]
+    checks += [("cycle", "Cycle", recipe.get("cycle")), ("cooling", "Cooling", recipe.get("cooling")), ("screwRpm", "Screw speed", recipe.get("screwRpm"))]
+    error = _number_error(payload, checks)
+    if error:
+        return {"error": error}
     for key in TEMP_KEYS:
         temps[key] = (payload.get("temp_" + key) or "").strip()
     recipe["temps"] = temps

@@ -1,8 +1,6 @@
 """Tabulator lists. A row click opens the record."""
 
 from anvil import *
-import anvil.google.auth, anvil.google.drive
-from anvil.google.drive import app_files
 from tabulator.Tabulator import Tabulator
 
 from cyclops_app import Format, Layout, Nav
@@ -40,6 +38,13 @@ def _text(cell, **params):
     if value is None or value == "":
         return '<span class="cy-empty">—</span>'
     return Layout.esc(value)
+
+
+def _wrap(cell, **params):
+    value = _value(cell)
+    if value is None or value == "":
+        return '<span class="cy-empty">—</span>'
+    return '<span class="cy-wrap">%s</span>' % Layout.esc(value)
 
 
 def _num(cell, **params):
@@ -95,6 +100,7 @@ def columns_for(kind, hide=()):
             _col("ERP code", "erp", width=110, formatter=_text),
             {"title": "Mold", "field": "mold", "width": 120, "formatter": _mold_id},
             {"title": "Runs on", "field": "presses", "min_width": 150, "formatter": _pills("press")},
+            {"title": "Approved on", "field": "approved", "min_width": 150, "formatter": _pills("press")},
             _num_col("Variants", "variants", 90),
             _num_col("Recipes", "recipes", 86),
             _num_col("Trial", "trial", 70),
@@ -147,6 +153,20 @@ def columns_for(kind, hide=()):
             _num_col("Recipes", "recipes", 90),
             _num_col("Best cycle (s)", "cycle", 120),
             {"title": "Colors", "field": "colors", "min_width": 140, "formatter": _pills("color")},
+            _status_col(),
+        ]
+    elif kind == "issue":
+        columns = [
+            _col("Stopped", "start", width=140, formatter=_text),
+            _col("Recipe", "id", width=112, formatter=_id("recipe")),
+            _col("Product", "product", min_width=170, formatter=_text),
+            {"title": "Press", "field": "press", "width": 130, "formatter": _press_pill, "header_filter": True},
+            _col("Cause", "cause", min_width=240, formatter=_wrap),
+            _col("Worker", "worker", width=170, formatter=_text),
+            _col("Fix", "fix", min_width=240, formatter=_wrap),
+            _col("Restarted", "end", width=140, formatter=_text),
+            _num_col("Hours", "hours", 80),
+            _status_col(),
         ]
     elif kind == "material":
         columns = [
@@ -185,11 +205,12 @@ def mount(rows, kind, columns, height="640px"):
         "pagination_size_selector": [25, 50, 100, True],
         "pagination_counter": "rows",
         "layout": "fitDataFill",
-        "index": "id",
+        "index": "key" if kind == "issue" else "id",
         "placeholder": "No rows match.",
     }
     table.columns = columns
     table.data = rows or []
+    target = "recipe" if kind == "issue" else kind
 
     def on_row(sender, **event_args):
         row = event_args.get("row")
@@ -201,7 +222,7 @@ def mount(rows, kind, columns, height="640px"):
             return
         code = data.get("id")
         if code:
-            Nav.go(kind, code)
+            Nav.go(target, code)
 
     table.set_event_handler("row_click", on_row)
     return Layout.flat(table)

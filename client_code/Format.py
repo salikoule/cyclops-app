@@ -1,5 +1,3 @@
-import anvil.google.auth, anvil.google.drive
-from anvil.google.drive import app_files
 """Small HTML fragments for ids, status, and pills."""
 
 from cyclops_app import Layout, Nav
@@ -14,7 +12,14 @@ def trim(value):
         return str(value)
     if number == int(number):
         return str(int(number))
-    return str(number)
+    return ("%.4f" % number).rstrip("0").rstrip(".")
+
+
+def clip(value, limit=120):
+    text = "" if value is None else str(value).strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "…"
 
 
 def plural(count, one, many=None):

@@ -233,3 +233,24 @@ def test_approvals_material_color_edits_and_delete():
     assert deleted["redirect"] == {"kind": "product", "code": "PRD-0001"}
     assert deleted["dirty"] == {"recipes": ["REC-0002"]}
     assert "REC-0002" not in graph["_ix"]["recipe"]
+
+
+def test_search_folds_greek_lookalikes_and_accents():
+    assert domain.fold("ΚΑΛΥΚΑΣ Α100").endswith(domain.fold("A100"))
+    assert domain.fold("ΤΟΣΤ SAFE-T") == domain.fold("τοστ safe-t")
+    assert domain.fold("Αρίδα") == domain.fold("αριδα")
+    graph = plant()
+    name = graph["products"][0]["name"]
+    assert domain.search(graph, name.lower())[0]["id"] == graph["products"][0]["id"]
+
+
+def test_numeric_fields_reject_text():
+    graph = plant()
+    recipe = graph["_ix"]["recipe"]["REC-0021"]
+    before = recipe.get("cycle")
+    bad = domain.dispatch(graph, "edit-recipe", {"contextId": "REC-0021", "cycle": "abc"})
+    assert bad["error"] == "Cycle has to be a number."
+    assert recipe.get("cycle") == before
+    assert domain.dispatch(graph, "edit-recipe", {"contextId": "REC-0021", "cycle": "31,5"}).get("error") is None
+    assert domain.dispatch(graph, "edit-press", {"contextId": "PRS-01", "changeoverMin": "soon"})["error"]
+    assert domain.dispatch(graph, "edit-mold", {"contextKind": "mold", "contextId": "MLD-0001", "cavities": "four"})["error"]

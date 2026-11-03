@@ -64,6 +64,12 @@ def blank(text):
     return "" if text in ("", "-") else text
 
 
+def joined(text):
+    """The Machines sheet packs two values in one cell with "||" or a line break."""
+    parts = [part.strip() for part in re.split(r"\|\||\n", blank(text) or "")]
+    return " · ".join(part for part in parts if part)
+
+
 def date_text(value):
     if isinstance(value, datetime.datetime):
         return value.date().isoformat()
@@ -112,7 +118,7 @@ def parse(path):
         aa = cell(row, 2)
         presses.append({
             "name": name, "alias": cell(row, 1), "aa": int(float(aa)) if aa else 99,
-            "serial": blank(cell(row, 3)), "robot": blank(cell(row, 4)), "robotSerial": blank(cell(row, 5)),
+            "serial": blank(cell(row, 3)), "robot": joined(cell(row, 4)), "robotSerial": joined(cell(row, 5)),
             "robotYear": year_text(row[6] if len(row) > 6 else None),
             "euromap": blank(cell(row, 8)), "board": {"mounted": "", "location": "", "note": ""},
         })

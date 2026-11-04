@@ -12,7 +12,6 @@ from cyclops_app import Format, Layout, Nav
 
 NAV = (
     ("Overview", "overview", "fa:table-cells", True),
-    ("Structure", "structure", "fa:sitemap", True),
     None,
     ("Products", "product", "fa:box", False),
     ("Molds", "mold", "fa:cubes", False),
@@ -20,6 +19,7 @@ NAV = (
     ("Recipes", "recipe", "fa:sliders", False),
     ("Materials", "material", "fa:flask", False),
     ("Colors", "color", "fa:palette", False),
+    ("Production", "run", "fa:clipboard-list", False),
     ("Stoppages", "issue", "fa:wrench", False),
 )
 

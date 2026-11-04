@@ -98,3 +98,8 @@ class ColorRoute(AppPage):
 class StoppagesRoute(AppPage):
     path = "/stoppages"
     form = "StoppagesForm"
+
+
+class ProductionRoute(AppPage):
+    path = "/production"
+    form = "ProductionForm"

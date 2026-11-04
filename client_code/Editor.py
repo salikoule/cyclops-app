@@ -4,11 +4,14 @@ from datetime import datetime
 
 from anvil import *
 import anvil.js
-from craftify_library.CraftifyUtils import drawer
+from craftify_library.CraftifyUtils import dialogs, drawer
 
 from cyclops_app import Data, Layout
 
 WIDE = ("area", "checks")
+LOGS = ("issue", "run")
+_REMOVE = {"issue": ("remove-issue", "Delete this stoppage?", "The record of this stop and its fix is removed from the recipe."),
+           "run": ("remove-run", "Delete this run?", "The pieces, scrap, and settings logged for this run are removed.")}
 
 
 def _text(value):
@@ -121,11 +124,22 @@ def _order(first, then, box, field):
     check()
 
 
+def _follow(parent, child, groups, empty):
+    """Refill ``child`` with ``groups[parent value]`` whenever the parent dropdown changes."""
+    def refill(**event_args):
+        options = groups.get(parent.selected_value) or []
+        child.items = [(opt.get("label") or "", opt.get("value")) for opt in options] or [(empty, "")]
+        child.selected_value = options[0].get("value") if options else ""
+
+    parent.set_event_handler("change", refill)
+    refill()
+
+
 _OPEN = {"drawer": None}
 
 
-def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=520):
-    """Open a drawer with ``fields``. ``on_save(payload, close)`` returns an error string or None."""
+def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=520, on_delete=None):
+    """Open a drawer with ``fields``. ``on_save(payload, close)`` and ``on_delete(close)`` return an error string or None."""
     if _OPEN["drawer"] is not None and _OPEN["drawer"].is_open:
         if not _OPEN["drawer"].close(force=False):
             return _OPEN["drawer"]
@@ -148,12 +162,15 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
         box = Layout.field(field["label"], view, hint=field.get("hint") or "")
         if field.get("type") == "datetime":
             moments[field["name"]] = (field, box, not field.get("time"))
-        if (field.get("type") or "text") in WIDE:
+        if (field.get("type") or "text") in WIDE or field.get("wide"):
             flush()
             rows.append(box)
         else:
             short.append(box)
     flush()
+    for field in fields:
+        if field.get("follows") in widgets:
+            _follow(widgets[field["follows"]], widgets[field["name"]], field.get("groups") or {}, field.get("empty") or "")
     error = Layout.html('<p class="bc-note bc-note-warn cy-form-error" anvil-name="msg"></p>')
     content = Layout.stack(error, *rows)
     for name, (field, box, _) in moments.items():
@@ -197,13 +214,22 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
 
     save_button.set_event_handler("click", save)
     cancel_button.set_event_handler("click", lambda **e: close(force=False))
+    footer = (cancel_button, save_button)
+    if on_delete is not None:
+        def delete(**event_args):
+            problem = on_delete(close)
+            if problem:
+                error.dom_nodes["msg"].textContent = problem
+                error.dom_nodes["msg"].classList.add("is-on")
+
+        footer = (Layout.button("Delete", delete, danger=True),) + footer
     holder["drawer"] = drawer.open(
         content,
         host=get_open_form(),
         title=title,
         subtitle=hint,
         eyebrow=eyebrow,
-        footer=(cancel_button, save_button),
+        footer=footer,
         width=width,
         confirm_close=drawer.discard_check(lambda: values() != initial),
     )
@@ -216,13 +242,34 @@ def _blank(label):
 
 
 def open_editor(screen, action, extra=None):
-    spec = _spec(screen, action, extra or {})
+    extra = extra or {}
+    spec = _spec(screen, action, extra)
     if spec is None:
         return False
     title, fields, hint = spec[:3]
     save_text = spec[3] if len(spec) > 3 else "Save"
     eyebrow = (screen.data or {}).get("id") or ""
-    show(title, fields, lambda payload, close: screen.apply(action, payload, close), hint, eyebrow=eyebrow, save_text=save_text)
+    on_save = lambda payload, close: screen.apply(action, payload, close)
+    on_delete = None
+    row = extra.get("row") or {}
+    if screen.kind in LOGS or row:
+        eyebrow = row.get("id") or eyebrow
+
+        def on_save(payload, close):
+            recipe = row.get("id") or payload.get("recipe") or (screen.code if screen.kind == "recipe" else "")
+            if not recipe:
+                return "Choose the press and the recipe that was running."
+            return screen.apply(action, dict(payload, contextKind="recipe", contextId=recipe), close)
+
+    if row and action[5:] in _REMOVE:
+        remove, question, detail = _REMOVE[action[5:]]
+
+        def on_delete(close):
+            if not dialogs.confirm(detail, title=question, confirm_text="Delete", danger=True):
+                return None
+            return screen.apply(remove, {"contextKind": "recipe", "contextId": row.get("id"), "index": row.get("index")}, close)
+
+    show(title, fields, on_save, hint, eyebrow=eyebrow, save_text=save_text, on_delete=on_delete)
     return True
 
 
@@ -231,6 +278,49 @@ def _worker_options(workers, current):
     if current and current not in [opt.get("value") for opt in options]:
         options.append({"label": current, "value": current})
     return [{"label": "Not recorded", "value": ""}] + options
+
+
+def _now_rounded():
+    now = datetime.now()
+    return now.strftime("%Y-%m-%d"), "%02d:%02d" % (now.hour, now.minute - now.minute % 5)
+
+
+def _shift_at(time_text):
+    try:
+        hour = int(str(time_text or "")[:2])
+    except ValueError:
+        return ""
+    return "morning" if 6 <= hour < 14 else ("afternoon" if 14 <= hour < 22 else "night")
+
+
+def _job_fields(choices):
+    return [
+        {"name": "press", "label": "Press", "type": "select", "options": [_blank("Choose a press")] + (choices.get("presses") or [])},
+        {"name": "recipe", "label": "Recipe that was running", "type": "select", "options": [], "follows": "press", "wide": True,
+         "groups": choices.get("recipesByPress") or {}, "empty": "Choose a press first"},
+    ]
+
+
+def _run_fields(run, choices):
+    start_date, start_time = run.get("startDate"), run.get("startTime")
+    if not run:
+        start_date, start_time = _now_rounded()
+    return [
+        {"name": "start", "label": "Started", "type": "datetime", "keys": ("startDate", "startTime"), "date": start_date, "time": start_time},
+        {"name": "end", "label": "Ended", "type": "datetime", "keys": ("endDate", "endTime"), "date": run.get("endDate"), "time": run.get("endTime"),
+         "after": "start", "after_error": "The end is before the start.", "hint": "Leave empty while the job is still running."},
+        {"name": "shift", "label": "Shift", "type": "select", "options": [_blank("Not recorded")] + (choices.get("shifts") or []),
+         "value": run.get("shift") if run else _shift_at(start_time)},
+        {"name": "operator", "label": "Operator", "type": "select", "options": _worker_options(choices.get("workers") or [], run.get("operator")), "value": run.get("operator") or ""},
+        {"name": "good", "label": "Good pieces", "type": "number", "value": run.get("good")},
+        {"name": "scrap", "label": "Scrap pieces", "type": "number", "value": run.get("scrap")},
+        {"name": "scrapReason", "label": "Scrap reason", "value": run.get("scrapReason"), "placeholder": "short shots, flash, streaks…"},
+        {"name": "cycle", "label": "Actual cycle (s)", "type": "number", "value": run.get("cycle"), "placeholder": "from the press display"},
+        {"name": "cavities", "label": "Cavities running", "type": "number", "value": run.get("cavities"), "placeholder": "blocked ones excluded"},
+        {"name": "lot", "label": "Product lot", "value": run.get("lot"), "placeholder": "printed on the boxes, e.g. 060526"},
+        {"name": "order", "label": "Order / ERP no.", "value": run.get("order")},
+        {"name": "notes", "label": "Notes", "type": "area", "value": run.get("notes"), "height": 64},
+    ]
 
 
 def _issue_fields(issue, workers):
@@ -374,8 +464,27 @@ def _spec(screen, action, extra):
             {"name": "lot", "label": "Lot"},
         ], "", "Add")
     if action == "add-issue":
-        return ("Log a stoppage", _issue_fields({}, choices.get("workers") or []),
-                "Leave the restart empty while the press is still down.", "Log stoppage")
+        fields = _issue_fields({}, choices.get("workers") or [])
+        if screen.kind == "issue":
+            fields = _job_fields(choices) + fields
+        return ("Log a stoppage", fields, "Leave the restart empty while the press is still down.", "Log stoppage")
+    if action == "add-run":
+        fields = _run_fields({}, choices)
+        if screen.kind == "run":
+            fields = _job_fields(choices) + fields
+        return ("Log a run", fields,
+                "Cycle and cavities as they really ran. Empty cycle or cavities fall back to the recipe and the mold.", "Log run")
+    if action == "edit-run":
+        row = extra.get("row") or {}
+        fields = [{"name": "index", "type": "hidden", "value": row.get("index")}] + _run_fields(row, choices)
+        hint = "%s on %s" % (row.get("product") or "", row.get("press") or "")
+        if row.get("sample"):
+            hint += ". This is a sample run: saving it makes it a real one."
+        return ("Edit run", fields, hint)
+    if action == "edit-issue" and screen.kind == "issue":
+        row = extra.get("row") or {}
+        fields = [{"name": "index", "type": "hidden", "value": row.get("index")}] + _issue_fields(row, choices.get("workers") or [])
+        return ("Edit stoppage", fields, "%s on %s" % (row.get("product") or "", row.get("press") or ""))
     if action == "edit-issue":
         issues = data.get("rawIssues") or []
         try:

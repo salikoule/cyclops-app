@@ -267,6 +267,8 @@ html.craftify-theme-dark .cy-fact a, html.craftify-theme-dark .cy-way-foot a, ht
   font-size: 12px;
 }
 .cy-mini.cy-danger, .content .anvil-role-cy-danger > .anvil-btn { color: var(--cy-red); }
+.cf-drawer-actions > .anvil-role-cy-danger { margin-right: auto !important; }
+html body .cf-drawer-actions > .anvil-role-cy-danger > button.anvil-btn { color: var(--cy-red) !important; }
 
 .cy-temps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
 .cy-zone { background: var(--cy-surface); border: 1px solid var(--cy-line); border-radius: 8px; padding: 8px 10px; }
@@ -322,6 +324,9 @@ html.craftify-theme-dark .cy-fact a, html.craftify-theme-dark .cy-way-foot a, ht
 .tabulator .cy-pills { max-width: 280px; }
 
 .cy-wrap { white-space: normal; line-height: 1.35; display: block; }
+.tabulator-row .tabulator-cell:has(> .cy-clip) { white-space: nowrap; }
+.cy-clip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabulator-row .tabulator-cell.cy-col-edit { padding: 4px 6px; }
 .cy-pad { padding: 14px 16px; margin: 0; }
 .cy-form-error { display: none; margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--cy-amber-soft); color: var(--cy-amber); }
 .cy-form-error.is-on { display: block; }

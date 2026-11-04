@@ -17,6 +17,7 @@ LEADS = {
     "material": "Grades from the material sheet, including regrind and additives, plus texts written on recipes that were not in the catalog. A setup needs at least one resin or regrind.",
     "color": "Masterbatch codes, with the accounting code when the sheet has one.",
     "issue": "Every stop logged on a recipe, from the Issues sheet and the floor. Filter by press, worker, or cause; open a row for the recipe.",
+    "run": "One row per job run on a press: pieces made, scrap, and the real cycle and cavities. Pieces per hour leaves out the stoppages logged on that press during the run; target is what the recipe's cycle and cavities promise.",
 }
 TITLES = {
     "product": "Products",
@@ -26,6 +27,7 @@ TITLES = {
     "material": "Raw materials",
     "color": "Colors",
     "issue": "Stoppages",
+    "run": "Production log",
 }
 CONFIRM = {
     "remove-link": ("Unlink these parts?", "The lid and the body stop showing each other.", "Unlink", True),
@@ -51,6 +53,8 @@ CREATE = {
     "press": ("New press", "new-press"),
     "material": ("New material", "new-material"),
     "color": ("New color", "new-color"),
+    "issue": ("Log a stoppage", "add-issue"),
+    "run": ("Log a run", "add-run"),
 }
 
 
@@ -372,7 +376,8 @@ class Screen:
                 % (info.get("count") or 0, Layout.esc((info.get("title") or "").lower()), Layout.esc(info.get("benefit")), Layout.esc(Nav.path(self.kind)))
             )
         table_card = Layout.section(TITLES.get(self.kind) or "Records", "%s rows" % len(data.get("rows") or []), padded=False)
-        Layout.body(table_card, Tables.mount(data.get("rows") or [], self.kind, Tables.columns_for(self.kind)))
+        on_edit = (lambda row: Editor.open_editor(self, "edit-" + self.kind, {"row": row})) if self.kind in Editor.LOGS else None
+        Layout.body(table_card, Tables.mount(data.get("rows") or [], self.kind, Tables.columns_for(self.kind), on_edit=on_edit))
         self.show(
             Layout.page_header(TITLES.get(self.kind) or "Records", description=LEADS.get(self.kind) or "", actions=actions),
             self.slot,
@@ -597,6 +602,7 @@ class Screen:
                 ("Products", "summary", data.get("products") or [], ("presses",)),
                 ("Approved products", "summary", data.get("approved") or [], ("presses",)),
                 ("Recipes", "recipe", data.get("recipes") or [], ("press",)),
+                ("Production", "run", data.get("production") or [], ("press",)),
                 ("Stoppages", "issue", data.get("issues") or [], ("press",)),
             )),
         )
@@ -629,14 +635,28 @@ class Screen:
                 ("Screw", "%s <small>rpm</small>" % Format.text(data.get("screwRpm")), False),
                 ("Pieces / hour", pph_html, not pph),
                 ("Last product lot", Format.text(data.get("productLot")), False),
-                ("Sheet row", Format.text(data.get("legacyId")), False) if data.get("legacyId") else None,
                 ("Same color", sibling_html, False) if siblings else None,
             )),
             self._zones(data, zones),
             self._feeds(data),
             self._settings(data),
+            self._recipe_runs(data),
             self._recipe_issues(data),
         )
+
+    def _recipe_runs(self, data):
+        rows = data.get("production") or []
+        card = Layout.section("Production runs", "Each job on this recipe: pieces, scrap, and pieces per hour against what the cycle and cavities promise.",
+                              padded=not rows, actions=(Layout.button("Log a run", self.act("add-run")),))
+        if not rows:
+            Layout.body(card, self.block('<p class="cy-muted">No runs logged on this recipe.</p>'))
+            return card
+        edit = lambda row: Editor.open_editor(self, "edit-run", {"row": row})
+        columns = [dict(column, header_filter=False) for column in Tables.columns_for("run", ("press", "product"))]
+        table = Tables.mount(rows, "run", columns,
+                             height="320px" if len(rows) > 6 else None, on_edit=edit, edit_on_click=True)
+        Layout.body(card, table)
+        return card
 
     def _recipe_issues(self, data):
         rows = []

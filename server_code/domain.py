@@ -196,6 +196,11 @@ def normalize(graph):
         recipe["trial"] = bool(recipe.get("trial"))
         recipe["standard"] = bool(recipe.get("standard"))
         recipe["issues"] = [_issue(item) for item in recipe.get("issues") or [] if item]
+    recipes = graph.get("recipes") or []
+    if recipes and all(recipe.get("runs") is None for recipe in recipes):
+        _seed_sample_runs(graph)
+    for recipe in recipes:
+        recipe["runs"] = [_run(item) for item in recipe.get("runs") or [] if item]
     for material in graph.get("materials") or []:
         if not material.get("kind"):
             material["kind"] = derive_material_kind(material)
@@ -244,6 +249,139 @@ def issue_state(issue):
     if end < start:
         return "check dates"
     return "closed"
+
+
+RUN_KEYS = ("startDate", "startTime", "endDate", "endTime", "shift", "operator", "good", "scrap",
+            "scrapReason", "cycle", "cavities", "lot", "order", "notes")
+SHIFTS = (("morning", "Morning 06–14"), ("afternoon", "Afternoon 14–22"), ("night", "Night 22–06"))
+_SAMPLE_RUNS = (
+    ("2026-11-02", "06:00", "2026-11-02", "14:00", "morning", 0.92, 0.012, "Short shots at start-up", 2),
+    ("2026-11-02", "14:00", "2026-11-02", "22:00", "afternoon", 0.81, 0.035, "Flash on the parting line", 1),
+    ("2026-11-03", "06:00", "2026-11-03", "14:00", "morning", 0.95, 0.008, "Color streaks", 4),
+    ("2026-11-03", "22:00", "2026-11-04", "06:00", "night", 0.74, 0.052, "Sink marks", 1),
+)
+
+
+def _run(item):
+    run = {key: str(item.get(key) if item.get(key) is not None else "").strip() for key in RUN_KEYS}
+    run["sample"] = bool(item.get("sample"))
+    return run
+
+
+def _seed_sample_runs(graph):
+    """Four example runs on what the board says is mounted, so the production log is not empty in a first demo."""
+    products = {item["id"]: (item.get("name") or "").strip().lower() for item in graph.get("products") or []}
+    molds = {item["id"]: item for item in graph.get("molds") or []}
+    workers = graph.get("workers") or []
+    picked = []
+    for press in sorted(graph.get("presses") or [], key=lambda item: item["id"]):
+        mounted = ((press.get("board") or {}).get("mounted") or "").strip().lower()
+        if not mounted:
+            continue
+        for recipe in graph.get("recipes") or []:
+            if (recipe.get("pressId") == press["id"] and not recipe.get("trial") and num(recipe.get("cycle"))
+                    and products.get(recipe.get("productId")) == mounted):
+                picked.append(recipe)
+                break
+        if len(picked) == len(_SAMPLE_RUNS):
+            break
+    for position, (recipe, plan) in enumerate(zip(picked, _SAMPLE_RUNS)):
+        start_date, start_time, end_date, end_time, shift, efficiency, scrap_rate, reason, cavities = plan
+        cavities = (molds.get(recipe.get("moldId")) or {}).get("cavities") or cavities
+        total = int(8 * 3600.0 / num(recipe.get("cycle")) * float(cavities) * efficiency)
+        scrap = int(round(total * scrap_rate))
+        recipe["runs"] = [{
+            "startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time,
+            "shift": shift, "operator": workers[(position * 7) % len(workers)] if workers else "",
+            "good": total - scrap, "scrap": scrap, "scrapReason": reason,
+            "cycle": recipe.get("cycle"), "cavities": cavities, "lot": recipe.get("productLot") or "",
+            "order": "", "notes": "Sample run. Edit it with real figures or delete it.", "sample": True,
+        }]
+
+
+def _overlap_hours(start, end, spans):
+    total = 0.0
+    for stop, restart in spans:
+        low, high = max(start, stop), min(end, restart)
+        if high > low:
+            total += (high - low).total_seconds() / 3600.0
+    return total
+
+
+def _stop_spans(graph):
+    """Closed stoppages per press, for taking downtime out of a run."""
+    spans = {}
+    for recipe in graph.get("recipes") or []:
+        for issue in recipe.get("issues") or []:
+            start = _moment(issue.get("startDate"), issue.get("startTime"))
+            end = _moment(issue.get("endDate"), issue.get("endTime"))
+            if start is not None and end is not None and end > start:
+                spans.setdefault(recipe.get("pressId") or "", []).append((start, end))
+    return spans
+
+
+def run_metrics(index, recipe, run, spans):
+    start = _moment(run.get("startDate"), run.get("startTime") or "00:00")
+    end = _moment(run.get("endDate"), run.get("endTime") or "00:00") if run.get("endDate") else None
+    hours = (end - start).total_seconds() / 3600.0 if start and end and end > start else None
+    down = _overlap_hours(start, end, spans.get(recipe.get("pressId") or "") or []) if hours else 0.0
+    good, scrap = num(run.get("good")), num(run.get("scrap")) or 0.0
+    made = (good or 0.0) + scrap if good is not None else None
+    running = hours - down if hours else None
+    rate = made / running if made and running and running > 0 else None
+    cycle = num(run.get("cycle")) or num(recipe.get("cycle"))
+    mold = index["mold"].get(recipe.get("moldId")) or {}
+    cavities = num(run.get("cavities")) or num(mold.get("cavities"))
+    target = 3600.0 / cycle * cavities if cycle and cavities else None
+    if run.get("sample"):
+        state = "sample"
+    elif not run.get("endDate"):
+        state = "running"
+    elif start and end and end < start:
+        state = "check dates"
+    else:
+        state = "done"
+    return {
+        "hours": round(hours, 1) if hours else None,
+        "downHours": round(down, 1) if down else None,
+        "pph": int(round(rate)) if rate else None,
+        "target": int(round(target)) if target else None,
+        "performance": int(round(100.0 * rate / target)) if rate and target else None,
+        "scrapPct": round(100.0 * scrap / made, 1) if made else None,
+        "state": state,
+    }
+
+
+def run_rows(graph, recipes):
+    index = _ix(graph)
+    spans = _stop_spans(graph)
+    shifts = dict(SHIFTS)
+    rows = []
+    for recipe in recipes or []:
+        for position, run in enumerate(recipe.get("runs") or []):
+            metrics = run_metrics(index, recipe, run, spans)
+            state = metrics["state"]
+            row = dict(run)
+            row.update(metrics)
+            row.update({
+                "id": recipe["id"],
+                "key": "%s:%s" % (recipe["id"], position),
+                "index": position,
+                "product": product_name(index, recipe.get("productId")),
+                "productId": recipe.get("productId") or "",
+                "press": press_name(index, recipe.get("pressId")),
+                "pressId": recipe.get("pressId") or "",
+                "start": " ".join(part for part in (run.get("startDate"), run.get("startTime")) if part),
+                "end": " ".join(part for part in (run.get("endDate"), run.get("endTime")) if part),
+                "shiftLabel": shifts.get(run.get("shift"), ""),
+                "good": whole(run.get("good")),
+                "scrap": whole(run.get("scrap")),
+                "status": cap(state),
+                "tone": {"done": "ok", "check dates": "bad", "sample": "muted"}.get(state, "warn"),
+            })
+            rows.append(row)
+    rows.sort(key=lambda row: row["start"], reverse=True)
+    return rows
 
 
 def reindex(graph):
@@ -553,6 +691,7 @@ def counts(graph):
         "links": len(graph.get("links") or []),
         "stoppages": sum(len(recipe.get("issues") or []) for recipe in graph.get("recipes") or []),
         "downtimeHours": round(sum(downtime_hours(issue) or 0 for recipe in graph.get("recipes") or [] for issue in recipe.get("issues") or []), 1),
+        "runs": sum(len(recipe.get("runs") or []) for recipe in graph.get("recipes") or []),
     }
 
 
@@ -595,6 +734,10 @@ def issue_rows(graph, recipes):
                 "pressId": recipe.get("pressId") or "",
                 "start": " ".join(part for part in (issue.get("startDate"), issue.get("startTime")) if part),
                 "end": " ".join(part for part in (issue.get("endDate"), issue.get("endTime")) if part),
+                "startDate": issue.get("startDate") or "",
+                "startTime": issue.get("startTime") or "",
+                "endDate": issue.get("endDate") or "",
+                "endTime": issue.get("endTime") or "",
                 "cause": issue.get("cause") or "",
                 "worker": issue.get("worker") or "",
                 "fix": issue.get("fix") or "",
@@ -782,6 +925,7 @@ _LISTS = {
     "material": _material_rows,
     "color": _color_rows,
     "issue": lambda graph: issue_rows(graph, graph.get("recipes")),
+    "run": lambda graph: run_rows(graph, graph.get("recipes")),
 }
 
 
@@ -881,7 +1025,24 @@ def choices(graph):
         "lifecycles": [{"value": value, "label": cap(value)} for value in LIFECYCLES],
         "moldStatuses": [{"value": value, "label": value} for value in MOLD_STATUSES],
         "workers": [{"value": name, "label": name} for name in graph.get("workers") or []],
+        "recipesByPress": _recipes_by_press(graph, index),
+        "shifts": [{"value": value, "label": label} for value, label in SHIFTS],
     }
+
+
+def _recipes_by_press(graph, index):
+    """Live recipes per press for picking the job that stopped. The product on the board comes first."""
+    grouped = {}
+    for recipe in live(graph.get("recipes") or []):
+        product = product_name(index, recipe.get("productId"))
+        colors = ", ".join(color_short(index, code) for code in color_ids(recipe))
+        label = "%s%s · %s" % (product, (" · " + colors) if colors else "", recipe["id"])
+        grouped.setdefault(recipe.get("pressId") or "", []).append({"value": recipe["id"], "label": label, "product": product})
+    for press in graph.get("presses") or []:
+        mounted = ((press.get("board") or {}).get("mounted") or "").strip().lower()
+        options = grouped.get(press["id"]) or []
+        options.sort(key=lambda opt: (not mounted or opt["product"].strip().lower() != mounted, opt["product"].lower(), opt["value"]))
+    return {press_id: [{"value": opt["value"], "label": opt["label"]} for opt in options] for press_id, options in grouped.items()}
 
 
 def _flow_recipe(graph, recipe):
@@ -1128,6 +1289,7 @@ def detail_press(graph, code):
         "products": summary_rows(graph, recipes),
         "approved": _approved_on_press(graph, press),
         "recipes": [recipe_row(graph, recipe) for recipe in recipes],
+        "production": run_rows(graph, recipes),
         "issues": issue_rows(graph, recipes),
     }
 
@@ -1224,6 +1386,7 @@ def detail_recipe(graph, code):
         "statusText": recipe.get("status") or "",
         "comment": recipe.get("comment") or "",
         "settingsNote": recipe.get("settingsNote") or "",
+        "production": run_rows(graph, [recipe]),
         "issues": issue_rows(graph, [recipe]),
         "rawIssues": [dict(issue, index=position) for position, issue in enumerate(recipe.get("issues") or [])],
     }
@@ -1371,6 +1534,7 @@ def _blank_recipe():
         "materialSlots": [],
         "colorSlots": [],
         "issues": [],
+        "runs": [],
         "settingsNote": "",
         "trial": False,
         "standard": False,
@@ -1546,6 +1710,7 @@ def action_clone_product(graph, payload):
             recipe["comment"] = "copy of %s" % source_recipe["id"]
             recipe["standard"] = False
             recipe["issues"] = []
+            recipe["runs"] = []
             graph["recipes"].append(recipe)
             dirty["recipes"].append(recipe["id"])
     result = _redirect("product", product["id"])
@@ -1590,6 +1755,7 @@ def _new_recipe(graph, product_id, press_id, source):
     recipe["trial"] = False
     recipe["standard"] = False
     recipe["issues"] = []
+    recipe["runs"] = []
     recipe["comment"] = ("copy of %s" % source["id"]) if source else "created in Cyclops"
     graph["recipes"].append(recipe)
     return recipe, new_molds, ""
@@ -1806,6 +1972,72 @@ def action_remove_issue(graph, payload):
     return _refresh({"recipes": [recipe["id"]]})
 
 
+def _run_from(payload):
+    run = _run(payload)
+    if not run["startDate"] or _moment(run["startDate"], run["startTime"] or "00:00") is None:
+        return None, "Give the start date as YYYY-MM-DD and the time as HH:MM."
+    if run["endDate"]:
+        end = _moment(run["endDate"], run["endTime"] or "00:00")
+        if end is None:
+            return None, "Give the end date as YYYY-MM-DD and the time as HH:MM."
+        if end < _moment(run["startDate"], run["startTime"] or "00:00"):
+            return None, "The end is before the start."
+    for key, label in (("good", "Good pieces"), ("scrap", "Scrap pieces"), ("cycle", "Cycle time"), ("cavities", "Cavities")):
+        if run[key] and (num(run[key]) is None or num(run[key]) < 0):
+            return None, "%s must be a number." % label
+    if run["shift"] and run["shift"] not in dict(SHIFTS):
+        run["shift"] = ""
+    run["sample"] = False
+    return run, ""
+
+
+def _run_position(recipe, payload):
+    try:
+        position = int(payload.get("index"))
+    except (TypeError, ValueError):
+        return None
+    runs = recipe.get("runs") or []
+    return position if 0 <= position < len(runs) else None
+
+
+def action_add_run(graph, payload):
+    recipe = _ix(graph)["recipe"].get(payload.get("contextId"))
+    if recipe is None:
+        return {"error": "Recipe was not found."}
+    run, error = _run_from(payload)
+    if error:
+        return {"error": error}
+    recipe.setdefault("runs", []).append(run)
+    if run.get("lot"):
+        recipe["productLot"] = run["lot"]
+    return _refresh({"recipes": [recipe["id"]]})
+
+
+def action_edit_run(graph, payload):
+    recipe = _ix(graph)["recipe"].get(payload.get("contextId"))
+    if recipe is None:
+        return {"error": "Recipe was not found."}
+    position = _run_position(recipe, payload)
+    if position is None:
+        return {"error": "That run is no longer on the recipe."}
+    run, error = _run_from(payload)
+    if error:
+        return {"error": error}
+    recipe["runs"][position] = run
+    return _refresh({"recipes": [recipe["id"]]})
+
+
+def action_remove_run(graph, payload):
+    recipe = _ix(graph)["recipe"].get(payload.get("contextId"))
+    if recipe is None:
+        return {"error": "Recipe was not found."}
+    position = _run_position(recipe, payload)
+    if position is None:
+        return {"error": "That run is no longer on the recipe."}
+    recipe["runs"] = [run for at, run in enumerate(recipe["runs"]) if at != position]
+    return _refresh({"recipes": [recipe["id"]]})
+
+
 def action_edit_material(graph, payload):
     material = _ix(graph)["material"].get(payload.get("contextId"))
     if material is None:
@@ -1974,6 +2206,9 @@ ACTIONS = {
     "add-issue": action_add_issue,
     "edit-issue": action_edit_issue,
     "remove-issue": action_remove_issue,
+    "add-run": action_add_run,
+    "edit-run": action_edit_run,
+    "remove-run": action_remove_run,
     "edit-material": action_edit_material,
     "edit-color": action_edit_color,
     "delete-recipe": action_delete_recipe,

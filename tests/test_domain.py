@@ -180,6 +180,48 @@ def test_seed_module_loads_the_workbook_import():
     stoppages = domain.list_view(graph, "issue")["rows"]
     assert len(stoppages) == 26
     assert len({row["key"] for row in stoppages}) == 26
+    assert all(row["startDate"] for row in stoppages)
+    runs = domain.list_view(graph, "run")["rows"]
+    assert len(runs) == 4 and all(row["sample"] and row["status"] == "Sample" for row in runs)
+    assert all(row["good"] > 0 and row["pph"] and row["performance"] for row in runs)
+    assert counted["runs"] == 4
+    by_press = domain.choices(graph)["recipesByPress"]
+    assert sum(len(options) for options in by_press.values()) == counted["liveRecipes"]
+    for press in graph["presses"]:
+        mounted = (press.get("board") or {}).get("mounted")
+        options = by_press.get(press["id"]) or []
+        if mounted and any(opt["label"].startswith(mounted) for opt in options):
+            assert options[0]["label"].startswith(mounted)
+
+
+def test_runs_take_out_stoppages_and_validate():
+    graph = plant()
+    for recipe in graph["recipes"]:
+        recipe["runs"] = []
+    domain.dispatch(graph, "add-issue", {
+        "contextId": "REC-0021", "startDate": "2026-06-03", "startTime": "10:00", "cause": "Heater",
+        "endDate": "2026-06-03", "endTime": "12:00",
+    })
+    added = domain.dispatch(graph, "add-run", {
+        "contextId": "REC-0021", "startDate": "2026-06-03", "startTime": "06:00", "endDate": "2026-06-03", "endTime": "14:00",
+        "good": "5700", "scrap": "300", "cycle": "18", "cavities": "2", "lot": "041126",
+    })
+    assert added.get("error") is None
+    assert graph["_ix"]["recipe"]["REC-0021"]["productLot"] == "041126"
+    row = domain.list_view(graph, "run")["rows"][0]
+    assert row["hours"] == 8 and row["downHours"] == 2
+    assert row["pph"] == 1000 and row["target"] == 400 and row["performance"] == 250
+    assert row["scrapPct"] == 5 and row["status"] == "Done"
+    recipe = domain.detail(graph, "recipe", "REC-0021")
+    assert [run["key"] for run in recipe["production"]] == [row["key"]]
+    assert [run["key"] for run in domain.detail(graph, "press", recipe["pressId"])["production"]] == [row["key"]]
+    assert domain.dispatch(graph, "add-run", {"contextId": "REC-0021", "startDate": "2026-06-03", "startTime": "06:00",
+                                              "endDate": "2026-06-02", "endTime": "14:00"})["error"]
+    assert domain.dispatch(graph, "add-run", {"contextId": "REC-0021", "startDate": "2026-06-03", "good": "lots"})["error"]
+    assert domain.dispatch(graph, "edit-run", {"contextId": "REC-0021", "index": "0", "startDate": "2026-06-03", "startTime": "06:00"}).get("error") is None
+    assert domain.list_view(graph, "run")["rows"][0]["status"] == "Running"
+    assert domain.dispatch(graph, "remove-run", {"contextId": "REC-0021", "index": "0"}).get("error") is None
+    assert domain.counts(graph)["runs"] == 0
 
 
 def test_stoppages_downtime_and_states():

@@ -10,6 +10,7 @@ SLUG = {
     "material": "materials",
     "color": "colors",
     "issue": "stoppages",
+    "run": "production",
 }
 KIND = {slug: kind for kind, slug in SLUG.items()}
 LABEL = {
@@ -22,6 +23,7 @@ LABEL = {
     "material": "Raw material",
     "color": "Color",
     "issue": "Stoppage",
+    "run": "Production run",
 }
 COUNT_KEY = {
     "product": "products",
@@ -31,6 +33,7 @@ COUNT_KEY = {
     "material": "materials",
     "color": "colors",
     "issue": "stoppages",
+    "run": "runs",
 }
 
 

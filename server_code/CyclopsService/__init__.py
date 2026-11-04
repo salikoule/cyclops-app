@@ -52,6 +52,7 @@ def cyclops_nav():
         "materials": counted["materials"],
         "colors": counted["colors"],
         "stoppages": counted["stoppages"],
+        "runs": counted["runs"],
     }
 
 

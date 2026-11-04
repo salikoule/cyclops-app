@@ -449,7 +449,8 @@ class Screen:
             self._approved(data),
             self._missing(data),
             self._recipe_section("All recipes", "Including trial rows.", data.get("recipes") or [], hide=("product",)),
-            self._issue_section("Stoppages on this product", data.get("issues") or [], hide=("product",)),
+            self._issue_section("Stoppages on this product", data.get("issues") or [], hide=("product",),
+                                actions=(Layout.button("Log a stoppage", self.act("add-issue")),) if data.get("liveRecipes") else ()),
             self.block('<div class="cy-card cy-notes"><b>Notes.</b> %s</div>' % Layout.esc(data.get("notes"))) if data.get("notes") else None,
         )
 
@@ -541,9 +542,11 @@ class Screen:
     def _issue_section(self, title, rows, hide=(), actions=()):
         if not rows and not actions:
             return None
-        card = Layout.section(title, "%s logged · newest first. Open a row for the recipe." % len(rows), padded=False, actions=actions)
+        card = Layout.section(title, "%s logged · newest first. Edit changes the stoppage; the rest of the row opens its recipe." % len(rows),
+                              padded=False, actions=actions)
         if rows:
-            Layout.body(card, Tables.mount(rows, "issue", Tables.columns_for("issue", hide), height="360px"))
+            edit = lambda row: Editor.open_editor(self, "edit-issue", {"row": row})
+            Layout.body(card, Tables.mount(rows, "issue", Tables.columns_for("issue", hide), height="360px", on_edit=edit))
         else:
             Layout.body(card, Layout.html('<p class="cy-muted cy-pad">No stoppages logged.</p>'))
         return card
@@ -718,10 +721,9 @@ class Screen:
 
     def _settings(self, data):
         settings = data.get("settings") or []
-        if settings:
-            setting_rows = "".join("<tr><td>%s</td><td>%s</td></tr>" % (Layout.esc(item.get("label")), Layout.esc(item.get("value"))) for item in settings)
-        else:
-            setting_rows = '<tr><td colspan="2" class="cy-muted">No injection row filled</td></tr>'
+        filled = sum(1 for item in settings if item.get("value"))
+        setting_rows = "".join("<tr><td>%s</td><td>%s</td></tr>" % (Layout.esc(item.get("label")), Format.text(item.get("value"), "<small>fill in</small>"))
+                               for item in settings)
         if data.get("settingsNote"):
             setting_rows += '<tr><td>Note</td><td>%s</td></tr>' % Layout.esc(data.get("settingsNote"))
         written = (
@@ -733,7 +735,9 @@ class Screen:
             ("Comment", data.get("comment")),
         )
         written_rows = "".join("<tr><td>%s</td><td>%s</td></tr>" % (Layout.esc(label), Format.text(value)) for label, value in written)
-        left = Layout.html('<div class="cy-card"><h3>Injection settings</h3><table class="cy-kv">%s</table></div>' % setting_rows)
+        left = Layout.section("Injection settings", "%s of %s filled" % (filled, len(settings)),
+                              actions=(Layout.button("Edit", self.act("edit-injection"), primary=not filled),))
+        Layout.body(left, self.block('<table class="cy-kv">%s</table>' % setting_rows))
         right = Layout.html('<div class="cy-card cy-note"><h3>Written on the row, meaning to confirm</h3><table class="cy-kv">%s</table></div>' % written_rows)
         return Layout.grid("repeat(auto-fit, minmax(280px, 1fr))", left, right)
 

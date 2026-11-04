@@ -62,7 +62,7 @@ class AppStartup(AppStartupTemplate):
                 brand_sub="Production records",
                 copyright="© Cyclops",
                 allow_signup=True,
-                allow_google=False,
+                allow_google=True,
             ),
             full_width_row=True,
         )

@@ -289,6 +289,20 @@ def test_search_folds_greek_lookalikes_and_accents():
     assert domain.search(graph, name.lower())[0]["id"] == graph["products"][0]["id"]
 
 
+def test_injection_settings_list_every_standard_label():
+    graph = plant()
+    recipe = graph["_ix"]["recipe"]["REC-0021"]
+    recipe["settings"] = [{"label": "Hold pressure", "value": "60"}, {"label": "Cycle time (s)", "value": "28"},
+                          {"label": "Back pressure P2", "value": "5"}]
+    shown = domain.injection_settings(recipe)
+    assert [item["label"] for item in shown] == list(domain.SETTING_LABELS) + ["Back pressure P2"]
+    assert dict((item["label"], item["value"]) for item in shown)["Hold pressure"] == "60"
+    payload = {"contextId": "REC-0021", "setting::Hold pressure": "", "setting::Injection speed u1": " 45 "}
+    assert domain.dispatch(graph, "edit-injection", payload).get("error") is None
+    assert recipe["settings"] == [{"label": "Injection speed u1", "value": "45"}, {"label": "Back pressure P2", "value": "5"},
+                                  {"label": "Cycle time (s)", "value": "28"}]
+
+
 def test_numeric_fields_reject_text():
     graph = plant()
     recipe = graph["_ix"]["recipe"]["REC-0021"]

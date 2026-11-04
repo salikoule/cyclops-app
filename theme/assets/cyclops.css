@@ -364,6 +364,22 @@ a.cy-stop:hover { background: var(--cy-hover); }
 .cf-drawer .anvil-checkbox input[type=checkbox] { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 16px !important; height: 16px; min-height: 0; margin: 0 !important; padding: 0; }
 .cf-drawer .bc-stack { gap: 14px; }
 
+.anvil-role-login-card .anvil-button { display: block !important; width: 100%; }
+.anvil-role-login-card .anvil-button > .anvil-btn { width: 100%; justify-content: center; gap: 8px; }
+.anvil-role-login-card .anvil-button > .anvil-btn img { width: 18px; height: 18px; }
+html.ipac-dark .anvil-role-login-card .anvil-role-login-primary-btn > .anvil-btn { background-color: #3b82f6 !important; color: #fff !important; border: none !important; }
+html.ipac-dark .anvil-role-login-card .anvil-role-login-primary-btn > .anvil-btn:hover { background-color: #2563eb !important; }
+html.ipac-dark .anvil-role-login-card .anvil-role-login-sso-btn > .anvil-btn { background-color: #1e293b !important; color: #e6edf7 !important; border: 1px solid #334155 !important; }
+html.ipac-dark .anvil-role-login-card .anvil-role-login-sso-btn > .anvil-btn:hover { background-color: #263449 !important; }
+html.ipac-dark .anvil-role-login-card .anvil-role-login-heading,
+html.ipac-dark .anvil-role-login-card .anvil-role-login-heading .anvil-label-text { color: #e6edf7 !important; }
+html.ipac-dark .anvil-role-login-card .anvil-role-login-subtitle .anvil-label-text,
+html.ipac-dark .anvil-role-login-card .anvil-role-login-field-label .anvil-label-text { color: #94a3b8 !important; }
+html.ipac-dark .anvil-role-login-card .anvil-role-login-link,
+html.ipac-dark .anvil-role-login-card .anvil-role-login-link a { color: #60a5fa !important; }
+html.ipac-dark .anvil-role-login-divider::before,
+html.ipac-dark .anvil-role-login-divider::after { background: #334155; }
+
 @media (max-width: 900px) {
   .cy-temps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cy-search { width: 100%; }

@@ -36,11 +36,21 @@ def column(row, name, default=None):
     return default if value is None else value
 
 
-def _workers_table():
+def _optional_table(name):
     try:
-        return getattr(app_tables, "workers")
+        return getattr(app_tables, name)
     except Exception:
         return None
+
+
+def _workers_table():
+    return _optional_table("workers")
+
+
+def _log_tables():
+    """(stoppages, production_runs), or None while the database lacks them; the logs then stay in JSON on the recipe row."""
+    stoppages, runs = _optional_table("stoppages"), _optional_table("production_runs")
+    return (stoppages, runs) if stoppages is not None and runs is not None else None
 
 
 def _loads(text, fallback):
@@ -145,8 +155,6 @@ def _recipe_fields(item):
         "settings_json": _dumps(item.get("settings")),
         "material_slots_json": _dumps(item.get("materialSlots")),
         "color_slots_json": _dumps(item.get("colorSlots")),
-        "issues_json": _dumps(item.get("issues")),
-        "runs_json": _dumps(item.get("runs")),
         "settings_note": item.get("settingsNote") or "",
         "cycle": item.get("cycle") or "",
         "cooling": item.get("cooling") or "",
@@ -161,6 +169,134 @@ def _recipe_fields(item):
         "trial": bool(item.get("trial")),
         "standard": bool(item.get("standard")),
     }
+
+
+def _recipe_row_fields(item, logs_in_tables):
+    fields = _recipe_fields(item)
+    if logs_in_tables:
+        fields.update(issues_json=None, runs_json=None)
+    else:
+        fields.update(issues_json=_dumps(item.get("issues")), runs_json=_dumps(item.get("runs")))
+    return fields
+
+
+def _stoppage_fields(issue, position, recipe_row, press_row, workers):
+    name = issue.get("worker") or ""
+    return {
+        "recipe": recipe_row,
+        "press": press_row,
+        "worker": workers.get(name),
+        "worker_name": name,
+        "position": position,
+        "start_date": issue.get("startDate") or "",
+        "start_time": issue.get("startTime") or "",
+        "end_date": issue.get("endDate") or "",
+        "end_time": issue.get("endTime") or "",
+        "cause": issue.get("cause") or "",
+        "fix": issue.get("fix") or "",
+    }
+
+
+def _run_fields(run, position, recipe_row, press_row, workers):
+    name = run.get("operator") or ""
+    return {
+        "recipe": recipe_row,
+        "press": press_row,
+        "operator": workers.get(name),
+        "operator_name": name,
+        "position": position,
+        "start_date": run.get("startDate") or "",
+        "start_time": run.get("startTime") or "",
+        "end_date": run.get("endDate") or "",
+        "end_time": run.get("endTime") or "",
+        "shift": run.get("shift") or "",
+        "good": domain.whole(run.get("good")),
+        "scrap": domain.whole(run.get("scrap")),
+        "scrap_reason": run.get("scrapReason") or "",
+        "cycle": domain.whole(run.get("cycle")),
+        "cavities": domain.whole(run.get("cavities")),
+        "lot": run.get("lot") or "",
+        "order_no": run.get("order") or "",
+        "notes": run.get("notes") or "",
+        "sample": bool(run.get("sample")),
+    }
+
+
+def _stoppage_item(row):
+    return {
+        "startDate": column(row, "start_date", ""),
+        "startTime": column(row, "start_time", ""),
+        "cause": column(row, "cause", ""),
+        "worker": column(row, "worker_name", ""),
+        "fix": column(row, "fix", ""),
+        "endDate": column(row, "end_date", ""),
+        "endTime": column(row, "end_time", ""),
+    }
+
+
+def _run_item(row):
+    return {
+        "startDate": column(row, "start_date", ""),
+        "startTime": column(row, "start_time", ""),
+        "endDate": column(row, "end_date", ""),
+        "endTime": column(row, "end_time", ""),
+        "shift": column(row, "shift", ""),
+        "operator": column(row, "operator_name", ""),
+        "good": domain.trim_num(column(row, "good")),
+        "scrap": domain.trim_num(column(row, "scrap")),
+        "scrapReason": column(row, "scrap_reason", ""),
+        "cycle": domain.trim_num(column(row, "cycle")),
+        "cavities": domain.trim_num(column(row, "cavities")),
+        "lot": column(row, "lot", ""),
+        "order": column(row, "order_no", ""),
+        "notes": column(row, "notes", ""),
+        "sample": bool(column(row, "sample", False)),
+    }
+
+
+def _set(fields):
+    """Leave out empty links and numbers: a missing column cannot be auto-created from None."""
+    return {key: value for key, value in fields.items() if value is not None}
+
+
+def _write_logs(tables, items, recipe_rows):
+    """Replace the stoppage and run rows of ``items`` (recipes); ``recipe_rows`` maps recipe code to its row."""
+    stoppages, runs = tables
+    workers_table = _workers_table()
+    workers = {row["name"]: row for row in _rows(workers_table)} if workers_table is not None else {}
+    presses = {row["code"]: row for row in _rows(app_tables.presses)}
+    new_stops, new_runs = [], []
+    for item in items:
+        recipe_row = recipe_rows.get(item["id"])
+        if recipe_row is None:
+            continue
+        press_row = presses.get(item.get("pressId"))
+        new_stops += [_set(_stoppage_fields(issue, at, recipe_row, press_row, workers)) for at, issue in enumerate(item.get("issues") or [])]
+        new_runs += [_set(_run_fields(run, at, recipe_row, press_row, workers)) for at, run in enumerate(item.get("runs") or [])]
+    for start in range(0, len(new_stops), 200):
+        stoppages.add_rows(new_stops[start:start + 200])
+    for start in range(0, len(new_runs), 200):
+        runs.add_rows(new_runs[start:start + 200])
+
+
+def _drop_logs(tables, recipe_row):
+    for table in tables:
+        for row in table.search(recipe=recipe_row):
+            row.delete()
+
+
+def _read_logs(tables):
+    """{recipe code: (issues, runs)} from the log tables, each list in its saved order."""
+    found = {}
+    for table, slot, reader in ((tables[0], 0, _stoppage_item), (tables[1], 1, _run_item)):
+        for row in table.search():
+            recipe_row = column(row, "recipe")
+            if recipe_row is None:
+                continue
+            entry = found.setdefault(recipe_row["code"], ([], []))
+            entry[slot].append((column(row, "position", 0), reader(row)))
+    return {code: tuple([item for _, item in sorted(pairs, key=lambda pair: pair[0])] for pairs in entry)
+            for code, entry in found.items()}
 
 
 def _link_fields(item):
@@ -280,6 +416,11 @@ def _read_tables():
         "trial": bool(row["trial"]),
         "standard": bool(row["standard"]),
     } for row in _rows(app_tables.recipes)]
+    tables = _log_tables()
+    if tables is not None and column(_meta(), "logs_in_tables", False):
+        logs = _read_logs(tables)
+        for recipe in recipes:
+            recipe["issues"], recipe["runs"] = logs.get(recipe["id"], ([], []))
     for items in (products, molds, materials, colors, recipes):
         items.sort(key=lambda item: item["id"])
     links = [{
@@ -304,11 +445,16 @@ def _read_tables():
 def _write_tables(graph):
     """Replace every entity table with the graph, in batches."""
     workers_table = _workers_table()
+    tables = _log_tables()
+    for table in tables or ():
+        table.delete_all_rows()
     for name in ("links",) + tuple(_WRITERS):
         _table(name).delete_all_rows()
     if workers_table is not None:
         workers_table.delete_all_rows()
     for kind, writer in _WRITERS.items():
+        if kind == "recipes":
+            writer = lambda item: _recipe_row_fields(item, tables is not None)
         rows = [writer(item) for item in graph.get(kind) or []]
         for start in range(0, len(rows), 200):
             _table(kind).add_rows(rows[start:start + 200])
@@ -318,6 +464,25 @@ def _write_tables(graph):
     workers = [{"name": name} for name in graph.get("workers") or []]
     if workers and workers_table is not None:
         workers_table.add_rows(workers)
+    if tables is not None:
+        _write_logs(tables, graph.get("recipes") or [], {row["code"]: row for row in _rows(app_tables.recipes)})
+        _meta().update(logs_in_tables=True)
+
+
+def _move_logs_to_tables(graph):
+    """One-off: copy every recipe's stoppages and runs into their tables and empty the JSON columns."""
+    tables = _log_tables()
+    meta = _meta()
+    if tables is None or column(meta, "logs_in_tables", False):
+        return
+    with anvil.tables.batch_update, anvil.tables.batch_delete:
+        for table in tables:
+            table.delete_all_rows()
+        recipe_rows = {row["code"]: row for row in _rows(app_tables.recipes)}
+        _write_logs(tables, graph.get("recipes") or [], recipe_rows)
+        for row in recipe_rows.values():
+            row.update(issues_json=None, runs_json=None)
+    meta.update(logs_in_tables=True)
 
 
 def _meta():
@@ -380,6 +545,7 @@ def _load_unlocked():
             loaded = _ready(_seed_graph())
             _write_tables(loaded)
         version = _save_snapshot(meta, loaded)
+    _move_logs_to_tables(loaded)
     _CACHE["graph"] = loaded
     _CACHE["version"] = version
     return loaded
@@ -392,6 +558,7 @@ def graph():
 
 def _persist_unlocked(plant, dirty):
     dirty = dirty or {}
+    tables = _log_tables() if column(_meta(), "logs_in_tables", False) else None
     with anvil.tables.batch_update, anvil.tables.batch_delete:
         for kind, codes in dirty.items():
             if kind == "links":
@@ -403,18 +570,27 @@ def _persist_unlocked(plant, dirty):
             writer = _WRITERS.get(kind)
             if writer is None or not codes:
                 continue
+            if kind == "recipes":
+                writer = lambda item: _recipe_row_fields(item, tables is not None)
             table = _table(kind)
             by_code = {item["id"]: item for item in plant.get(kind) or []}
+            logged = {}
             for code in codes:
                 item = by_code.get(code)
                 row = table.get(code=code)
+                if kind == "recipes" and tables is not None and row is not None:
+                    _drop_logs(tables, row)
                 if item is None:
                     if row is not None:
                         row.delete()
-                elif row is None:
-                    table.add_row(**writer(item))
+                    continue
+                if row is None:
+                    row = table.add_row(**writer(item))
                 else:
                     row.update(**writer(item))
+                logged[code] = row
+            if kind == "recipes" and tables is not None and logged:
+                _write_logs(tables, [by_code[code] for code in logged], logged)
     _CACHE["version"] = _save_snapshot(_meta(), plant)
     _CACHE["graph"] = plant
 

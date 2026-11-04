@@ -216,6 +216,31 @@ def normalize(graph):
     return graph
 
 
+SETTING_LABELS = (
+    "Injection speed u1", "Switch position 1→2", "Injection speed u2", "Switch position 2→3", "Injection speed u3",
+    "Injection pressure max P1", "Position 1→2", "Injection pressure max P2",
+    "Hold switch position", "Hold pressure", "Hold time (s)", "Hold speed",
+    "Dosing stroke", "Decompression after dosing", "Back pressure P1",
+)
+RECIPE_FIELD_SETTINGS = ("Cycle time (s)", "Cooling time (s)", "Screw speed (rpm)")
+SETTING_PREFIX = "setting::"
+
+
+def injection_settings(recipe):
+    """The standard injection block, filled or blank, then any other label this recipe carries.
+    Cycle, cooling, and screw speed are left out: the recipe has its own fields for them."""
+    values = {}
+    extras = []
+    for item in recipe.get("settings") or []:
+        label = (item.get("label") or "").strip()
+        if not label or label in RECIPE_FIELD_SETTINGS or label in values:
+            continue
+        values[label] = item.get("value") or ""
+        if label not in SETTING_LABELS:
+            extras.append(label)
+    return [{"label": label, "value": values.get(label, "")} for label in SETTING_LABELS + tuple(extras)]
+
+
 ISSUE_KEYS = ("startDate", "startTime", "cause", "worker", "fix", "endDate", "endTime")
 
 
@@ -1378,7 +1403,7 @@ def detail_recipe(graph, code):
         "temps": {key: (recipe.get("temps") or {}).get(key) or "" for key in TEMP_KEYS},
         "materialSlots": material_slots,
         "colorSlots": color_slots,
-        "settings": [{"label": item.get("label") or "", "value": item.get("value") or ""} for item in recipe.get("settings") or []],
+        "settings": injection_settings(recipe),
         "px": recipe.get("px") or "",
         "py": recipe.get("py") or "",
         "printPieces": recipe.get("printPieces") or "",
@@ -2105,6 +2130,20 @@ def action_edit_recipe(graph, payload):
     return _refresh({"recipes": [recipe["id"]]})
 
 
+def action_edit_injection(graph, payload):
+    recipe = _ix(graph)["recipe"].get(payload.get("contextId"))
+    if recipe is None:
+        return {"error": "Recipe was not found."}
+    kept = [item for item in recipe.get("settings") or [] if item.get("label") in RECIPE_FIELD_SETTINGS]
+    written = []
+    for item in injection_settings(recipe):
+        value = str(payload.get(SETTING_PREFIX + item["label"], item["value"]) or "").strip()
+        if value:
+            written.append({"label": item["label"], "value": value})
+    recipe["settings"] = written + kept
+    return _refresh({"recipes": [recipe["id"]]})
+
+
 def action_set_standard(graph, payload):
     index = _ix(graph)
     recipe = index["recipe"].get(payload.get("contextId"))
@@ -2197,6 +2236,7 @@ ACTIONS = {
     "edit-mold": action_edit_mold,
     "edit-press": action_edit_press,
     "edit-recipe": action_edit_recipe,
+    "edit-injection": action_edit_injection,
     "set-standard": action_set_standard,
     "clone-recipe": action_clone_recipe,
     "add-slot-material": action_add_slot_material,

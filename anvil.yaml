@@ -47,6 +47,7 @@ db_schema:
     - {name: version, type: number}
     - {name: snapshot, type: media}
     - {name: updated, type: datetime}
+    - {name: logs_in_tables, type: bool}
     server: full
     title: Plant meta
   molds:
@@ -107,6 +108,7 @@ db_schema:
     - {name: material_slots_json, type: string}
     - {name: color_slots_json, type: string}
     - {name: issues_json, type: string}
+    - {name: runs_json, type: string}
     - {name: settings_note, type: string}
     - {name: cycle, type: string}
     - {name: cooling, type: string}

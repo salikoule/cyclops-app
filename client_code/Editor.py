@@ -5,10 +5,11 @@ from datetime import datetime
 from anvil import *
 import anvil.js
 from craftify_library.CraftifyUtils import dialogs, drawer
+from craftify_library.CustomComponents.TimePicker import TimePicker
 
 from cyclops_app import Data, Layout
 
-WIDE = ("area", "checks")
+WIDE = ("area", "checks", "datetime")
 LOGS = ("issue", "run")
 _REMOVE = {"issue": ("remove-issue", "Delete this stoppage?", "The record of this stop and its fix is removed from the recipe."),
            "run": ("remove-run", "Delete this run?", "The pieces, scrap, and settings logged for this run are removed.")}
@@ -27,19 +28,20 @@ def _as_date(value):
         return None
 
 
-def _as_moment(date_text, time_text):
-    day = _as_date(date_text)
-    if day is None:
-        return None
-    try:
-        clock = datetime.strptime(str(time_text or "").strip().replace(".", ":"), "%H:%M")
-    except (TypeError, ValueError):
-        clock = datetime(2000, 1, 1)
-    return datetime(day.year, day.month, day.day, clock.hour, clock.minute)
+class _Moment:
+    """A day picker and a time box side by side. Picking a day needs no Apply, and the time stays optional."""
 
+    def __init__(self, date_text, time_text):
+        self.day = DatePicker(format="%d %b %Y", date=_as_date(date_text), pick_time=False, placeholder="Not set")
+        self.clock = TimePicker(time=str(time_text or "").strip().replace(".", ":"), placeholder="HH:MM")
+        self.panel = Layout.grid("minmax(0, 1fr) 120px", self.day, self.clock)
 
-def _stamp(picked):
-    return picked.strftime("%Y-%m-%d %H:%M") if picked else ""
+    def parts(self):
+        return (self.day.date.isoformat() if self.day.date else ""), (self.clock.time or "")
+
+    def set_event_handler(self, name, handler):
+        self.day.set_event_handler(name, handler)
+        self.clock.set_event_handler(name, handler)
 
 
 class _Checks:
@@ -79,8 +81,8 @@ def _widget(field):
         widget = DatePicker(format="%d %b %Y", date=_as_date(field.get("value")), pick_time=False)
         return widget, widget
     if kind == "datetime":
-        widget = DatePicker(format="%d %b %Y  %H:%M", date=_as_moment(field.get("date"), field.get("time")), pick_time=True, placeholder="Not set")
-        return widget, widget
+        moment = _Moment(field.get("date"), field.get("time"))
+        return moment, moment.panel
     widget = TextBox(text=_text(field.get("value")), placeholder=field.get("placeholder") or "")
     if kind == "number":
         widget.type = "number"
@@ -101,20 +103,15 @@ def _read(widget):
 
 
 def _order(first, then, box, field):
-    """Keep ``then`` on or after ``first``: earlier days are not offered, and a reversed pair is shown in red."""
+    """Show a reversed pair (``then`` before ``first``) in red."""
     hint = box.dom_nodes["hint"]
     usual = field.get("hint") or ""
     root = hint.parentElement
 
     def check(**event_args):
-        start, end = _stamp(first.date), _stamp(then.date)
-        reversed_pair = bool(start and end and end < start)
-        if start and not reversed_pair:
-            # Whole day: a minimum with a time makes the picker silently drop same-day picks before it.
-            day = first.date
-            then.min_date = day.replace(hour=0, minute=0, second=0, microsecond=0) if hasattr(day, "hour") else day
-        elif not start:
-            then.min_date = None
+        (start_day, start_time), (end_day, end_time) = first.parts(), then.parts()
+        reversed_pair = bool(start_day and end_day and (
+            end_day < start_day or (end_day == start_day and start_time and end_time and end_time < start_time)))
         hint.textContent = field.get("after_error") if reversed_pair else usual
         if reversed_pair:
             root.classList.add("is-bad")
@@ -163,7 +160,7 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
         widgets[field["name"]] = widget
         box = Layout.field(field["label"], view, hint=field.get("hint") or "")
         if field.get("type") == "datetime":
-            moments[field["name"]] = (field, box, not field.get("time"))
+            moments[field["name"]] = (field, box)
         if (field.get("type") or "text") in WIDE or field.get("wide"):
             flush()
             rows.append(box)
@@ -175,7 +172,7 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
             _follow(widgets[field["follows"]], widgets[field["name"]], field.get("groups") or {}, field.get("empty") or "")
     error = Layout.html('<p class="bc-note bc-note-warn cy-form-error" anvil-name="msg"></p>')
     content = Layout.stack(error, *rows)
-    for name, (field, box, _) in moments.items():
+    for name, (field, box) in moments.items():
         if field.get("after") in widgets:
             _order(widgets[field["after"]], widgets[name], box, field)
 
@@ -185,12 +182,8 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
             if name not in moments:
                 out[name] = _read(widget)
                 continue
-            field, _, no_time = moments[name]
-            day_key, time_key = field["keys"]
-            stamp = _stamp(widget.date)
-            out[day_key] = stamp[:10]
-            clock = stamp[11:]
-            out[time_key] = "" if (no_time and clock == "00:00") else clock
+            day_key, time_key = moments[name][0]["keys"]
+            out[day_key], out[time_key] = widget.parts()
         return out
 
     initial = values()
@@ -254,13 +247,13 @@ def open_editor(screen, action, extra=None):
     on_save = lambda payload, close: screen.apply(action, payload, close)
     on_delete = None
     row = extra.get("row") or {}
-    if screen.kind in LOGS or row:
+    if screen.kind in LOGS or row or action in ("add-issue", "add-run"):
         eyebrow = row.get("id") or eyebrow
 
         def on_save(payload, close):
             recipe = row.get("id") or payload.get("recipe") or (screen.code if screen.kind == "recipe" else "")
             if not recipe:
-                return "Choose the press and the recipe that was running."
+                return "Choose the recipe that was running."
             return screen.apply(action, dict(payload, contextKind="recipe", contextId=recipe), close)
 
     if row and action[5:] in _REMOVE:
@@ -426,6 +419,11 @@ def _spec(screen, action, extra):
         ])
         hint = "Saving confirms this row: it leaves the trial block." if data.get("trial") else "Barrel zones in °C, nozzle first."
         return ("Edit settings", fields, hint)
+    if action == "edit-injection":
+        fields = [{"name": "setting::" + item.get("label"), "label": item.get("label"), "value": item.get("value")}
+                  for item in data.get("settings") or []]
+        return ("Injection settings", fields,
+                "As set on the machine's injection page. Leave a box empty when the press does not use that step.")
     if action == "add-recipe":
         live = data.get("liveRecipes") or []
         return ("Add a recipe", [
@@ -469,6 +467,10 @@ def _spec(screen, action, extra):
         fields = _issue_fields({}, choices.get("workers") or [])
         if screen.kind == "issue":
             fields = _job_fields(choices) + fields
+        elif screen.kind == "product":
+            live = data.get("liveRecipes") or []
+            fields = [{"name": "recipe", "label": "Recipe that was running", "type": "select",
+                       "options": ([_blank("Choose the recipe")] if len(live) > 1 else []) + live}] + fields
         return ("Log a stoppage", fields, "Leave the restart empty while the press is still down.", "Log stoppage")
     if action == "add-run":
         fields = _run_fields({}, choices)
@@ -483,7 +485,7 @@ def _spec(screen, action, extra):
         if row.get("sample"):
             hint += ". This is a sample run: saving it makes it a real one."
         return ("Edit run", fields, hint)
-    if action == "edit-issue" and screen.kind == "issue":
+    if action == "edit-issue" and extra.get("row"):
         row = extra.get("row") or {}
         fields = [{"name": "index", "type": "hidden", "value": row.get("index")}] + _issue_fields(row, choices.get("workers") or [])
         return ("Edit stoppage", fields, "%s on %s" % (row.get("product") or "", row.get("press") or ""))

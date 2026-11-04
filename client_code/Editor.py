@@ -110,7 +110,9 @@ def _order(first, then, box, field):
         start, end = _stamp(first.date), _stamp(then.date)
         reversed_pair = bool(start and end and end < start)
         if start and not reversed_pair:
-            then.min_date = first.date
+            # Whole day: a minimum with a time makes the picker silently drop same-day picks before it.
+            day = first.date
+            then.min_date = day.replace(hour=0, minute=0, second=0, microsecond=0) if hasattr(day, "hour") else day
         elif not start:
             then.min_date = None
         hint.textContent = field.get("after_error") if reversed_pair else usual

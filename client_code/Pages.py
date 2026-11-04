@@ -442,7 +442,6 @@ class Screen:
             self.slot,
             self._facts((
                 ("ERP code", Format.text(data.get("erpCode"), "<small>none yet</small>"), not data.get("erpCode")),
-                ("Sheet id", Format.text(data.get("legacyId")), False),
                 ("Mold", mold_value if mold else "<small>none</small>", not mold),
             )),
             self._flow_section(data),

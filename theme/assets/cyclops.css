@@ -160,7 +160,7 @@ html:not(.designer) .app-bar > .sidebar-toggle { display: none !important; }
 .cy-st.cy-warn { background: var(--cy-amber-soft); color: var(--cy-amber); }
 .cy-st.cy-bad { background: var(--cy-red-soft); color: var(--cy-red); }
 .bc-field.is-bad .bc-field-hint { color: var(--cy-red); font-weight: 600; }
-.bc-field.is-bad .bc-field-input input { border-color: var(--cy-red) !important; background: var(--cy-red-soft) !important; }
+.bc-field.is-bad .bc-field-input .anvil-datepicker { border-color: var(--cy-red) !important; background: var(--cy-red-soft) !important; box-shadow: 0 0 0 1px var(--cy-red); }
 .cy-when small.cy-bad-date { color: var(--cy-red); font-weight: 600; }
 .cy-flag { font-size: 11px; padding: 1px 7px; margin-right: 4px; background: var(--cy-amber-soft); color: var(--cy-amber); }
 .cy-flag.cy-ok { background: var(--cy-green-soft); color: var(--cy-green); }

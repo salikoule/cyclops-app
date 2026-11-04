@@ -93,3 +93,8 @@ class ColorsRoute(AppPage):
 class ColorRoute(AppPage):
     path = "/colors/:code"
     form = "ColorForm"
+
+
+class StoppagesRoute(AppPage):
+    path = "/stoppages"
+    form = "StoppagesForm"

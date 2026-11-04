@@ -51,6 +51,7 @@ def cyclops_nav():
         "recipes": counted["recipes"],
         "materials": counted["materials"],
         "colors": counted["colors"],
+        "stoppages": counted["stoppages"],
     }
 
 

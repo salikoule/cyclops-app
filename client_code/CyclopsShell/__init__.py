@@ -20,6 +20,7 @@ NAV = (
     ("Recipes", "recipe", "fa:sliders", False),
     ("Materials", "material", "fa:flask", False),
     ("Colors", "color", "fa:palette", False),
+    ("Stoppages", "issue", "fa:wrench", False),
 )
 
 BRAND = (

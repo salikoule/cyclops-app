@@ -9,6 +9,7 @@ SLUG = {
     "recipe": "recipes",
     "material": "materials",
     "color": "colors",
+    "issue": "stoppages",
 }
 KIND = {slug: kind for kind, slug in SLUG.items()}
 LABEL = {
@@ -20,6 +21,7 @@ LABEL = {
     "recipe": "Recipe",
     "material": "Raw material",
     "color": "Color",
+    "issue": "Stoppage",
 }
 COUNT_KEY = {
     "product": "products",
@@ -28,6 +30,7 @@ COUNT_KEY = {
     "recipe": "recipes",
     "material": "materials",
     "color": "colors",
+    "issue": "stoppages",
 }
 
 

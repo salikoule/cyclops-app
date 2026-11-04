@@ -601,7 +601,7 @@ def issue_rows(graph, recipes):
                 "hours": hours,
                 "state": state,
                 "status": "Closed" if state == "closed" else cap(state),
-                "tone": "ok" if state == "closed" else "warn",
+                "tone": {"closed": "ok", "check dates": "bad"}.get(state, "warn"),
             })
     rows.sort(key=lambda row: (row["state"] != "check dates", row["start"]), reverse=True)
     return rows
@@ -781,6 +781,7 @@ _LISTS = {
     "recipe": _recipe_rows,
     "material": _material_rows,
     "color": _color_rows,
+    "issue": lambda graph: issue_rows(graph, graph.get("recipes")),
 }
 
 

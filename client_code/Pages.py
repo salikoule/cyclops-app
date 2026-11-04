@@ -16,6 +16,7 @@ LEADS = {
     "recipe": "One row per setup: a mold on a press, with the color and material written on that row. Sheet rows 2–16 are the trial block.",
     "material": "Grades from the material sheet, including regrind and additives, plus texts written on recipes that were not in the catalog. A setup needs at least one resin or regrind.",
     "color": "Masterbatch codes, with the accounting code when the sheet has one.",
+    "issue": "Every stop logged on a recipe, from the Issues sheet and the floor. Filter by press, worker, or cause; open a row for the recipe.",
 }
 TITLES = {
     "product": "Products",
@@ -24,6 +25,7 @@ TITLES = {
     "recipe": "Recipes",
     "material": "Raw materials",
     "color": "Colors",
+    "issue": "Stoppages",
 }
 CONFIRM = {
     "remove-link": ("Unlink these parts?", "The lid and the body stop showing each other.", "Unlink", True),
@@ -189,7 +191,8 @@ class Screen:
                     Format.status(hours, row.get("tone")),
                 )
             )
-        card = Layout.section("Latest stoppages", "From the Issues sheet and the floor. Open a row for the recipe, the fix, and the worker.")
+        card = Layout.section("Latest stoppages", "From the Issues sheet and the floor. Open a row for the recipe, the fix, and the worker.",
+                              actions=(Layout.button("All stoppages", lambda **e: Nav.go("issue")),))
         Layout.body(card, self.block('<div class="cy-list">%s</div>' % "".join(items)))
         return card
 
@@ -201,7 +204,7 @@ class Screen:
             ("Recipes", counts.get("liveRecipes"), "+ %s trial" % (counts.get("trialRecipes") or 0), "recipe", "recipe", None),
             ("Color variants", counts.get("variants"), "Distinct colors on live recipes", "product", "variant", None),
             ("Materials", counts.get("materials"), "%s colors" % (counts.get("colors") or 0), "material", "material", None),
-            ("Stoppages", counts.get("stoppages"), "%s h of downtime logged" % (Format.trim(counts.get("downtimeHours")) or "0"), "recipe", "stoppage", "stoppage-open"),
+            ("Stoppages", counts.get("stoppages"), "%s h of downtime logged" % (Format.trim(counts.get("downtimeHours")) or "0"), "issue", "stoppage", None),
         )
         built = []
         for title, value, subtitle, kind, icon, gap in cards:
@@ -641,11 +644,12 @@ class Screen:
             hours = ("%s h" % Format.trim(item.get("hours"))) if item.get("hours") is not None else item.get("status")
             who = (" · " + Layout.esc(item.get("worker"))) if item.get("worker") else ""
             rows.append(
-                '<div class="cy-row cy-stop"><div class="cy-when">%s<small>%s</small></div><div class="cy-grow"><b>%s</b><div class="cy-sub">%s%s</div></div>%s'
+                '<div class="cy-row cy-stop"><div class="cy-when">%s<small class="%s">%s</small></div><div class="cy-grow"><b>%s</b><div class="cy-sub">%s%s</div></div>%s'
                 '<button type="button" class="cy-mini" data-action="edit-issue" data-index="%s">Edit</button>'
                 '<button type="button" class="cy-mini cy-danger" data-action="remove-issue" data-index="%s">Delete</button></div>'
                 % (
                     Layout.esc(item.get("start") or "—"),
+                    "cy-bad-date" if item.get("tone") == "bad" else "",
                     Layout.esc(("→ " + item.get("end")) if item.get("end") else "still down"),
                     Layout.esc(item.get("cause")),
                     Layout.esc(item.get("fix") or "No fix written"),

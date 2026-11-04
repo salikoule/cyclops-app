@@ -74,6 +74,8 @@ html:not(.designer) .app-bar > .sidebar-toggle { display: none !important; }
   min-width: 0;
 }
 .app-bar .title .anvil-component { margin: 0; min-height: 0; }
+.app-bar { position: relative; z-index: 40; }
+.app-bar .title .anvil-panel-col { overflow: visible !important; }
 
 .app-bar .cy-search input.anvil-component::placeholder, .cy-search input::placeholder { color: var(--cy-muted); opacity: 1; }
 .cy-search { position: relative; width: min(480px, 100%); margin-left: auto; }
@@ -106,11 +108,21 @@ html:not(.designer) .app-bar > .sidebar-toggle { display: none !important; }
   gap: 10px;
   align-items: baseline;
   padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.35;
   text-decoration: none;
   color: var(--cy-ink);
   border-bottom: 1px solid var(--cy-line);
 }
-.cy-hits a:hover { background: var(--cy-hover); }
+.app-bar .cy-hits a {
+  margin: 0;
+  min-height: 0;
+  min-width: 0;
+  border-radius: 0;
+  line-height: 1.35;
+}
+.cy-hits a:last-child { border-bottom: 0; }
+.cy-hits a:hover, .app-bar .cy-hits a:hover, .app-bar .cy-hits a:active { background: var(--cy-hover); color: var(--cy-ink); }
 .cy-hits .cy-kind { margin-left: auto; color: var(--cy-muted); font-size: 12px; }
 
 .cy-nav-sep { height: 1px; background: var(--cy-line); margin: 8px 12px; }
@@ -147,6 +159,9 @@ html:not(.designer) .app-bar > .sidebar-toggle { display: none !important; }
 .cy-st.cy-std { background: var(--bc-soft); color: var(--bc-navy); }
 .cy-st.cy-warn { background: var(--cy-amber-soft); color: var(--cy-amber); }
 .cy-st.cy-bad { background: var(--cy-red-soft); color: var(--cy-red); }
+.bc-field.is-bad .bc-field-hint { color: var(--cy-red); font-weight: 600; }
+.bc-field.is-bad .bc-field-input input { border-color: var(--cy-red) !important; background: var(--cy-red-soft) !important; }
+.cy-when small.cy-bad-date { color: var(--cy-red); font-weight: 600; }
 .cy-flag { font-size: 11px; padding: 1px 7px; margin-right: 4px; background: var(--cy-amber-soft); color: var(--cy-amber); }
 .cy-flag.cy-ok { background: var(--cy-green-soft); color: var(--cy-green); }
 .cy-flag.cy-std { background: var(--bc-soft); color: var(--bc-navy); }

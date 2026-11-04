@@ -177,6 +177,9 @@ def test_seed_module_loads_the_workbook_import():
     assert detail["name"] == "CAVE 11 lt"
     assert detail["missing"] is False
     assert domain.search(graph, "nova")
+    stoppages = domain.list_view(graph, "issue")["rows"]
+    assert len(stoppages) == 26
+    assert len({row["key"] for row in stoppages}) == 26
 
 
 def test_stoppages_downtime_and_states():

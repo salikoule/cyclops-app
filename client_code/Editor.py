@@ -1,15 +1,13 @@
 """Record editors in a side drawer. Field values go to cyclops_apply as strings."""
 
-from datetime import date, datetime
+from datetime import datetime
 
 from anvil import *
 import anvil.js
-from anvil.js import get_dom_node
 from craftify_library.CraftifyUtils import drawer
 
 from cyclops_app import Data, Layout
 
-_LIST_IDS = {"n": 0}
 WIDE = ("area", "checks")
 
 
@@ -26,26 +24,19 @@ def _as_date(value):
         return None
 
 
-def _suggest(box, options):
-    """Attach a datalist so the box suggests known values but still takes new ones."""
+def _as_moment(date_text, time_text):
+    day = _as_date(date_text)
+    if day is None:
+        return None
     try:
-        from anvil.js.window import document
-        _LIST_IDS["n"] += 1
-        list_id = "cy-suggest-%s" % _LIST_IDS["n"]
-        holder = document.createElement("datalist")
-        holder.id = list_id
-        for option in options:
-            item = document.createElement("option")
-            item.value = option.get("value") or ""
-            holder.appendChild(item)
-        document.body.appendChild(holder)
-        node = get_dom_node(box)
-        target = node if node.tagName == "INPUT" else node.querySelector("input")
-        if target is not None:
-            target.setAttribute("list", list_id)
-            target.setAttribute("autocomplete", "off")
-    except Exception:
-        pass
+        clock = datetime.strptime(str(time_text or "").strip().replace(".", ":"), "%H:%M")
+    except (TypeError, ValueError):
+        clock = datetime(2000, 1, 1)
+    return datetime(day.year, day.month, day.day, clock.hour, clock.minute)
+
+
+def _stamp(picked):
+    return picked.strftime("%Y-%m-%d %H:%M") if picked else ""
 
 
 class _Checks:
@@ -84,11 +75,12 @@ def _widget(field):
     if kind == "date":
         widget = DatePicker(format="%d %b %Y", date=_as_date(field.get("value")), pick_time=False)
         return widget, widget
+    if kind == "datetime":
+        widget = DatePicker(format="%d %b %Y  %H:%M", date=_as_moment(field.get("date"), field.get("time")), pick_time=True, placeholder="Not set")
+        return widget, widget
     widget = TextBox(text=_text(field.get("value")), placeholder=field.get("placeholder") or "")
     if kind == "number":
         widget.type = "number"
-    if kind == "suggest":
-        _suggest(widget, field.get("options") or [])
     return widget, widget
 
 
@@ -105,6 +97,30 @@ def _read(widget):
     return _text(widget)
 
 
+def _order(first, then, box, field):
+    """Keep ``then`` on or after ``first``: earlier days are not offered, and a reversed pair is shown in red."""
+    hint = box.dom_nodes["hint"]
+    usual = field.get("hint") or ""
+    root = hint.parentElement
+
+    def check(**event_args):
+        start, end = _stamp(first.date), _stamp(then.date)
+        reversed_pair = bool(start and end and end < start)
+        if start and not reversed_pair:
+            then.min_date = first.date
+        elif not start:
+            then.min_date = None
+        hint.textContent = field.get("after_error") if reversed_pair else usual
+        if reversed_pair:
+            root.classList.add("is-bad")
+        else:
+            root.classList.remove("is-bad")
+
+    first.set_event_handler("change", check)
+    then.set_event_handler("change", check)
+    check()
+
+
 _OPEN = {"drawer": None}
 
 
@@ -114,6 +130,7 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
         if not _OPEN["drawer"].close(force=False):
             return _OPEN["drawer"]
     widgets = {}
+    moments = {}
     rows = []
     short = []
 
@@ -129,6 +146,8 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
         widget, view = _widget(field)
         widgets[field["name"]] = widget
         box = Layout.field(field["label"], view, hint=field.get("hint") or "")
+        if field.get("type") == "datetime":
+            moments[field["name"]] = (field, box, not field.get("time"))
         if (field.get("type") or "text") in WIDE:
             flush()
             rows.append(box)
@@ -137,9 +156,23 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
     flush()
     error = Layout.html('<p class="bc-note bc-note-warn cy-form-error" anvil-name="msg"></p>')
     content = Layout.stack(error, *rows)
+    for name, (field, box, _) in moments.items():
+        if field.get("after") in widgets:
+            _order(widgets[field["after"]], widgets[name], box, field)
 
     def values():
-        return {name: _read(widget) for name, widget in widgets.items()}
+        out = {}
+        for name, widget in widgets.items():
+            if name not in moments:
+                out[name] = _read(widget)
+                continue
+            field, _, no_time = moments[name]
+            day_key, time_key = field["keys"]
+            stamp = _stamp(widget.date)
+            out[day_key] = stamp[:10]
+            clock = stamp[11:]
+            out[time_key] = "" if (no_time and clock == "00:00") else clock
+        return out
 
     initial = values()
     holder = {"drawer": None}
@@ -193,16 +226,25 @@ def open_editor(screen, action, extra=None):
     return True
 
 
+def _worker_options(workers, current):
+    options = sorted(workers or [], key=lambda opt: (opt.get("label") or opt.get("value") or "").lower())
+    if current and current not in [opt.get("value") for opt in options]:
+        options.append({"label": current, "value": current})
+    return [{"label": "Not recorded", "value": ""}] + options
+
+
 def _issue_fields(issue, workers):
-    today = date.today().isoformat()
+    now = datetime.now()
+    start_date, start_time = issue.get("startDate"), issue.get("startTime")
+    if not issue:
+        start_date, start_time = now.strftime("%Y-%m-%d"), "%02d:%02d" % (now.hour, now.minute - now.minute % 5)
     return [
-        {"name": "startDate", "label": "Stopped on", "type": "date", "value": issue.get("startDate") or today},
-        {"name": "startTime", "label": "At (HH:MM)", "value": issue.get("startTime"), "placeholder": "22:30"},
+        {"name": "start", "label": "Stopped at", "type": "datetime", "keys": ("startDate", "startTime"), "date": start_date, "time": start_time},
+        {"name": "end", "label": "Restarted at", "type": "datetime", "keys": ("endDate", "endTime"), "date": issue.get("endDate"), "time": issue.get("endTime"),
+         "after": "start", "after_error": "The restart is before the stop.", "hint": "Leave empty while the press is still down."},
+        {"name": "worker", "label": "Reported by", "type": "select", "options": _worker_options(workers, issue.get("worker")), "value": issue.get("worker") or ""},
         {"name": "cause", "label": "What stopped it", "type": "area", "value": issue.get("cause")},
-        {"name": "worker", "label": "Reported by", "type": "suggest", "options": workers, "value": issue.get("worker"), "placeholder": "Start typing a name"},
         {"name": "fix", "label": "What was done", "type": "area", "value": issue.get("fix")},
-        {"name": "endDate", "label": "Restarted on", "type": "date", "value": issue.get("endDate")},
-        {"name": "endTime", "label": "At (HH:MM)", "value": issue.get("endTime"), "placeholder": "07:30"},
     ]
 
 

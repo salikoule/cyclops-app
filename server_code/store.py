@@ -25,7 +25,7 @@ import records
 _LOCK = threading.Lock()
 _CACHE = {"graph": None, "version": None}
 _KINDS = ("products", "molds", "presses", "materials", "colors", "recipes", "links", "workers")
-_RECIPE_CHILDREN = ("injection_settings", "recipe_materials", "recipe_colors", "stoppages", "production_runs")
+_RECIPE_CHILDREN = ("recipe_materials", "recipe_colors", "stoppages", "production_runs")
 _CLEAR_ORDER = ("product_links",) + _RECIPE_CHILDREN + ("recipes", "molds", "products", "presses", "materials", "colors", "workers")
 _ENTITY_WRITERS = {
     "presses": records.press_row,
@@ -87,9 +87,7 @@ def _add(table, rows):
 
 def _recipe_children(item, recipe_row, refs):
     """{table: rows} for everything that hangs off one recipe."""
-    settings = records.injection_row(item, recipe_row)
     return {
-        "injection_settings": [settings] if settings else [],
         "recipe_materials": records.material_slot_rows(item, recipe_row, refs),
         "recipe_colors": records.color_slot_rows(item, recipe_row, refs),
         "stoppages": records.stoppage_rows(item, recipe_row, refs),
@@ -157,10 +155,6 @@ def _read_all():
     def owner(row):
         return recipe_by_id.get(_link_id(row, "recipe"))
 
-    for row in app_tables.injection_settings.search():
-        item = owner(row)
-        if item is not None:
-            item["settings"] = records.settings_items(row)
     slots = {"materialSlots": [], "colorSlots": [], "issues": [], "runs": []}
     for row in app_tables.recipe_materials.search():
         slots["materialSlots"].append((owner(row), row["slot"], records.material_slot_item(row, material_code.get(_link_id(row, "material")))))

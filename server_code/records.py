@@ -7,6 +7,10 @@ with the same columns) whose links have already been turned into codes.
 Numbers are stored as numbers. A value the setter wrote as something other than a plain
 number ("210/195", "10+22", "-") keeps its text in the row's ``as_written`` column, keyed by
 column name, so nothing on the original sheet is lost.
+
+A recipe's injection settings are the machine's own parameters, so they sit on the recipe as one
+JSON list of ``{label, value}``: each press can carry its own labels, values that are plain
+numbers are numbers, and anything else keeps the setter's text.
 """
 
 import datetime
@@ -17,28 +21,6 @@ TEMP_COLUMNS = (("nozzle", "temp_nozzle"), ("t1", "temp_1"), ("t2", "temp_2"), (
                 ("t4", "temp_4"), ("t5", "temp_5"), ("t6", "temp_6"))
 RECIPE_NUMBERS = (("cycle", "cycle_s"), ("cooling", "cooling_s"), ("screwRpm", "screw_rpm"), ("px", "px"), ("py", "py"),
                   ("printPieces", "print_pieces"), ("printTotal", "print_total"))
-SETTING_COLUMNS = (
-    ("Injection speed u1", "inj_speed_1"),
-    ("Switch position 1→2", "switch_pos_1_2"),
-    ("Injection speed u2", "inj_speed_2"),
-    ("Switch position 2→3", "switch_pos_2_3"),
-    ("Injection speed u3", "inj_speed_3"),
-    ("Injection pressure max P1", "inj_pressure_max_1"),
-    ("Position 1→2", "position_1_2"),
-    ("Injection pressure max P2", "inj_pressure_max_2"),
-    ("Position 2→3", "position_2_3"),
-    ("Injection pressure max P3", "inj_pressure_max_3"),
-    ("Hold switch position", "hold_switch_pos"),
-    ("Hold pressure", "hold_pressure"),
-    ("Hold time (s)", "hold_time_s"),
-    ("Hold speed", "hold_speed"),
-    ("Dosing stroke", "dosing_stroke"),
-    ("Decompression after dosing", "decompression"),
-    ("Back pressure P1", "back_pressure_1"),
-    ("Back pressure switch 1→2", "back_pressure_switch_1_2"),
-    ("Back pressure P2", "back_pressure_2"),
-)
-SETTING_COLUMN = dict(SETTING_COLUMNS)
 
 
 def _text(value):
@@ -64,6 +46,29 @@ def _number_out(row, column, written):
 
 def _written(row):
     return dict(row["as_written"] or {})
+
+
+def _setting_in(text):
+    number = domain.num(text)
+    return domain.whole(number) if number is not None and domain.trim_num(number) == text else text
+
+
+def _settings_in(settings):
+    """The machine's parameters in the order written, as [{label, value}]; None when none are set."""
+    kept = []
+    for setting in settings or []:
+        label, value = _text(setting.get("label")), _text(setting.get("value"))
+        if label and value:
+            kept.append({"label": label, "value": _setting_in(value)})
+    return kept or None
+
+
+def _setting_out(value):
+    return domain.trim_num(value) if isinstance(value, (int, float)) else _text(value)
+
+
+def _settings_out(stored):
+    return [{"label": setting["label"], "value": _setting_out(setting["value"])} for setting in stored or []]
 
 
 def _date_in(text):
@@ -195,28 +200,12 @@ def recipe_row(item, ref):
         "status_note": _text(item.get("status")),
         "comment": _text(item.get("comment")),
         "settings_note": _text(item.get("settingsNote")),
+        "injection": _settings_in(item.get("settings")),
     }
     for key, column in TEMP_COLUMNS:
         fields[column] = _number_in(temps.get(key), column, written)
     for key, column in RECIPE_NUMBERS:
         fields[column] = _number_in(item.get(key), column, written)
-    fields["as_written"] = written or None
-    return fields
-
-
-def injection_row(item, recipe):
-    """None when the recipe has no injection settings written."""
-    written = {}
-    fields = dict({column: None for _, column in SETTING_COLUMNS}, recipe=recipe)
-    filled = False
-    for setting in item.get("settings") or []:
-        column = SETTING_COLUMN.get(_text(setting.get("label")))
-        if column is None:
-            continue
-        fields[column] = _number_in(setting.get("value"), column, written)
-        filled = filled or bool(_text(setting.get("value")))
-    if not filled:
-        return None
     fields["as_written"] = written or None
     return fields
 
@@ -375,7 +364,7 @@ def recipe_item(row, mold_code, product_code, press_code):
         "comment": row["comment"] or "",
         "settingsNote": row["settings_note"] or "",
         "temps": {key: _number_out(row, column, written) for key, column in TEMP_COLUMNS},
-        "settings": [],
+        "settings": _settings_out(row["injection"]),
         "materialSlots": [],
         "colorSlots": [],
         "issues": [],
@@ -384,16 +373,6 @@ def recipe_item(row, mold_code, product_code, press_code):
     for key, column in RECIPE_NUMBERS:
         item[key] = _number_out(row, column, written)
     return item
-
-
-def settings_items(row):
-    written = _written(row)
-    settings = []
-    for label, column in SETTING_COLUMNS:
-        value = _number_out(row, column, written)
-        if value:
-            settings.append({"label": label, "value": value})
-    return settings
 
 
 def material_slot_item(row, material_code):

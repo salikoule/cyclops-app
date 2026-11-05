@@ -14,32 +14,6 @@ db_schema:
     - {name: in_catalog, type: bool}
     server: full
     title: Colors
-  injection_settings:
-    client: none
-    columns:
-    - {name: recipe, target: recipes, type: link_single}
-    - {name: inj_speed_1, type: number}
-    - {name: switch_pos_1_2, type: number}
-    - {name: inj_speed_2, type: number}
-    - {name: switch_pos_2_3, type: number}
-    - {name: inj_speed_3, type: number}
-    - {name: inj_pressure_max_1, type: number}
-    - {name: position_1_2, type: number}
-    - {name: inj_pressure_max_2, type: number}
-    - {name: position_2_3, type: number}
-    - {name: inj_pressure_max_3, type: number}
-    - {name: hold_switch_pos, type: number}
-    - {name: hold_pressure, type: number}
-    - {name: hold_time_s, type: number}
-    - {name: hold_speed, type: number}
-    - {name: dosing_stroke, type: number}
-    - {name: decompression, type: number}
-    - {name: back_pressure_1, type: number}
-    - {name: back_pressure_switch_1_2, type: number}
-    - {name: back_pressure_2, type: number}
-    - {name: as_written, type: simpleObject}
-    server: full
-    title: Injection settings
   materials:
     client: none
     columns:
@@ -188,6 +162,7 @@ db_schema:
     - {name: status_note, type: string}
     - {name: comment, type: string}
     - {name: settings_note, type: string}
+    - {name: injection, type: simpleObject}
     - {name: as_written, type: simpleObject}
     server: full
     title: Recipes
@@ -292,7 +267,7 @@ services:
 - client_config: {enable_split: true, enable_v2: true}
   server_config: {auto_create_missing_columns: true}
   source: /runtime/services/tables.yml
-- client_config: {allow_remember_me: true, allow_signup: true, confirm_email: false, enable_automatic_sign_in: true, mfa_timeout_days: 0, remember_me_days: 30, require_mfa: false, use_email: true, use_google: true}
+- client_config: {allow_remember_me: true, allow_signup: true, confirm_email: true, enable_automatic_sign_in: true, mfa_timeout_days: 0, remember_me_days: 30, require_mfa: false, use_email: true, use_google: true}
   server_config: {user_table: users}
   source: /runtime/services/anvil/users.yml
 - client_config: {}

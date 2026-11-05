@@ -40,8 +40,6 @@ def _round_trip(plant):
     for item in plant["recipes"]:
         row = records.recipe_row(item, _ref)
         recipe = records.recipe_item(row, row["mold"], mold_product.get(row["mold"]), row["press"])
-        settings = records.injection_row(item, row["code"])
-        recipe["settings"] = records.settings_items(settings) if settings else []
         recipe["materialSlots"] = [records.material_slot_item(slot, slot["material"]) for slot in records.material_slot_rows(item, row["code"], _ref)]
         recipe["colorSlots"] = [records.color_slot_item(slot, slot["color"]) for slot in records.color_slot_rows(item, row["code"], _ref)]
         recipe["issues"] = [records.stoppage_item(log, log["worker"]) for log in records.stoppage_rows(item, row["code"], _ref)]
@@ -54,8 +52,6 @@ def _comparable(plant):
     plain = {kind: copy.deepcopy(plant.get(kind) or []) for kind in KINDS}
     for product in plain["products"]:
         product.pop("moldId", None)
-    for recipe in plain["recipes"]:
-        recipe["settings"] = sorted((item["label"], item["value"]) for item in recipe["settings"])
     plain["workers"] = sorted(plain["workers"])
     return plain
 
@@ -79,7 +75,18 @@ def test_numbers_are_stored_as_numbers_and_odd_text_is_kept():
     assert row["temp_1"] is None and row["temp_5"] is None and row["print_pieces"] is None
     assert row["cooling_s"] == 5.5
     assert row["as_written"] == {"temp_1": "210/195", "temp_5": "-", "cooling_s": "5,5", "print_pieces": "10+22"}
-    assert records.injection_row(item, "REC-1")["hold_time_s"] == 6
+
+
+def test_injection_settings_are_one_ordered_list_on_the_recipe():
+    item = {"id": "REC-1", "settings": [{"label": "Hold time (s)", "value": "6"}, {"label": "Hold pressure", "value": "60/55"},
+                                        {"label": "Nozzle stroke (Arburg)", "value": "12.5"}, {"label": "Hold speed", "value": ""}]}
+    row = records.recipe_row(item, _ref)
+    assert row["injection"] == [{"label": "Hold time (s)", "value": 6}, {"label": "Hold pressure", "value": "60/55"},
+                                {"label": "Nozzle stroke (Arburg)", "value": 12.5}]
+    assert records.recipe_item(row, None, None, None)["settings"] == [
+        {"label": "Hold time (s)", "value": "6"}, {"label": "Hold pressure", "value": "60/55"},
+        {"label": "Nozzle stroke (Arburg)", "value": "12.5"}]
+    assert records.recipe_row({"id": "REC-2"}, _ref)["injection"] is None
 
 
 def test_recipe_settings_drop_the_copies_of_recipe_fields():

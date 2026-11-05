@@ -285,6 +285,13 @@ def _drop_logs(tables, recipe_row):
             row.delete()
 
 
+def _unlink_press(tables, press_row):
+    """Faster Storage tables may restrict or cascade a delete; a log keeps its row when its press goes."""
+    for table in tables:
+        for row in table.search(press=press_row):
+            row.update(press=None)
+
+
 def _read_logs(tables):
     """{recipe code: (issues, runs)} from the log tables, each list in its saved order."""
     found = {}
@@ -582,6 +589,8 @@ def _persist_unlocked(plant, dirty):
                     _drop_logs(tables, row)
                 if item is None:
                     if row is not None:
+                        if kind == "presses" and tables is not None:
+                            _unlink_press(tables, row)
                         row.delete()
                     continue
                 if row is None:

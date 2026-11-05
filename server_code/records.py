@@ -4,52 +4,27 @@ No Anvil imports, so the mapping can be tested on its own. Writers take ``ref(ta
 and return the row's columns with links resolved through it. Readers take a row (or a dict
 with the same columns) whose links have already been turned into codes.
 
-Numbers are stored as numbers. A value the setter wrote as something other than a plain
-number ("210/195", "10+22", "-") keeps its text in the row's ``as_written`` column, keyed by
-column name, so nothing on the original sheet is lost.
-
-A recipe's injection settings are the machine's own parameters, so they sit on the recipe as one
-JSON list of ``{label, value}``: each press can carry its own labels, values that are plain
-numbers are numbers, and anything else keeps the setter's text.
+Numbers are stored as numbers. A recipe's machine settings are the press's own parameters, so
+they sit on the recipe as JSON lists of ``{label, value}`` in the order written: ``temps`` holds
+the barrel zones the press has, ``injection`` the injection page with cooling and screw speed,
+``extra`` the remaining setting-sheet boxes. Values that are plain numbers are numbers; anything
+else ("210/195", "5,5") keeps the setter's text. A "-" for a zone means the press has none.
 """
 
 import datetime
 
 import domain
 
-TEMP_COLUMNS = (("nozzle", "temp_nozzle"), ("t1", "temp_1"), ("t2", "temp_2"), ("t3", "temp_3"),
-                ("t4", "temp_4"), ("t5", "temp_5"), ("t6", "temp_6"))
-RECIPE_NUMBERS = (("cycle", "cycle_s"), ("cooling", "cooling_s"), ("screwRpm", "screw_rpm"), ("px", "px"), ("py", "py"),
-                  ("printPieces", "print_pieces"), ("printTotal", "print_total"))
+RECIPE_INJECTION_FIELDS = (("cooling", "Cooling time (s)"), ("screwRpm", "Screw speed (rpm)"))
+RECIPE_EXTRA_FIELDS = (("px", "ΠΧ"), ("py", "ΠΥ"), ("printPieces", "ΤΕΜ εκτύπωση"), ("printTotal", "TOT εκτύπωσης"))
 PRESS_COLUMNS = ("code", "name", "alias", "floor_number", "serial", "robot", "robot_serial", "robot_year", "euromap",
                  "changeover_min", "lifecycle", "board_location", "board_note")
-PRODUCT_COLUMNS = ("code", "name", "sheet_id", "erp_code", "item_type", "lifecycle", "only_on_cards", "notes",
+PRODUCT_COLUMNS = ("code", "name", "erp_code", "item_type", "lifecycle", "only_on_cards", "notes",
                    "approved_presses", "lid_basis")
 
 
 def _text(value):
     return str(value if value is not None else "").strip()
-
-
-def _number_in(value, column, written):
-    """The number to store; ``written`` gets the original text when it is not exactly that number."""
-    text = _text(value)
-    if not text:
-        return None
-    number = domain.num(text)
-    if number is None or domain.trim_num(number) != text:
-        written[column] = text
-    return domain.whole(number) if number is not None else None
-
-
-def _number_out(row, column, written):
-    if column in written:
-        return written[column]
-    return domain.trim_num(row[column])
-
-
-def _written(row):
-    return dict(row["as_written"] or {})
 
 
 def _setting_in(text):
@@ -159,7 +134,6 @@ def product_row(item, ref):
     return {
         "code": item["id"],
         "name": _text(item.get("name")),
-        "sheet_id": domain.whole(item.get("legacyId")),
         "erp_code": _text(item.get("erpCode")),
         "item_type": item.get("type") or "part",
         "lifecycle": item.get("lifecycle") or "active",
@@ -189,27 +163,24 @@ def mold_row(item, ref):
 
 def recipe_row(item, ref):
     """The product is the mold's product, so it is not stored twice."""
-    written = {}
     temps = item.get("temps") or {}
-    fields = {
+    return {
         "code": item["id"],
-        "sheet_row": domain.whole(item.get("legacyId")),
         "mold": _ref(ref, "molds", item.get("moldId")),
         "press": _ref(ref, "presses", item.get("pressId")),
         "trial": bool(item.get("trial")),
         "standard": bool(item.get("standard")),
+        "cycle_s": domain.whole(item.get("cycle")),
         "product_lot": _text(item.get("productLot")),
         "status_note": _text(item.get("status")),
         "comment": _text(item.get("comment")),
         "settings_note": _text(item.get("settingsNote")),
-        "injection": _settings_in(item.get("settings")),
+        "temps": _settings_in([{"label": label, "value": temps.get(key)} for key, label in domain.TEMP_LABELS
+                               if _text(temps.get(key)) != "-"]),
+        "injection": _settings_in(list(item.get("settings") or [])
+                                  + [{"label": label, "value": item.get(key)} for key, label in RECIPE_INJECTION_FIELDS]),
+        "extra": _settings_in([{"label": label, "value": item.get(key)} for key, label in RECIPE_EXTRA_FIELDS]),
     }
-    for key, column in TEMP_COLUMNS:
-        fields[column] = _number_in(temps.get(key), column, written)
-    for key, column in RECIPE_NUMBERS:
-        fields[column] = _number_in(item.get(key), column, written)
-    fields["as_written"] = written or None
-    return fields
 
 
 def material_slot_rows(item, recipe, ref):
@@ -325,7 +296,6 @@ def product_item(row, approved_codes, lid_code):
     return {
         "id": row["code"],
         "name": row["name"] or "",
-        "legacyId": domain.trim_num(row["sheet_id"]),
         "erpCode": row["erp_code"] or "",
         "type": row["item_type"] or "part",
         "lifecycle": row["lifecycle"] or "active",
@@ -350,28 +320,33 @@ def mold_item(row, product_code):
 
 
 def recipe_item(row, mold_code, product_code, press_code):
-    written = _written(row)
+    temps = {setting["label"]: setting["value"] for setting in _settings_out(row["temps"])}
+    injection = _settings_out(row["injection"])
+    fields = {setting["label"]: setting["value"] for setting in injection}
+    extra = {setting["label"]: setting["value"] for setting in _settings_out(row["extra"])}
     item = {
         "id": row["code"],
-        "legacyId": domain.whole(row["sheet_row"]),
         "productId": product_code or "",
         "moldId": mold_code or "",
         "pressId": press_code or "",
         "trial": bool(row["trial"]),
         "standard": bool(row["standard"]),
+        "cycle": domain.trim_num(row["cycle_s"]),
         "productLot": row["product_lot"] or "",
         "status": row["status_note"] or "",
         "comment": row["comment"] or "",
         "settingsNote": row["settings_note"] or "",
-        "temps": {key: _number_out(row, column, written) for key, column in TEMP_COLUMNS},
-        "settings": _settings_out(row["injection"]),
+        "temps": {key: temps.get(label, "") for key, label in domain.TEMP_LABELS},
+        "settings": [setting for setting in injection if setting["label"] not in domain.RECIPE_FIELD_SETTINGS],
         "materialSlots": [],
         "colorSlots": [],
         "issues": [],
         "runs": [],
     }
-    for key, column in RECIPE_NUMBERS:
-        item[key] = _number_out(row, column, written)
+    for key, label in RECIPE_INJECTION_FIELDS:
+        item[key] = fields.get(label, "")
+    for key, label in RECIPE_EXTRA_FIELDS:
+        item[key] = extra.get(label, "")
     return item
 
 

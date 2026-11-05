@@ -153,7 +153,7 @@ def normalize(graph):
     for product in graph.get("products") or []:
         product["erpCode"] = product.get("erpCode") or ""
         product["notes"] = product.get("notes") or ""
-        product["legacyId"] = product.get("legacyId") or ""
+        product.pop("legacyId", None)
         if not product.get("type"):
             product["type"] = default_product_type(product.get("name"))
         if not product.get("lifecycle"):
@@ -206,8 +206,9 @@ def normalize(graph):
         press["robotYear"] = press.get("robotYear") or ""
         press["euromap"] = press.get("euromap") or ""
     for recipe in graph.get("recipes") or []:
+        recipe.pop("legacyId", None)
         temps = recipe.get("temps") or {}
-        recipe["temps"] = {key: temps.get(key) or "" for key in TEMP_KEYS}
+        recipe["temps"] = {key: "" if str(temps.get(key) or "").strip() == "-" else temps.get(key) or "" for key in TEMP_KEYS}
         recipe["settings"] = [item for item in recipe.get("settings") or []
                               if (item.get("label") or "").strip() not in RECIPE_FIELD_SETTINGS and str(item.get("value") or "").strip()]
         recipe["materialSlots"] = list(recipe.get("materialSlots") or [])
@@ -1270,7 +1271,6 @@ def detail_product(graph, code):
         "typeLabel": TYPES.get(product.get("type"), product.get("type") or ""),
         "lifecycle": product.get("lifecycle") or "active",
         "erpCode": product.get("erpCode") or "",
-        "legacyId": product.get("legacyId") or "",
         "notes": product.get("notes") or "",
         "mold": None if mold is None else {
             "id": mold["id"],
@@ -1432,7 +1432,6 @@ def detail_recipe(graph, code):
         "pph": pph,
         "pphHint": pph_hint,
         "productLot": recipe.get("productLot") or "",
-        "legacyId": recipe.get("legacyId"),
         "siblings": siblings,
         "zones": [{"key": key, "label": label, "value": (recipe.get("temps") or {}).get(key) or ""} for key, label in TEMP_LABELS],
         "temps": {key: (recipe.get("temps") or {}).get(key) or "" for key in TEMP_KEYS},
@@ -1623,7 +1622,6 @@ def action_new_product(graph, payload):
     product = {
         "id": new_code(graph, "products", "PRD", 4),
         "name": name,
-        "legacyId": "",
         "moldId": None,
         "erpCode": (payload.get("erp") or "").strip(),
         "type": payload.get("type") or "part",
@@ -1755,7 +1753,6 @@ def action_clone_product(graph, payload):
     product = copy.deepcopy(source)
     product["id"] = new_code(graph, "products", "PRD", 4)
     product["name"] = (source.get("name") or "Product") + " (copy)"
-    product["legacyId"] = ""
     product["onlyOnCards"] = False
     product["moldId"] = None
     graph["products"].append(product)
@@ -1770,7 +1767,6 @@ def action_clone_product(graph, payload):
         for source_recipe in list(index["recipesByMold"].get(source_mold["id"]) or []):
             recipe = copy.deepcopy(source_recipe)
             recipe["id"] = new_code(graph, "recipes", "REC", 4)
-            recipe["legacyId"] = None
             recipe["productId"] = product["id"]
             recipe["moldId"] = mold["id"]
             recipe["comment"] = "copy of %s" % source_recipe["id"]
@@ -1814,7 +1810,6 @@ def _new_recipe(graph, product_id, press_id, source):
     base = copy.deepcopy(source) if source else _blank_recipe()
     recipe = base
     recipe["id"] = new_code(graph, "recipes", "REC", 4)
-    recipe["legacyId"] = None
     recipe["productId"] = product_id
     recipe["moldId"] = mold["id"]
     recipe["pressId"] = press_id

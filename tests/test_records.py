@@ -64,14 +64,19 @@ def test_every_workbook_value_survives_the_tables():
             assert got == want, (kind, want.get("id") if isinstance(want, dict) else want)
 
 
-def test_numbers_are_stored_as_numbers_and_odd_text_is_kept():
-    item = {"id": "REC-1", "temps": {"t1": "210/195", "t2": "245", "t5": "-"}, "cycle": "48.19", "cooling": "5,5",
-            "printPieces": "10+22", "settings": [{"label": "Hold time (s)", "value": "6"}]}
+def test_machine_settings_are_json_lists_with_numbers_or_the_setters_text():
+    item = {"id": "REC-1", "temps": {"nozzle": "230", "t2": "245", "t1": "210/195", "t5": "-"}, "cycle": "48.19", "cooling": "5,5",
+            "screwRpm": "120", "px": "3", "printPieces": "10+22", "settings": [{"label": "Hold time (s)", "value": "6"}]}
     row = records.recipe_row(item, _ref)
-    assert row["temp_2"] == 245 and row["cycle_s"] == 48.19
-    assert row["temp_1"] is None and row["temp_5"] is None and row["print_pieces"] is None
-    assert row["cooling_s"] == 5.5
-    assert row["as_written"] == {"temp_1": "210/195", "temp_5": "-", "cooling_s": "5,5", "print_pieces": "10+22"}
+    assert row["cycle_s"] == 48.19
+    assert row["temps"] == [{"label": "Nozzle", "value": 230}, {"label": "T2", "value": 245}, {"label": "T1", "value": "210/195"}]
+    assert row["injection"] == [{"label": "Hold time (s)", "value": 6}, {"label": "Cooling time (s)", "value": "5,5"},
+                                {"label": "Screw speed (rpm)", "value": 120}]
+    assert row["extra"] == [{"label": "ΠΧ", "value": 3}, {"label": "ΤΕΜ εκτύπωση", "value": "10+22"}]
+    back = records.recipe_item(row, None, None, None)
+    assert back["temps"] == {"nozzle": "230", "t6": "", "t5": "", "t4": "", "t3": "", "t2": "245", "t1": "210/195"}
+    assert (back["cycle"], back["cooling"], back["screwRpm"], back["px"], back["printPieces"]) == ("48.19", "5,5", "120", "3", "10+22")
+    assert back["settings"] == [{"label": "Hold time (s)", "value": "6"}]
 
 
 def test_injection_settings_are_one_ordered_list_on_the_recipe():

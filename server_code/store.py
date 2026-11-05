@@ -5,6 +5,8 @@ through ``loader`` and an edit loads what it touches, changes it, and writes the
 back in one transaction. ``records`` maps rows to the shape the domain module works on.
 """
 
+import copy
+
 import anvil.tables
 import anvil.tables.query as q
 from anvil.tables import app_tables
@@ -60,8 +62,8 @@ def _key_column(table):
 class _Refs:
     """Rows by code (workers by name), fetched once per write."""
 
-    def __init__(self):
-        self._rows = {}
+    def __init__(self, known=()):
+        self._rows = dict(known)
 
     def __call__(self, table, code):
         key = (table, code)
@@ -83,12 +85,12 @@ def _whole(children=loader.CHILDREN, workers=False):
     return loader.Plant(whole=True, children=children, workers=workers).graph()
 
 
-def _recipe_scope(plant, code):
+def _recipe_scope(plant, code, spans=True):
     row = app_tables.recipes.get(q.fetch_only("code", press=q.fetch_only("code"), mold=q.fetch_only("code", product=q.fetch_only("code"))), code=code)
     if row is None:
         return plant
     plant.add_recipes([row])
-    if row["press"] is not None:
+    if spans and row["press"] is not None:
         plant.add_spans([row["press"]["code"]])
     return plant
 
@@ -268,14 +270,28 @@ def _ensure_workers(plant, items, refs):
                 known.add(name)
 
 
-def _drop_lines(recipe_row):
-    for name in _RECIPE_LINES:
-        for row in _table(name).search(recipe=recipe_row):
-            row.delete()
+def _drop_lines(loaded, recipe_row, name):
+    rows = loaded.lines(recipe_row, name)
+    for row in rows if rows is not None else _table(name).search(recipe=recipe_row):
+        row.delete()
 
 
-def _persist(plant, dirty):
-    refs = _Refs()
+def _codes(table, code):
+    """A stand-in for row links, so a writer's output can be compared without reading rows."""
+    return (table, code) if code else None
+
+
+def _same(writer, before, item):
+    return before is not None and writer(before, _codes) == writer(item, _codes)
+
+
+def _same_lines(name, before, item):
+    return before is not None and _recipe_lines(before, None, _codes)[name] == _recipe_lines(item, None, _codes)[name]
+
+
+def _persist(plant, dirty, loaded, before):
+    """Write the dirty records back, skipping rows and line tables that are as they were read."""
+    refs = _Refs(loaded.rows())
     recipes = {item["id"]: item for item in plant.get("recipes") or []}
     _ensure_workers(plant, [recipes[code] for code in dirty.get("recipes") or [] if code in recipes], refs)
     for kind in _PERSIST_ORDER:
@@ -285,32 +301,36 @@ def _persist(plant, dirty):
         items = {item["id"]: item for item in plant.get(kind) or []}
         writer = _ENTITY_WRITERS[kind]
         for code in codes:
-            item = items.get(code)
+            item, old = items.get(code), before[kind].get(code)
             row = refs(kind, code)
             if item is None:
                 if row is not None:
                     if kind == "recipes":
-                        _drop_lines(row)
+                        for name in _RECIPE_LINES:
+                            _drop_lines(loaded, row, name)
                     row.delete()
                 continue
             if row is None:
                 row = _table(kind).add_row(**writer(item, refs))
                 refs.remember(kind, code, row)
-            else:
-                if kind == "recipes":
-                    _drop_lines(row)
+                old = None
+            elif not _same(writer, old, item):
                 row.update(**writer(item, refs))
             if kind == "recipes":
                 for name, rows in _recipe_lines(item, row, refs).items():
+                    if _same_lines(name, old, item):
+                        continue
+                    if old is not None:
+                        _drop_lines(loaded, row, name)
                     if rows:
                         _table(name).add_rows(rows)
     products = {item["id"]: item for item in plant.get("products") or []}
     for code in dirty.get("products") or []:
-        if code in products:
+        if code in products and not _same(records.product_lid_row, before["products"].get(code), products[code]):
             refs("products", code).update(**records.product_lid_row(products[code], refs))
     presses = {item["id"]: item for item in plant.get("presses") or []}
     for code in dirty.get("presses") or []:
-        if code in presses:
+        if code in presses and not _same(records.press_board_row, before["presses"].get(code), presses[code]):
             refs("presses", code).update(**records.press_board_row(presses[code], refs))
 
 
@@ -327,24 +347,26 @@ def _action_plant(action, payload):
             if payload.get(key):
                 _product_scope(plant, payload[key])
         if payload.get("from"):
-            _recipe_scope(plant, payload["from"])
+            _recipe_scope(plant, payload["from"], spans=False)
     elif action in _RECIPE_ACTIONS:
-        _recipe_scope(plant, context)
+        _recipe_scope(plant, context, spans=False)
     elif action == "edit-press" and payload.get("mounted"):
         plant.add(products=[payload["mounted"]])
     elif action == "new-mold" and payload.get("product"):
         plant.add(products=[payload["product"]])
-    return plant.graph()
+    return plant
 
 
 @anvil.tables.in_transaction
 def apply_action(action, payload):
     payload = payload or {}
-    plant = _action_plant(action, payload)
+    loaded = _action_plant(action, payload)
+    plant = loaded.graph()
+    before = {kind: {item["id"]: copy.deepcopy(item) for item in plant.get(kind) or []} for kind in _PERSIST_ORDER}
     result = domain.dispatch(plant, action, payload)
     if result.get("error"):
         return {"error": result["error"]}
-    _persist(plant, result.get("dirty") or {})
+    _persist(plant, result.get("dirty") or {}, loaded, before)
     return {"redirect": result.get("redirect"), "refresh": bool(result.get("refresh"))}
 
 

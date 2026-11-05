@@ -69,6 +69,24 @@ class Plant:
         self.workers = workers or any(kind in self.children for kind in ("issues", "runs"))
         self.codes = {kind: [row["code"] for row in _table(kind).search(q.fetch_only("code"))] for kind in codes}
         self.spans = None
+        self.worker_rows = []
+        self.line_rows = {}
+        self._read_lines = set()
+
+    def rows(self):
+        """((table, code), row) for every record row read, workers by name."""
+        for table, rows in (("presses", self.press_rows), ("materials", self.material_rows), ("colors", self.color_rows),
+                            ("products", self.products.values()), ("molds", self.molds.values()), ("recipes", self.recipes.values())):
+            for row in rows:
+                yield (table, row["code"]), row
+        for row in self.worker_rows:
+            yield ("workers", row["name"]), row
+
+    def lines(self, recipe_row, table):
+        """The ``table`` rows read for this recipe, or None when that table was not read."""
+        if recipe_row.get_id() not in self.recipes or table not in self._read_lines:
+            return None
+        return self.line_rows.get((recipe_row.get_id(), table), [])
 
     def press(self, code):
         return next((row for row in self.press_rows if row["code"] == code), None)
@@ -133,10 +151,15 @@ class Plant:
         return self
 
     def _lines(self, table):
+        self._read_lines.add(table)
         if self.whole:
-            return _table(table).search()
-        rows = list(self.recipes.values())
-        return _table(table).search(recipe=q.any_of(*rows)) if rows else []
+            found = _table(table).search()
+        else:
+            rows = list(self.recipes.values())
+            found = _table(table).search(recipe=q.any_of(*rows)) if rows else []
+        for row in found:
+            self.line_rows.setdefault((_id(row["recipe"]), table), []).append(row)
+            yield row
 
     def graph(self):
         press_code = {row.get_id(): row["code"] for row in self.press_rows}
@@ -144,8 +167,8 @@ class Plant:
         color_code = {row.get_id(): row["code"] for row in self.color_rows}
         product_code = {key: row["code"] for key, row in self.products.items()}
         mold_code = {key: row["code"] for key, row in self.molds.items()}
-        worker_rows = list(app_tables.workers.search()) if self.workers else []
-        worker_name = {row.get_id(): row["name"] for row in worker_rows}
+        self.worker_rows = list(app_tables.workers.search()) if self.workers else []
+        worker_name = {row.get_id(): row["name"] for row in self.worker_rows}
 
         def code(linked, known):
             if linked is None:

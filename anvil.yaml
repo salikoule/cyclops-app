@@ -36,11 +36,16 @@ db_schema:
     columns:
     - {name: code, type: string}
     - {name: name, type: string}
-    - {name: product, target: products, type: link_single}
+    - admin_ui: {order: 2}
+      client_hidden: false
+      name: product
+      target: products
+      type: link_single
     - {name: cavities, type: number}
     - {name: shot_weight_g, type: number}
     - {name: location, type: string}
     - {name: status, type: string}
+    indexes: []
     server: full
     title: Molds
   presses:

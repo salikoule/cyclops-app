@@ -1,6 +1,3 @@
-import anvil.tables as tables
-import anvil.tables.query as q
-from anvil.tables import app_tables
 """Server API for the Cyclops plant record."""
 
 import json

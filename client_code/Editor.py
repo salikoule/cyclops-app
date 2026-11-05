@@ -3,9 +3,6 @@
 from datetime import datetime
 
 from anvil import *
-import anvil.tables as tables
-import anvil.tables.query as q
-from anvil.tables import app_tables
 import anvil.js
 from craftify_library.CraftifyUtils import dialogs, drawer
 from craftify_library.CustomComponents.TimePicker import TimePicker
@@ -399,7 +396,8 @@ def _spec(screen, action, extra):
         return ("Edit press %s" % data.get("name"), [
             {"name": "lifecycle", "label": "Lifecycle", "type": "select", "options": choices.get("lifecycles") or [], "value": data.get("lifecycle")},
             {"name": "changeoverMin", "label": "Changeover (min)", "type": "number", "value": data.get("changeoverMin")},
-            {"name": "mounted", "label": "On the board", "value": data.get("mounted"), "placeholder": "product name"},
+            {"name": "mounted", "label": "On the board", "type": "select",
+             "options": [_blank("Nothing mounted")] + (choices.get("products") or []), "value": data.get("mountedId") or ""},
             {"name": "location", "label": "Board note", "value": data.get("location")},
             {"name": "euromap", "label": "EUROMAP class", "value": data.get("euromap")},
             {"name": "serial", "label": "Serial", "value": data.get("serial")},

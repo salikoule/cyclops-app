@@ -1,13 +1,13 @@
-import anvil.tables as tables
-import anvil.tables.query as q
-from anvil.tables import app_tables
-"""Load and save the plant graph in Anvil tables.
+"""The plant record in relational Anvil tables.
 
-The domain module always sees the sketch's shape. The entity tables are the
-storage shape and what the Anvil editor shows. A compressed copy of the whole
-graph sits on the ``meta`` row named "plant", with a version that goes up on
-every write, so a fresh server process loads one row instead of seven tables
-and a process holding an older copy notices and reloads.
+The tables are the record: every product, mold, press, recipe, and log is a row, and the
+references between them are link columns. ``records`` maps rows to the shape the domain module
+works on.
+
+Every page needs the whole plant (statuses and gaps look across all of it), so a compressed copy
+sits on the ``meta`` row named "plant", with a version that goes up on each write. It is only a
+cache. It is rebuilt from the tables whenever it is missing, and ``reload_from_tables`` rebuilds it
+after rows are changed by hand in the Anvil editor.
 """
 
 import datetime
@@ -20,18 +20,26 @@ import anvil.tables
 from anvil.tables import app_tables
 
 import domain
+import records
 
 _LOCK = threading.Lock()
 _CACHE = {"graph": None, "version": None}
 _KINDS = ("products", "molds", "presses", "materials", "colors", "recipes", "links", "workers")
-
-
-def _rows(table):
-    return list(table.search())
+_RECIPE_CHILDREN = ("injection_settings", "recipe_materials", "recipe_colors", "stoppages", "production_runs")
+_CLEAR_ORDER = ("product_links",) + _RECIPE_CHILDREN + ("recipes", "molds", "products", "presses", "materials", "colors", "workers")
+_ENTITY_WRITERS = {
+    "presses": records.press_row,
+    "materials": records.material_row,
+    "colors": records.color_row,
+    "products": records.product_row,
+    "molds": records.mold_row,
+    "recipes": records.recipe_row,
+}
+_PERSIST_ORDER = ("presses", "materials", "colors", "products", "molds", "recipes")
+_BATCH = 200
 
 
 def column(row, name, default=None):
-    """A column the cloud schema may not have yet. Writes create it (auto_create_missing_columns)."""
     try:
         value = row[name]
     except Exception:
@@ -39,476 +47,168 @@ def column(row, name, default=None):
     return default if value is None else value
 
 
-def _optional_table(name):
-    try:
-        return getattr(app_tables, name)
-    except Exception:
-        return None
-
-
-def _workers_table():
-    return _optional_table("workers")
-
-
-def _log_tables():
-    """(stoppages, production_runs), or None while the database lacks them; the logs then stay in JSON on the recipe row."""
-    stoppages, runs = _optional_table("stoppages"), _optional_table("production_runs")
-    return (stoppages, runs) if stoppages is not None and runs is not None else None
-
-
-def _loads(text, fallback):
-    if not text:
-        return fallback
-    try:
-        return json.loads(text)
-    except (TypeError, ValueError):
-        return fallback
-
-
-def _dumps(value):
-    return json.dumps(value if value is not None else [], ensure_ascii=False)
-
-
-def _product_fields(item):
-    return {
-        "code": item["id"],
-        "name": item.get("name") or "",
-        "legacy_id": item.get("legacyId") or "",
-        "erp_code": item.get("erpCode") or "",
-        "item_type": item.get("type") or "part",
-        "notes": item.get("notes") or "",
-        "lifecycle": item.get("lifecycle") or "active",
-        "only_on_cards": bool(item.get("onlyOnCards")),
-        "approved_presses_json": _dumps(item.get("approvedPressIds") or []),
-    }
-
-
-def _mold_fields(item):
-    return {
-        "code": item["id"],
-        "name": item.get("name") or "",
-        "product_code": item.get("productId") or "",
-        "cavities": item.get("cavities"),
-        "shot_weight": item.get("shotWeight"),
-        "location": item.get("location") or "",
-        "status": item.get("status") or "in use",
-    }
-
-
-def _press_fields(item):
-    board = item.get("board") or {}
-    return {
-        "code": item["id"],
-        "name": item.get("name") or "",
-        "alias": item.get("alias") or "",
-        "aa": item.get("aa") if item.get("aa") is not None else 99,
-        "serial": item.get("serial") or "",
-        "robot": item.get("robot") or "",
-        "robot_serial": item.get("robotSerial") or "",
-        "robot_year": item.get("robotYear") or "",
-        "euromap": item.get("euromap") or "",
-        "mounted": board.get("mounted") or "",
-        "board_location": board.get("location") or "",
-        "board_note": board.get("note") or "",
-        "changeover_min": item.get("changeoverMin"),
-        "lifecycle": item.get("lifecycle") or "active",
-    }
-
-
-def _material_fields(item):
-    return {
-        "code": item["id"],
-        "text": item.get("text") or "",
-        "supplier": item.get("supplier") or "",
-        "mfi": item.get("mfi") or "",
-        "family": item.get("family") or "",
-        "account": item.get("account") or "",
-        "invoice_code": item.get("invoiceCode") or "",
-        "description": item.get("description") or "",
-        "notes": item.get("notes") or "",
-        "link": item.get("link") or "",
-        "catalog": bool(item.get("catalog")),
-        "kind": item.get("kind") or "resin",
-    }
-
-
-def _color_fields(item):
-    return {
-        "code": item["id"],
-        "label_code": item.get("code") or "",
-        "name": item.get("name") or "",
-        "label": item.get("label") or "",
-        "account": item.get("account") or "",
-        "shade": item.get("shade") or "",
-        "notes": item.get("notes") or "",
-        "link": item.get("link") or "",
-        "catalog": bool(item.get("catalog")),
-    }
-
-
-def _recipe_fields(item):
-    legacy = item.get("legacyId")
-    return {
-        "code": item["id"],
-        "legacy_id": legacy if isinstance(legacy, (int, float)) else None,
-        "product_code": item.get("productId") or "",
-        "mold_code": item.get("moldId") or "",
-        "press_code": item.get("pressId") or "",
-        "temps_json": json.dumps(item.get("temps") or {}, ensure_ascii=False),
-        "settings_json": _dumps(item.get("settings")),
-        "material_slots_json": _dumps(item.get("materialSlots")),
-        "color_slots_json": _dumps(item.get("colorSlots")),
-        "settings_note": item.get("settingsNote") or "",
-        "cycle": item.get("cycle") or "",
-        "cooling": item.get("cooling") or "",
-        "screw_rpm": item.get("screwRpm") or "",
-        "px": item.get("px") or "",
-        "py": item.get("py") or "",
-        "product_lot": item.get("productLot") or "",
-        "print_pieces": item.get("printPieces") or "",
-        "print_total": item.get("printTotal") or "",
-        "comment": item.get("comment") or "",
-        "status_text": item.get("status") or "",
-        "trial": bool(item.get("trial")),
-        "standard": bool(item.get("standard")),
-    }
-
-
-def _recipe_row_fields(item, logs_in_tables):
-    fields = _recipe_fields(item)
-    if logs_in_tables:
-        fields.update(issues_json=None, runs_json=None)
-    else:
-        fields.update(issues_json=_dumps(item.get("issues")), runs_json=_dumps(item.get("runs")))
-    return fields
-
-
-def _stoppage_fields(issue, position, recipe_row, press_row, workers):
-    name = issue.get("worker") or ""
-    return {
-        "recipe": recipe_row,
-        "press": press_row,
-        "worker": workers.get(name),
-        "worker_name": name,
-        "position": position,
-        "start_date": issue.get("startDate") or "",
-        "start_time": issue.get("startTime") or "",
-        "end_date": issue.get("endDate") or "",
-        "end_time": issue.get("endTime") or "",
-        "cause": issue.get("cause") or "",
-        "fix": issue.get("fix") or "",
-    }
-
-
-def _run_fields(run, position, recipe_row, press_row, workers):
-    name = run.get("operator") or ""
-    return {
-        "recipe": recipe_row,
-        "press": press_row,
-        "operator": workers.get(name),
-        "operator_name": name,
-        "position": position,
-        "start_date": run.get("startDate") or "",
-        "start_time": run.get("startTime") or "",
-        "end_date": run.get("endDate") or "",
-        "end_time": run.get("endTime") or "",
-        "shift": run.get("shift") or "",
-        "good": domain.whole(run.get("good")),
-        "scrap": domain.whole(run.get("scrap")),
-        "scrap_reason": run.get("scrapReason") or "",
-        "cycle": domain.whole(run.get("cycle")),
-        "cavities": domain.whole(run.get("cavities")),
-        "lot": run.get("lot") or "",
-        "order_no": run.get("order") or "",
-        "notes": run.get("notes") or "",
-        "sample": bool(run.get("sample")),
-    }
-
-
-def _stoppage_item(row):
-    return {
-        "startDate": column(row, "start_date", ""),
-        "startTime": column(row, "start_time", ""),
-        "cause": column(row, "cause", ""),
-        "worker": column(row, "worker_name", ""),
-        "fix": column(row, "fix", ""),
-        "endDate": column(row, "end_date", ""),
-        "endTime": column(row, "end_time", ""),
-    }
-
-
-def _run_item(row):
-    return {
-        "startDate": column(row, "start_date", ""),
-        "startTime": column(row, "start_time", ""),
-        "endDate": column(row, "end_date", ""),
-        "endTime": column(row, "end_time", ""),
-        "shift": column(row, "shift", ""),
-        "operator": column(row, "operator_name", ""),
-        "good": domain.trim_num(column(row, "good")),
-        "scrap": domain.trim_num(column(row, "scrap")),
-        "scrapReason": column(row, "scrap_reason", ""),
-        "cycle": domain.trim_num(column(row, "cycle")),
-        "cavities": domain.trim_num(column(row, "cavities")),
-        "lot": column(row, "lot", ""),
-        "order": column(row, "order_no", ""),
-        "notes": column(row, "notes", ""),
-        "sample": bool(column(row, "sample", False)),
-    }
-
-
-def _set(fields):
-    """Leave out empty links and numbers: a missing column cannot be auto-created from None."""
-    return {key: value for key, value in fields.items() if value is not None}
-
-
-def _write_logs(tables, items, recipe_rows):
-    """Replace the stoppage and run rows of ``items`` (recipes); ``recipe_rows`` maps recipe code to its row."""
-    stoppages, runs = tables
-    workers_table = _workers_table()
-    workers = {row["name"]: row for row in _rows(workers_table)} if workers_table is not None else {}
-    presses = {row["code"]: row for row in _rows(app_tables.presses)}
-    new_stops, new_runs = [], []
-    for item in items:
-        recipe_row = recipe_rows.get(item["id"])
-        if recipe_row is None:
-            continue
-        press_row = presses.get(item.get("pressId"))
-        new_stops += [_set(_stoppage_fields(issue, at, recipe_row, press_row, workers)) for at, issue in enumerate(item.get("issues") or [])]
-        new_runs += [_set(_run_fields(run, at, recipe_row, press_row, workers)) for at, run in enumerate(item.get("runs") or [])]
-    for start in range(0, len(new_stops), 200):
-        stoppages.add_rows(new_stops[start:start + 200])
-    for start in range(0, len(new_runs), 200):
-        runs.add_rows(new_runs[start:start + 200])
-
-
-def _drop_logs(tables, recipe_row):
-    for table in tables:
-        for row in table.search(recipe=recipe_row):
-            row.delete()
-
-
-def _unlink_press(tables, press_row):
-    """Faster Storage tables may restrict or cascade a delete; a log keeps its row when its press goes."""
-    for table in tables:
-        for row in table.search(press=press_row):
-            row.update(press=None)
-
-
-def _read_logs(tables):
-    """{recipe code: (issues, runs)} from the log tables, each list in its saved order."""
-    found = {}
-    for table, slot, reader in ((tables[0], 0, _stoppage_item), (tables[1], 1, _run_item)):
-        for row in table.search():
-            recipe_row = column(row, "recipe")
-            if recipe_row is None:
-                continue
-            entry = found.setdefault(recipe_row["code"], ([], []))
-            entry[slot].append((column(row, "position", 0), reader(row)))
-    return {code: tuple([item for _, item in sorted(pairs, key=lambda pair: pair[0])] for pairs in entry)
-            for code, entry in found.items()}
-
-
-def _link_fields(item):
-    return {
-        "lid_code": item.get("lidId") or "",
-        "part_code": item.get("partId") or "",
-        "basis": item.get("basis") or "",
-    }
-
-
-_WRITERS = {
-    "products": _product_fields,
-    "molds": _mold_fields,
-    "presses": _press_fields,
-    "materials": _material_fields,
-    "colors": _color_fields,
-    "recipes": _recipe_fields,
-}
-
-
 def _table(name):
     return getattr(app_tables, name)
+
+
+def _key_column(table):
+    return "name" if table == "workers" else "code"
+
+
+def _link_id(row, name):
+    linked = row[name]
+    return linked.get_id() if linked is not None else None
+
+
+class _Refs:
+    """Rows by code (workers by name), fetched once per write."""
+
+    def __init__(self):
+        self._rows = {}
+
+    def __call__(self, table, code):
+        key = (table, code)
+        if key not in self._rows:
+            self._rows[key] = _table(table).get(**{_key_column(table): code})
+        return self._rows[key]
+
+    def load(self, table):
+        for row in _table(table).search():
+            self._rows[(table, row[_key_column(table)])] = row
+
+    def remember(self, table, code, row):
+        self._rows[(table, code)] = row
+
+
+def _add(table, rows):
+    for start in range(0, len(rows), _BATCH):
+        _table(table).add_rows(rows[start:start + _BATCH])
+
+
+def _recipe_children(item, recipe_row, refs):
+    """{table: rows} for everything that hangs off one recipe."""
+    settings = records.injection_row(item, recipe_row)
+    return {
+        "injection_settings": [settings] if settings else [],
+        "recipe_materials": records.material_slot_rows(item, recipe_row, refs),
+        "recipe_colors": records.color_slot_rows(item, recipe_row, refs),
+        "stoppages": records.stoppage_rows(item, recipe_row, refs),
+        "production_runs": records.run_rows(item, recipe_row, refs),
+    }
+
+
+def _clear_all():
+    for row in app_tables.presses.search():
+        if row["mounted_product"] is not None:
+            row.update(mounted_product=None)
+    for name in _CLEAR_ORDER:
+        _table(name).delete_all_rows()
+
+
+def _write_all(plant):
+    """Replace every table with the plant record, parents before the rows that link to them."""
+    _clear_all()
+    refs = _Refs()
+    _add("workers", [records.worker_row(name) for name in plant.get("workers") or []])
+    refs.load("workers")
+    for kind in _PERSIST_ORDER:
+        writer = _ENTITY_WRITERS[kind]
+        _add(kind, [writer(item, refs) for item in plant.get(kind) or []])
+        refs.load(kind)
+    _add("product_links", [records.product_link_row(item, refs) for item in plant.get("links") or []])
+    children = {name: [] for name in _RECIPE_CHILDREN}
+    for item in plant.get("recipes") or []:
+        for name, rows in _recipe_children(item, refs("recipes", item["id"]), refs).items():
+            children[name] += rows
+    for name in _RECIPE_CHILDREN:
+        _add(name, children[name])
+    for item in plant.get("presses") or []:
+        if (item.get("board") or {}).get("mountedId"):
+            refs("presses", item["id"]).update(**records.press_board_row(item, refs))
+
+
+def _read_all():
+    workers = list(app_tables.workers.search())
+    worker_name = {row.get_id(): row["name"] for row in workers}
+    product_rows = list(app_tables.products.search())
+    product_code = {row.get_id(): row["code"] for row in product_rows}
+    product_names = {row["code"]: row["name"] or "" for row in product_rows}
+    press_rows = list(app_tables.presses.search())
+    press_code = {row.get_id(): row["code"] for row in press_rows}
+    material_code = {row.get_id(): row["code"] for row in app_tables.materials.search()}
+    color_code = {row.get_id(): row["code"] for row in app_tables.colors.search()}
+
+    products = [records.product_item(row, [press_code[linked.get_id()] for linked in row["approved_presses"] or []
+                                           if linked.get_id() in press_code])
+                for row in product_rows]
+    presses = [records.press_item(row, product_code.get(_link_id(row, "mounted_product")), product_names) for row in press_rows]
+    mold_rows = list(app_tables.molds.search())
+    molds = [records.mold_item(row, product_code.get(_link_id(row, "product"))) for row in mold_rows]
+    mold_code = {row.get_id(): row["code"] for row in mold_rows}
+    mold_product = {item["id"]: item["productId"] for item in molds}
+
+    recipes, recipe_by_id = [], {}
+    for row in app_tables.recipes.search():
+        mold = mold_code.get(_link_id(row, "mold"))
+        item = records.recipe_item(row, mold, mold_product.get(mold), press_code.get(_link_id(row, "press")))
+        recipes.append(item)
+        recipe_by_id[row.get_id()] = item
+
+    def owner(row):
+        return recipe_by_id.get(_link_id(row, "recipe"))
+
+    for row in app_tables.injection_settings.search():
+        item = owner(row)
+        if item is not None:
+            item["settings"] = records.settings_items(row)
+    slots = {"materialSlots": [], "colorSlots": [], "issues": [], "runs": []}
+    for row in app_tables.recipe_materials.search():
+        slots["materialSlots"].append((owner(row), row["slot"], records.material_slot_item(row, material_code.get(_link_id(row, "material")))))
+    for row in app_tables.recipe_colors.search():
+        slots["colorSlots"].append((owner(row), row["slot"], records.color_slot_item(row, color_code.get(_link_id(row, "color")))))
+    for row in app_tables.stoppages.search():
+        slots["issues"].append((owner(row), row["position"], records.stoppage_item(row, worker_name.get(_link_id(row, "worker")))))
+    for row in app_tables.production_runs.search():
+        slots["runs"].append((owner(row), row["position"], records.run_item(row, worker_name.get(_link_id(row, "operator")))))
+    for key, entries in slots.items():
+        for item, order, value in sorted((entry for entry in entries if entry[0] is not None), key=lambda entry: entry[1] or 0):
+            item[key].append(value)
+
+    links = [records.product_link_item(row, product_code.get(_link_id(row, "lid")), product_code.get(_link_id(row, "part")))
+             for row in app_tables.product_links.search()]
+    plant = {
+        "products": products,
+        "molds": molds,
+        "presses": presses,
+        "materials": [records.material_item(row) for row in app_tables.materials.search()],
+        "colors": [records.color_item(row) for row in app_tables.colors.search()],
+        "recipes": recipes,
+        "links": links,
+        "workers": sorted(name for name in worker_name.values() if name),
+    }
+    for kind in ("products", "molds", "presses", "materials", "colors", "recipes"):
+        plant[kind].sort(key=lambda item: item["id"])
+    return plant
 
 
 def _plain(graph):
     return {kind: graph.get(kind) or [] for kind in _KINDS}
 
 
-def _read_tables():
-    products = [{
-        "id": row["code"],
-        "name": row["name"] or "",
-        "legacyId": row["legacy_id"] or "",
-        "erpCode": row["erp_code"] or "",
-        "type": row["item_type"] or "",
-        "notes": row["notes"] or "",
-        "lifecycle": row["lifecycle"] or "",
-        "onlyOnCards": bool(row["only_on_cards"]),
-        "approvedPressIds": _loads(column(row, "approved_presses_json"), []),
-    } for row in _rows(app_tables.products)]
-    molds = [{
-        "id": row["code"],
-        "name": row["name"] or "",
-        "productId": row["product_code"] or "",
-        "cavities": row["cavities"],
-        "shotWeight": row["shot_weight"],
-        "location": row["location"] or "",
-        "status": row["status"] or "",
-    } for row in _rows(app_tables.molds)]
-    presses = [{
-        "id": row["code"],
-        "name": row["name"] or "",
-        "alias": row["alias"] or "",
-        "aa": row["aa"],
-        "serial": row["serial"] or "",
-        "robot": row["robot"] or "",
-        "robotSerial": row["robot_serial"] or "",
-        "robotYear": column(row, "robot_year", ""),
-        "euromap": row["euromap"] or "",
-        "board": {
-            "mounted": row["mounted"] or "",
-            "location": row["board_location"] or "",
-            "note": row["board_note"] or "",
-        },
-        "changeoverMin": row["changeover_min"],
-        "lifecycle": row["lifecycle"] or "",
-    } for row in _rows(app_tables.presses)]
-    presses.sort(key=lambda press: press["id"])
-    materials = [{
-        "id": row["code"],
-        "text": row["text"] or "",
-        "supplier": row["supplier"] or "",
-        "mfi": row["mfi"] or "",
-        "family": row["family"] or "",
-        "account": row["account"] or "",
-        "invoiceCode": row["invoice_code"] or "",
-        "description": row["description"] or "",
-        "notes": column(row, "notes", ""),
-        "link": row["link"] or "",
-        "catalog": bool(row["catalog"]),
-        "kind": row["kind"] or "",
-    } for row in _rows(app_tables.materials)]
-    colors = [{
-        "id": row["code"],
-        "code": row["label_code"] or "",
-        "name": row["name"] or "",
-        "label": row["label"] or "",
-        "account": row["account"] or "",
-        "shade": row["shade"] or "",
-        "notes": column(row, "notes", ""),
-        "link": row["link"] or "",
-        "catalog": bool(row["catalog"]),
-    } for row in _rows(app_tables.colors)]
-    recipes = [{
-        "id": row["code"],
-        "legacyId": row["legacy_id"],
-        "productId": row["product_code"] or "",
-        "moldId": row["mold_code"] or "",
-        "pressId": row["press_code"] or "",
-        "temps": _loads(row["temps_json"], {}),
-        "settings": _loads(row["settings_json"], []),
-        "materialSlots": _loads(row["material_slots_json"], []),
-        "colorSlots": _loads(row["color_slots_json"], []),
-        "issues": _loads(column(row, "issues_json"), []),
-        "runs": _loads(column(row, "runs_json"), None),
-        "settingsNote": column(row, "settings_note", ""),
-        "cycle": row["cycle"] or "",
-        "cooling": row["cooling"] or "",
-        "screwRpm": row["screw_rpm"] or "",
-        "px": row["px"] or "",
-        "py": row["py"] or "",
-        "productLot": row["product_lot"] or "",
-        "printPieces": row["print_pieces"] or "",
-        "printTotal": row["print_total"] or "",
-        "comment": row["comment"] or "",
-        "status": row["status_text"] or "",
-        "trial": bool(row["trial"]),
-        "standard": bool(row["standard"]),
-    } for row in _rows(app_tables.recipes)]
-    tables = _log_tables()
-    if tables is not None and column(_meta(), "logs_in_tables", False):
-        logs = _read_logs(tables)
-        for recipe in recipes:
-            recipe["issues"], recipe["runs"] = logs.get(recipe["id"], ([], []))
-    for items in (products, molds, materials, colors, recipes):
-        items.sort(key=lambda item: item["id"])
-    links = [{
-        "lidId": row["lid_code"] or "",
-        "partId": row["part_code"] or "",
-        "basis": row["basis"] or "",
-    } for row in _rows(app_tables.links)]
-    table = _workers_table()
-    workers = [row["name"] for row in _rows(table) if row["name"]] if table is not None else []
-    return {
-        "products": products,
-        "molds": molds,
-        "presses": presses,
-        "materials": materials,
-        "colors": colors,
-        "recipes": recipes,
-        "links": links,
-        "workers": workers,
-    }
-
-
-def _write_tables(graph):
-    """Replace every entity table with the graph, in batches."""
-    workers_table = _workers_table()
-    tables = _log_tables()
-    for table in tables or ():
-        table.delete_all_rows()
-    for name in ("links",) + tuple(_WRITERS):
-        _table(name).delete_all_rows()
-    if workers_table is not None:
-        workers_table.delete_all_rows()
-    for kind, writer in _WRITERS.items():
-        if kind == "recipes":
-            writer = lambda item: _recipe_row_fields(item, tables is not None)
-        rows = [writer(item) for item in graph.get(kind) or []]
-        for start in range(0, len(rows), 200):
-            _table(kind).add_rows(rows[start:start + 200])
-    links = [_link_fields(item) for item in graph.get("links") or []]
-    if links:
-        app_tables.links.add_rows(links)
-    workers = [{"name": name} for name in graph.get("workers") or []]
-    if workers and workers_table is not None:
-        workers_table.add_rows(workers)
-    if tables is not None:
-        _write_logs(tables, graph.get("recipes") or [], {row["code"]: row for row in _rows(app_tables.recipes)})
-        _meta().update(logs_in_tables=True)
-
-
-def _move_logs_to_tables(graph):
-    """One-off: copy every recipe's stoppages and runs into their tables and empty the JSON columns."""
-    tables = _log_tables()
-    meta = _meta()
-    if tables is None or column(meta, "logs_in_tables", False):
-        return
-    with anvil.tables.batch_update, anvil.tables.batch_delete:
-        for table in tables:
-            table.delete_all_rows()
-        recipe_rows = {row["code"]: row for row in _rows(app_tables.recipes)}
-        _write_logs(tables, graph.get("recipes") or [], recipe_rows)
-        for row in recipe_rows.values():
-            row.update(issues_json=None, runs_json=None)
-    meta.update(logs_in_tables=True)
-
-
 def _meta():
     row = app_tables.meta.get(name="plant")
     if row is None:
-        row = app_tables.meta.add_row(name="plant", seeded=False, version=0)
+        row = app_tables.meta.add_row(name="plant", version=0)
     return row
 
 
-def _snapshot_media(graph):
+def _cache_media(graph):
     raw = json.dumps(_plain(graph), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return anvil.BlobMedia("application/zlib", zlib.compress(raw, 6), name="plant.json.z")
 
 
-def _read_snapshot(row):
-    media = column(row, "snapshot")
+def _read_cache(row):
+    media = row["cache"]
     if media is None:
         return None
     try:
@@ -517,21 +217,10 @@ def _read_snapshot(row):
         return None
 
 
-def _save_snapshot(meta, graph):
-    version = int(column(meta, "version", 0)) + 1
-    meta.update(
-        snapshot=_snapshot_media(graph),
-        version=version,
-        seeded=True,
-        updated=datetime.datetime.now(datetime.timezone.utc),
-    )
+def _save_cache(meta, graph):
+    version = int(meta["version"] or 0) + 1
+    meta.update(cache=_cache_media(graph), version=version, updated=datetime.datetime.now(datetime.timezone.utc))
     return version
-
-
-def _seed_graph():
-    import seed_data
-
-    return seed_data.load()
 
 
 def _ready(graph):
@@ -540,22 +229,28 @@ def _ready(graph):
     return graph
 
 
+def _seed(meta):
+    import seed_data
+
+    seed = seed_data.load()
+    _write_all(_ready({kind: seed.get(kind) or [] for kind in _KINDS}))
+    source = seed.get("meta") or {}
+    meta.update(source=source.get("source") or seed_data.SOURCE, imported=records._date_in(source.get("imported")))
+
+
 def _load_unlocked():
     meta = _meta()
-    version = column(meta, "version", 0)
+    version = meta["version"] or 0
     if _CACHE["graph"] is not None and _CACHE["version"] == version:
         return _CACHE["graph"]
-    loaded = _read_snapshot(meta)
+    loaded = _read_cache(meta)
     if loaded is not None:
         _ready(loaded)
     else:
-        if meta["seeded"] and len(app_tables.products.search()) > 0:
-            loaded = _ready(_read_tables())
-        else:
-            loaded = _ready(_seed_graph())
-            _write_tables(loaded)
-        version = _save_snapshot(meta, loaded)
-    _move_logs_to_tables(loaded)
+        if len(app_tables.products.search()) == 0:
+            _seed(meta)
+        loaded = _ready(_read_all())
+        version = _save_cache(meta, loaded)
     _CACHE["graph"] = loaded
     _CACHE["version"] = version
     return loaded
@@ -566,44 +261,63 @@ def graph():
         return _load_unlocked()
 
 
+def _ensure_workers(plant, items, refs):
+    """A name typed on a stoppage or run that is not on the list yet becomes a worker row."""
+    known = set(plant.get("workers") or [])
+    for item in items:
+        for name in [log.get("worker") for log in item.get("issues") or []] + [log.get("operator") for log in item.get("runs") or []]:
+            name = (name or "").strip()
+            if name and name not in known:
+                refs.remember("workers", name, app_tables.workers.add_row(**records.worker_row(name)))
+                plant.setdefault("workers", []).append(name)
+                known.add(name)
+
+
+def _drop_children(recipe_row):
+    for name in _RECIPE_CHILDREN:
+        for row in _table(name).search(recipe=recipe_row):
+            row.delete()
+
+
 def _persist_unlocked(plant, dirty):
     dirty = dirty or {}
-    tables = _log_tables() if column(_meta(), "logs_in_tables", False) else None
-    with anvil.tables.batch_update, anvil.tables.batch_delete:
-        for kind, codes in dirty.items():
-            if kind == "links":
-                app_tables.links.delete_all_rows()
-                links = [_link_fields(item) for item in plant.get("links") or []]
-                if links:
-                    app_tables.links.add_rows(links)
+    refs = _Refs()
+    recipes = {item["id"]: item for item in plant.get("recipes") or []}
+    _ensure_workers(plant, [recipes[code] for code in dirty.get("recipes") or [] if code in recipes], refs)
+    for kind in _PERSIST_ORDER:
+        codes = dirty.get(kind) or []
+        if not codes:
+            continue
+        items = {item["id"]: item for item in plant.get(kind) or []}
+        writer = _ENTITY_WRITERS[kind]
+        for code in codes:
+            item = items.get(code)
+            row = refs(kind, code)
+            if item is None:
+                if row is not None:
+                    if kind == "recipes":
+                        _drop_children(row)
+                    row.delete()
                 continue
-            writer = _WRITERS.get(kind)
-            if writer is None or not codes:
-                continue
+            if row is None:
+                row = _table(kind).add_row(**writer(item, refs))
+                refs.remember(kind, code, row)
+            else:
+                if kind == "recipes":
+                    _drop_children(row)
+                row.update(**writer(item, refs))
             if kind == "recipes":
-                writer = lambda item: _recipe_row_fields(item, tables is not None)
-            table = _table(kind)
-            by_code = {item["id"]: item for item in plant.get(kind) or []}
-            logged = {}
-            for code in codes:
-                item = by_code.get(code)
-                row = table.get(code=code)
-                if kind == "recipes" and tables is not None and row is not None:
-                    _drop_logs(tables, row)
-                if item is None:
-                    if row is not None:
-                        if kind == "presses" and tables is not None:
-                            _unlink_press(tables, row)
-                        row.delete()
-                    continue
-                if row is None:
-                    row = table.add_row(**writer(item))
-                else:
-                    row.update(**writer(item))
-                logged[code] = row
-            if kind == "recipes" and tables is not None and logged:
-                _write_logs(tables, [by_code[code] for code in logged], logged)
-    _CACHE["version"] = _save_snapshot(_meta(), plant)
+                for name, rows in _recipe_children(item, row, refs).items():
+                    if rows:
+                        _table(name).add_rows(rows)
+    for code in dirty.get("presses") or []:
+        item = next((press for press in plant.get("presses") or [] if press["id"] == code), None)
+        if item is not None:
+            refs("presses", code).update(**records.press_board_row(item, refs))
+    if dirty.get("links"):
+        app_tables.product_links.delete_all_rows()
+        _add("product_links", [records.product_link_row(item, refs) for item in plant.get("links") or []])
+    _CACHE["version"] = _save_cache(_meta(), plant)
     _CACHE["graph"] = plant
 
 
@@ -620,18 +334,18 @@ def apply_action(action, payload):
 def replace_all(graph_in):
     """Replace the whole plant record, e.g. from the workbook import."""
     with _LOCK:
-        loaded = _ready({kind: graph_in.get(kind) or [] for kind in _KINDS})
-        _write_tables(loaded)
-        _CACHE["version"] = _save_snapshot(_meta(), loaded)
+        _write_all(_ready({kind: graph_in.get(kind) or [] for kind in _KINDS}))
+        loaded = _ready(_read_all())
+        _CACHE["version"] = _save_cache(_meta(), loaded)
         _CACHE["graph"] = loaded
         return domain.counts(loaded)
 
 
 def reload_from_tables():
-    """Rebuild the snapshot from the entity tables after editing them in the Anvil editor."""
+    """Rebuild the cache from the tables after editing them in the Anvil editor."""
     with _LOCK:
-        loaded = _ready(_read_tables())
-        _CACHE["version"] = _save_snapshot(_meta(), loaded)
+        loaded = _ready(_read_all())
+        _CACHE["version"] = _save_cache(_meta(), loaded)
         _CACHE["graph"] = loaded
         return domain.counts(loaded)
 

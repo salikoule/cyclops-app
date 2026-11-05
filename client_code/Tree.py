@@ -1,9 +1,6 @@
 """Production-flow tree. Treant draws it; the cards below still list every setup."""
 
 from anvil import *
-import anvil.tables as tables
-import anvil.tables.query as q
-from anvil.tables import app_tables
 
 from cyclops_app import Format, Layout, Nav
 

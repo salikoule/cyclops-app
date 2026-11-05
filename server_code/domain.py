@@ -1,6 +1,3 @@
-import anvil.tables as tables
-import anvil.tables.query as q
-from anvil.tables import app_tables
 """Cyclops production records.
 
 Pure Python port of the sketch in cyclops/sketch/template.html. No Anvil imports,
@@ -169,6 +166,8 @@ def normalize(graph):
         mold["location"] = mold.get("location") or ""
         if not mold.get("status"):
             mold["status"] = "in use"
+    product_by_name = {(product.get("name") or "").strip().upper(): product for product in graph.get("products") or []}
+    product_by_id = by_id(graph.get("products") or [])
     for press in graph.get("presses") or []:
         if "changeoverMin" not in press or press.get("changeoverMin") == "":
             press["changeoverMin"] = None
@@ -177,8 +176,10 @@ def normalize(graph):
         if not press.get("lifecycle"):
             press["lifecycle"] = "active"
         board = press.get("board") or {}
+        mounted = product_by_id.get(board.get("mountedId")) or product_by_name.get((board.get("mounted") or "").strip().upper())
         press["board"] = {
-            "mounted": board.get("mounted") or "",
+            "mountedId": mounted["id"] if mounted else "",
+            "mounted": (mounted.get("name") or "") if mounted else "",
             "location": board.get("location") or "",
             "note": board.get("note") or "",
         }
@@ -191,7 +192,8 @@ def normalize(graph):
     for recipe in graph.get("recipes") or []:
         temps = recipe.get("temps") or {}
         recipe["temps"] = {key: temps.get(key) or "" for key in TEMP_KEYS}
-        recipe["settings"] = list(recipe.get("settings") or [])
+        recipe["settings"] = [item for item in recipe.get("settings") or []
+                              if (item.get("label") or "").strip() not in RECIPE_FIELD_SETTINGS and str(item.get("value") or "").strip()]
         recipe["materialSlots"] = list(recipe.get("materialSlots") or [])
         recipe["colorSlots"] = list(recipe.get("colorSlots") or [])
         for key in ("cycle", "cooling", "screwRpm", "px", "py", "productLot", "printPieces", "printTotal", "comment", "status", "settingsNote"):
@@ -1313,6 +1315,7 @@ def detail_press(graph, code):
         "lifecycle": press.get("lifecycle") or "active",
         "changeoverMin": press.get("changeoverMin"),
         "mounted": board.get("mounted") or "",
+        "mountedId": board.get("mountedId") or "",
         "location": board.get("location") or "",
         "products": summary_rows(graph, recipes),
         "approved": _approved_on_press(graph, press),
@@ -1598,6 +1601,7 @@ def action_new_product(graph, payload):
         "notes": "",
         "lifecycle": "active",
         "onlyOnCards": False,
+        "approvedPressIds": [],
     }
     graph["products"].append(product)
     result = _redirect("product", product["id"])
@@ -1639,8 +1643,9 @@ def action_new_press(graph, payload):
         "serial": "",
         "robot": "",
         "robotSerial": "",
+        "robotYear": "",
         "euromap": (payload.get("euromap") or "").strip(),
-        "board": {"mounted": "", "location": "", "note": ""},
+        "board": {"mountedId": "", "mounted": "", "location": "", "note": ""},
         "changeoverMin": whole(payload.get("changeover")),
         "lifecycle": "active",
     }
@@ -1664,6 +1669,7 @@ def action_new_material(graph, payload):
         "account": (payload.get("account") or "").strip(),
         "invoiceCode": "",
         "description": "",
+        "notes": "",
         "link": "",
         "catalog": True,
     }
@@ -1685,6 +1691,7 @@ def action_new_color(graph, payload):
         "label": "",
         "account": (payload.get("account") or "").strip(),
         "shade": "",
+        "notes": "",
         "link": "",
         "catalog": True,
     }
@@ -1924,7 +1931,11 @@ def action_edit_press(graph, payload):
         if key in payload:
             press[key] = (payload.get(key) or "").strip()
     board = press.get("board") or {}
-    board["mounted"] = (payload.get("mounted") or "").strip()
+    mounted = _ix(graph)["product"].get(payload.get("mounted") or "")
+    if payload.get("mounted") and mounted is None:
+        return {"error": "Choose the product on the board from the list."}
+    board["mountedId"] = mounted["id"] if mounted else ""
+    board["mounted"] = (mounted.get("name") or "") if mounted else ""
     board["location"] = (payload.get("location") or "").strip()
     press["board"] = board
     return _refresh({"presses": [press["id"]]})
@@ -2073,6 +2084,8 @@ def action_edit_material(graph, payload):
     text = (payload.get("text") or "").strip()
     if not text:
         return {"error": "Grade is required."}
+    if str(payload.get("mfi") or "").strip() and num(payload.get("mfi")) is None:
+        return {"error": "MFI has to be a number."}
     material["text"] = text
     kind = payload.get("kind") or material.get("kind") or "resin"
     material["kind"] = kind if kind in MATERIAL_KINDS else "resin"

@@ -21,6 +21,10 @@ TEMP_COLUMNS = (("nozzle", "temp_nozzle"), ("t1", "temp_1"), ("t2", "temp_2"), (
                 ("t4", "temp_4"), ("t5", "temp_5"), ("t6", "temp_6"))
 RECIPE_NUMBERS = (("cycle", "cycle_s"), ("cooling", "cooling_s"), ("screwRpm", "screw_rpm"), ("px", "px"), ("py", "py"),
                   ("printPieces", "print_pieces"), ("printTotal", "print_total"))
+PRESS_COLUMNS = ("code", "name", "alias", "floor_number", "serial", "robot", "robot_serial", "robot_year", "euromap",
+                 "changeover_min", "lifecycle", "board_location", "board_note")
+PRODUCT_COLUMNS = ("code", "name", "sheet_id", "erp_code", "item_type", "lifecycle", "only_on_cards", "notes",
+                   "approved_presses", "lid_basis")
 
 
 def _text(value):
@@ -162,15 +166,13 @@ def product_row(item, ref):
         "only_on_cards": bool(item.get("onlyOnCards")),
         "notes": _text(item.get("notes")),
         "approved_presses": [row for row in (_ref(ref, "presses", code) for code in item.get("approvedPressIds") or []) if row is not None],
+        "lid_basis": _text(item.get("lidBasis")) if item.get("lidId") else "",
     }
 
 
-def product_link_row(item, ref):
-    return {
-        "lid": _ref(ref, "products", item.get("lidId")),
-        "part": _ref(ref, "products", item.get("partId")),
-        "basis": _text(item.get("basis")),
-    }
+def product_lid_row(item, ref):
+    """Set after the products exist: the lid is another product."""
+    return {"lid": _ref(ref, "products", item.get("lidId"))}
 
 
 def mold_row(item, ref):
@@ -319,7 +321,7 @@ def color_item(row):
     }
 
 
-def product_item(row, approved_codes):
+def product_item(row, approved_codes, lid_code):
     return {
         "id": row["code"],
         "name": row["name"] or "",
@@ -330,11 +332,9 @@ def product_item(row, approved_codes):
         "onlyOnCards": bool(row["only_on_cards"]),
         "notes": row["notes"] or "",
         "approvedPressIds": list(approved_codes),
+        "lidId": lid_code or "",
+        "lidBasis": (row["lid_basis"] or "") if lid_code else "",
     }
-
-
-def product_link_item(row, lid_code, part_code):
-    return {"lidId": lid_code or "", "partId": part_code or "", "basis": row["basis"] or ""}
 
 
 def mold_item(row, product_code):
@@ -381,6 +381,11 @@ def material_slot_item(row, material_code):
 
 def color_slot_item(row, color_code):
     return {"slot": domain.whole(row["slot"]), "lot": row["lot"] or "", "colorId": color_code or ""}
+
+
+def stop_times(row):
+    return {"startDate": _date_out(row["start_date"]), "startTime": row["start_time"] or "",
+            "endDate": _date_out(row["end_date"]), "endTime": row["end_time"] or ""}
 
 
 def stoppage_item(row, worker_name):

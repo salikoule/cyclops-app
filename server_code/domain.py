@@ -127,6 +127,12 @@ def next_id(prefix, items, width):
     return "%s-%s" % (prefix, str(highest + 1).zfill(width))
 
 
+def new_code(graph, kind, prefix, width):
+    """The next free code. ``graph["codes"][kind]`` lists every stored code when only part of the plant is loaded."""
+    known = [item["id"] for item in graph.get(kind) or []] + list((graph.get("codes") or {}).get(kind) or [])
+    return next_id(prefix, [{"id": code} for code in known], width)
+
+
 def derive_material_kind(material):
     text = (material.get("text") or "").strip().lower()
     family = (material.get("family") or "").upper()
@@ -168,6 +174,14 @@ def normalize(graph):
             mold["status"] = "in use"
     product_by_name = {(product.get("name") or "").strip().upper(): product for product in graph.get("products") or []}
     product_by_id = by_id(graph.get("products") or [])
+    for link in graph.get("links") or []:
+        part = product_by_id.get(link.get("partId"))
+        if part is not None and not part.get("lidId") and link.get("lidId") in product_by_id:
+            part["lidId"] = link["lidId"]
+            part["lidBasis"] = link.get("basis") or ""
+    for product in graph.get("products") or []:
+        product["lidId"] = product.get("lidId") or ""
+        product["lidBasis"] = (product.get("lidBasis") or "") if product["lidId"] else ""
     for press in graph.get("presses") or []:
         if "changeoverMin" not in press or press.get("changeoverMin") == "":
             press["changeoverMin"] = None
@@ -177,6 +191,8 @@ def normalize(graph):
             press["lifecycle"] = "active"
         board = press.get("board") or {}
         mounted = product_by_id.get(board.get("mountedId")) or product_by_name.get((board.get("mounted") or "").strip().upper())
+        if mounted is None and board.get("mountedId"):
+            mounted = {"id": board["mountedId"], "name": board.get("mounted") or ""}
         press["board"] = {
             "mountedId": mounted["id"] if mounted else "",
             "mounted": (mounted.get("name") or "") if mounted else "",
@@ -216,9 +232,15 @@ def normalize(graph):
         for key in ("code", "name", "label", "account", "shade", "link", "notes"):
             color[key] = color.get(key) or ""
         color["catalog"] = bool(color.get("catalog"))
-    graph["links"] = list(graph.get("links") or [])
+    graph["links"] = lid_links(graph)
     graph["workers"] = uniq([str(name).strip() for name in graph.get("workers") or [] if str(name or "").strip()])
     return graph
+
+
+def lid_links(graph):
+    """Each part names its one lid; a lid can fit several parts."""
+    return [{"lidId": product["lidId"], "partId": product["id"], "basis": product.get("lidBasis") or ""}
+            for product in graph.get("products") or [] if product.get("lidId")]
 
 
 SETTING_LABELS = (
@@ -338,16 +360,22 @@ def _overlap_hours(start, end, spans):
     return total
 
 
-def _stop_spans(graph):
-    """Closed stoppages per press, for taking downtime out of a run."""
+def stop_spans(entries):
+    """Closed stoppages per press from (press code, stoppage) pairs, for taking downtime out of a run."""
     spans = {}
-    for recipe in graph.get("recipes") or []:
-        for issue in recipe.get("issues") or []:
-            start = _moment(issue.get("startDate"), issue.get("startTime"))
-            end = _moment(issue.get("endDate"), issue.get("endTime"))
-            if start is not None and end is not None and end > start:
-                spans.setdefault(recipe.get("pressId") or "", []).append((start, end))
+    for press_id, issue in entries:
+        start = _moment(issue.get("startDate"), issue.get("startTime"))
+        end = _moment(issue.get("endDate"), issue.get("endTime"))
+        if start is not None and end is not None and end > start:
+            spans.setdefault(press_id or "", []).append((start, end))
     return spans
+
+
+def _stop_spans(graph):
+    """A graph holding only some of a press's recipes carries the press's stops in ``graph["spans"]``."""
+    if graph.get("spans") is not None:
+        return graph["spans"]
+    return stop_spans((recipe.get("pressId"), issue) for recipe in graph.get("recipes") or [] for issue in recipe.get("issues") or [])
 
 
 def run_metrics(index, recipe, run, spans):
@@ -421,6 +449,7 @@ def reindex(graph):
     recipes = graph.get("recipes") or []
     materials = graph.get("materials") or []
     colors = graph.get("colors") or []
+    graph["links"] = lid_links(graph)
     index = {
         "product": by_id(products),
         "mold": by_id(molds),
@@ -1592,7 +1621,7 @@ def action_new_product(graph, payload):
     if not name:
         return {"error": "Name is required."}
     product = {
-        "id": next_id("PRD", graph["products"], 4),
+        "id": new_code(graph, "products", "PRD", 4),
         "name": name,
         "legacyId": "",
         "moldId": None,
@@ -1602,6 +1631,8 @@ def action_new_product(graph, payload):
         "lifecycle": "active",
         "onlyOnCards": False,
         "approvedPressIds": [],
+        "lidId": "",
+        "lidBasis": "",
     }
     graph["products"].append(product)
     result = _redirect("product", product["id"])
@@ -1617,7 +1648,7 @@ def action_new_mold(graph, payload):
     if product_id not in _ix(graph)["product"]:
         return {"error": "Choose the product this mold makes."}
     mold = {
-        "id": next_id("MLD", graph["molds"], 4),
+        "id": new_code(graph, "molds", "MLD", 4),
         "name": name,
         "productId": product_id,
         "cavities": whole(payload.get("cavities")),
@@ -1636,7 +1667,7 @@ def action_new_press(graph, payload):
     if not name:
         return {"error": "Name is required."}
     press = {
-        "id": next_id("PRS", graph["presses"], 2),
+        "id": new_code(graph, "presses", "PRS", 2),
         "name": name,
         "alias": "",
         "aa": 99,
@@ -1660,7 +1691,7 @@ def action_new_material(graph, payload):
     if not text:
         return {"error": "Grade is required."}
     material = {
-        "id": next_id("MAT", graph["materials"], 3),
+        "id": new_code(graph, "materials", "MAT", 3),
         "text": text,
         "kind": payload.get("kind") or "resin",
         "supplier": (payload.get("supplier") or "").strip(),
@@ -1685,7 +1716,7 @@ def action_new_color(graph, payload):
     if not name or not code:
         return {"error": "Color and label code are required."}
     color = {
-        "id": next_id("COL", graph["colors"], 3),
+        "id": new_code(graph, "colors", "COL", 3),
         "code": code,
         "name": name,
         "label": "",
@@ -1722,7 +1753,7 @@ def action_clone_product(graph, payload):
     if source is None:
         return {"error": "Product was not found."}
     product = copy.deepcopy(source)
-    product["id"] = next_id("PRD", graph["products"], 4)
+    product["id"] = new_code(graph, "products", "PRD", 4)
     product["name"] = (source.get("name") or "Product") + " (copy)"
     product["legacyId"] = ""
     product["onlyOnCards"] = False
@@ -1731,14 +1762,14 @@ def action_clone_product(graph, payload):
     dirty = {"products": [product["id"]], "molds": [], "recipes": []}
     for source_mold in list(index["moldsByProduct"].get(source["id"]) or []):
         mold = copy.deepcopy(source_mold)
-        mold["id"] = next_id("MLD", graph["molds"], 4)
+        mold["id"] = new_code(graph, "molds", "MLD", 4)
         mold["name"] = (source_mold.get("name") or "Mold") + " (copy)"
         mold["productId"] = product["id"]
         graph["molds"].append(mold)
         dirty["molds"].append(mold["id"])
         for source_recipe in list(index["recipesByMold"].get(source_mold["id"]) or []):
             recipe = copy.deepcopy(source_recipe)
-            recipe["id"] = next_id("REC", graph["recipes"], 4)
+            recipe["id"] = new_code(graph, "recipes", "REC", 4)
             recipe["legacyId"] = None
             recipe["productId"] = product["id"]
             recipe["moldId"] = mold["id"]
@@ -1762,7 +1793,7 @@ def _ensure_mold(graph, product_id):
     if product is None:
         return None, []
     mold = {
-        "id": next_id("MLD", graph["molds"], 4),
+        "id": new_code(graph, "molds", "MLD", 4),
         "name": product.get("name") or "Mold",
         "productId": product_id,
         "cavities": None,
@@ -1782,7 +1813,7 @@ def _new_recipe(graph, product_id, press_id, source):
         return None, [], "Choose a press."
     base = copy.deepcopy(source) if source else _blank_recipe()
     recipe = base
-    recipe["id"] = next_id("REC", graph["recipes"], 4)
+    recipe["id"] = new_code(graph, "recipes", "REC", 4)
     recipe["legacyId"] = None
     recipe["productId"] = product_id
     recipe["moldId"] = mold["id"]
@@ -1868,22 +1899,20 @@ def action_add_link(graph, payload):
         return {"error": "Choose another product."}
     if other == current:
         return {"error": "Choose a different product."}
-    if payload.get("relation") == "part":
-        link = {"lidId": other, "partId": current, "basis": "manual"}
-    else:
-        link = {"lidId": current, "partId": other, "basis": "manual"}
-    graph["links"].append(link)
-    return _refresh({"links": ["*"]})
+    lid, part = (other, current) if payload.get("relation") == "part" else (current, other)
+    product = index["product"][part]
+    product["lidId"] = lid
+    product["lidBasis"] = "manual"
+    return _refresh({"products": [part]})
 
 
 def action_remove_link(graph, payload):
-    lid = payload.get("lidId")
-    part = payload.get("partId")
-    graph["links"] = [
-        link for link in graph.get("links") or []
-        if not (link.get("lidId") == lid and link.get("partId") == part)
-    ]
-    return _refresh({"links": ["*"]})
+    product = _ix(graph)["product"].get(payload.get("partId"))
+    if product is None or product.get("lidId") != payload.get("lidId"):
+        return {"error": "That lid link is no longer on the product."}
+    product["lidId"] = ""
+    product["lidBasis"] = ""
+    return _refresh({"products": [product["id"]]})
 
 
 def _number_error(payload, checks):

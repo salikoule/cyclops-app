@@ -1,19 +1,29 @@
 """Server API for the Cyclops plant record."""
 
 import json
+import time
 import zlib
 
 import anvil.server
 from anvil.tables import app_tables
 from craftify_library.CraftifyAuth import craftify_require_user
 
-import domain
 import seed_data
 import store
 
 
 def _guard():
-    return craftify_require_user()
+    user = craftify_require_user()
+    store.ensure_seeded()
+    return user
+
+
+def _timed(label, work, *args):
+    """Run one call and print how long it took, so the App Logs show where time goes."""
+    started = time.time()
+    result = work(*args)
+    print("%s %.2fs" % (label, time.time() - started))
+    return result
 
 
 def _payload(value):
@@ -42,82 +52,57 @@ def cyclops_enable_new_user(email):
 @anvil.server.callable
 def cyclops_nav():
     _guard()
-    plant = store.graph()
-    counted = domain.counts(plant)
-    return {
-        "products": counted["products"],
-        "molds": counted["molds"],
-        "presses": counted["presses"],
-        "recipes": counted["recipes"],
-        "materials": counted["materials"],
-        "colors": counted["colors"],
-        "stoppages": counted["stoppages"],
-        "runs": counted["runs"],
-    }
+    return _timed("nav", store.counts)
 
 
 @anvil.server.callable
 def cyclops_overview(who="all"):
     _guard()
-    return domain.overview(store.graph(), who or "all")
+    return _timed("overview", store.overview, who or "all")
 
 
 @anvil.server.callable
 def cyclops_structure():
     _guard()
-    return domain.structure(store.graph())
+    return _timed("structure", store.structure)
 
 
 @anvil.server.callable
 def cyclops_list(kind, gap=None):
     _guard()
-    if gap == "":
-        gap = None
-    return domain.list_view(store.graph(), kind, gap)
+    return _timed("list %s%s" % (kind, (" " + gap) if gap else ""), store.list_view, kind, gap or None)
 
 
 @anvil.server.callable
 def cyclops_detail(kind, code):
     _guard()
-    return domain.detail(store.graph(), kind, code)
+    return _timed("detail %s %s" % (kind, code), store.detail, kind, code)
 
 
 @anvil.server.callable
 def cyclops_search(term):
     _guard()
-    return domain.search(store.graph(), term or "")
+    return _timed("search", store.search, term or "")
 
 
 @anvil.server.callable
 def cyclops_choices():
     _guard()
-    return domain.choices(store.graph())
+    return _timed("choices", store.choices)
 
 
 @anvil.server.callable
 def cyclops_apply(action, payload=None):
     _guard()
-    return store.apply_action(action, _payload(payload))
+    return _timed("apply %s" % action, store.apply_action, action, _payload(payload))
 
 
 @anvil.server.callable
 def cyclops_data_status():
     _guard()
-    counted = domain.counts(store.graph())
-    row = app_tables.meta.get(name="plant")
-    return {
-        "version": store.column(row, "version", 0) if row else 0,
-        "updated": store.column(row, "updated") if row else None,
-        "counts": counted,
-        "source": seed_data.SOURCE,
-    }
-
-
-@anvil.server.callable
-def cyclops_reload_from_tables():
-    """Pick up rows changed by hand in the Anvil editor's Data Tables view."""
-    _guard()
-    return store.reload_from_tables()
+    counted = store.counts()
+    counted["downtimeHours"] = store.downtime_hours()
+    return {"counts": counted, "source": seed_data.SOURCE}
 
 
 @anvil.server.callable

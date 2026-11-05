@@ -31,17 +31,6 @@ db_schema:
     - {name: in_catalog, type: bool}
     server: full
     title: Raw materials
-  meta:
-    client: none
-    columns:
-    - {name: name, type: string}
-    - {name: version, type: number}
-    - {name: cache, type: media}
-    - {name: updated, type: datetime}
-    - {name: source, type: string}
-    - {name: imported, type: date}
-    server: full
-    title: Plant meta
   molds:
     client: none
     columns:
@@ -73,14 +62,6 @@ db_schema:
     - {name: board_note, type: string}
     server: full
     title: Presses
-  product_links:
-    client: none
-    columns:
-    - {name: lid, target: products, type: link_single}
-    - {name: part, target: products, type: link_single}
-    - {name: basis, type: string}
-    server: full
-    title: Lid and part links
   production_runs:
     client: none
     columns:
@@ -115,6 +96,8 @@ db_schema:
     - {name: only_on_cards, type: bool}
     - {name: notes, type: string}
     - {name: approved_presses, target: presses, type: link_multiple}
+    - {name: lid, target: products, type: link_single}
+    - {name: lid_basis, type: string}
     server: full
     title: Products
   recipe_colors:

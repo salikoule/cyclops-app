@@ -26,17 +26,14 @@ def _round_trip(plant):
         "links": [],
     }
     for item in plant["products"]:
-        row = records.product_row(item, _ref)
-        back["products"].append(records.product_item(row, row["approved_presses"]))
+        row = dict(records.product_row(item, _ref), **records.product_lid_row(item, _ref))
+        back["products"].append(records.product_item(row, row["approved_presses"], row["lid"]))
     for item in plant["molds"]:
         row = records.mold_row(item, _ref)
         back["molds"].append(records.mold_item(row, row["product"]))
     for item in plant["presses"]:
         row = dict(records.press_row(item, _ref), **records.press_board_row(item, _ref))
         back["presses"].append(records.press_item(row, row["mounted_product"], names))
-    for item in plant["links"]:
-        row = records.product_link_row(item, _ref)
-        back["links"].append(records.product_link_item(row, row["lid"], row["part"]))
     for item in plant["recipes"]:
         row = records.recipe_row(item, _ref)
         recipe = records.recipe_item(row, row["mold"], mold_product.get(row["mold"]), row["press"])
@@ -93,6 +90,33 @@ def test_recipe_settings_drop_the_copies_of_recipe_fields():
     plant = domain.normalize({"recipes": [{"id": "REC-1", "cycle": "30", "settings": [
         {"label": "Cycle time (s)", "value": "30"}, {"label": "Hold pressure", "value": "25"}]}]})
     assert plant["recipes"][0]["settings"] == [{"label": "Hold pressure", "value": "25"}]
+
+
+def test_lids_are_a_link_on_the_part():
+    plant = domain.normalize({"products": [{"id": "PRD-0001", "name": "CAVE"}, {"id": "PRD-0002", "name": "ΚΑΠΑΚΙ CAVE"}],
+                              "links": [{"lidId": "PRD-0002", "partId": "PRD-0001", "basis": "exact"}]})
+    part = plant["products"][0]
+    assert (part["lidId"], part["lidBasis"]) == ("PRD-0002", "exact")
+    assert plant["links"] == [{"lidId": "PRD-0002", "partId": "PRD-0001", "basis": "exact"}]
+    assert records.product_lid_row(part, _ref) == {"lid": "PRD-0002"}
+    assert records.product_row(plant["products"][1], _ref)["lid_basis"] == ""
+
+
+def test_read_columns_match_the_row_writers():
+    press = records.press_row({"id": "PRS-01"}, _ref)
+    product = records.product_row({"id": "PRD-0001"}, _ref)
+    assert set(records.PRESS_COLUMNS) == set(press)
+    assert set(records.PRODUCT_COLUMNS) == set(product)
+
+
+def test_a_board_entry_survives_when_its_product_is_not_loaded():
+    plant = domain.normalize({"presses": [{"id": "PRS-01", "board": {"mountedId": "PRD-0009", "mounted": "CAVE"}}]})
+    assert plant["presses"][0]["board"]["mountedId"] == "PRD-0009"
+
+
+def test_new_codes_count_codes_that_are_not_loaded():
+    graph = {"products": [{"id": "PRD-0002"}], "codes": {"products": ["PRD-0001", "PRD-0446"]}}
+    assert domain.new_code(graph, "products", "PRD", 4) == "PRD-0447"
 
 
 def test_board_links_the_mounted_product():

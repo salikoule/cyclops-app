@@ -2,6 +2,9 @@
 
 import anvil.server
 from anvil import *
+import anvil.tables as tables
+import anvil.tables.query as q
+from anvil.tables import app_tables
 from craftify_library.CraftifyUtils import dialogs
 from craftify_library.CustomComponents.ChartCard import ChartCard
 from craftify_library.CustomComponents.EChart import EChart

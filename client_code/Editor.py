@@ -3,6 +3,9 @@
 from datetime import datetime
 
 from anvil import *
+import anvil.tables as tables
+import anvil.tables.query as q
+from anvil.tables import app_tables
 import anvil.js
 from craftify_library.CraftifyUtils import dialogs, drawer
 from craftify_library.CustomComponents.TimePicker import TimePicker

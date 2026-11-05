@@ -1,3 +1,6 @@
+import anvil.tables as tables
+import anvil.tables.query as q
+from anvil.tables import app_tables
 """Cyclops production records.
 
 Pure Python port of the sketch in cyclops/sketch/template.html. No Anvil imports,

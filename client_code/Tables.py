@@ -1,6 +1,9 @@
 """Tabulator lists. A row click opens the record."""
 
 from anvil import *
+import anvil.tables as tables
+import anvil.tables.query as q
+from anvil.tables import app_tables
 from tabulator.Tabulator import Tabulator
 
 from cyclops_app import Format, Layout, Nav

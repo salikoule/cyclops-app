@@ -1,3 +1,6 @@
+import anvil.tables as tables
+import anvil.tables.query as q
+from anvil.tables import app_tables
 """Load and save the plant graph in Anvil tables.
 
 The domain module always sees the sketch's shape. The entity tables are the

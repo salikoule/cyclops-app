@@ -1,9 +1,9 @@
-from ._anvil_designer import PressesFormTemplate
+from ._anvil_designer import LotsFormTemplate
 from anvil import *
 from cyclops_app.Pages import mount_list
 
 
-class PressesForm(PressesFormTemplate):
+class LotsForm(LotsFormTemplate):
     def __init__(self, routing_context=None, **properties):
         self.init_components(**properties)
-        mount_list(self, "press", routing_context)
+        mount_list(self, "lot", routing_context)

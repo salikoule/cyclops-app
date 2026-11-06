@@ -13,6 +13,17 @@ def _value(cell):
         return None
 
 
+def _data(cell):
+    try:
+        return dict(cell.getRow().getData())
+    except Exception:
+        return {}
+
+
+def _empty():
+    return '<span class="cy-empty">—</span>'
+
+
 def _id(kind):
     def formatter(cell, **params):
         return Format.id_tag(kind, _value(cell))
@@ -20,70 +31,54 @@ def _id(kind):
 
 
 def _status(cell, **params):
-    try:
-        data = dict(cell.getRow().getData())
-    except Exception:
-        data = {}
+    data = _data(cell)
     return Format.status(data.get("status"), data.get("tone"))
 
 
 def _pills(kind):
     def formatter(cell, **params):
-        return Format.pills(_value(cell) or [], kind)
+        value = _value(cell)
+        if isinstance(value, str):
+            value = [value] if value else []
+        return Format.pills(value or [], kind)
     return formatter
 
 
 def _text(cell, **params):
     value = _value(cell)
     if value is None or value == "":
-        return '<span class="cy-empty">—</span>'
+        return _empty()
     return Layout.esc(value)
-
-
-def _wrap(cell, **params):
-    value = _value(cell)
-    if value is None or value == "":
-        return '<span class="cy-empty">—</span>'
-    return '<span class="cy-wrap">%s</span>' % Layout.esc(value)
 
 
 def _clip(cell, **params):
     value = _value(cell)
     if value is None or value == "":
-        return '<span class="cy-empty">—</span>'
+        return _empty()
     text = Layout.esc(value)
     return '<span class="cy-clip" title="%s">%s</span>' % (text, text)
 
 
-def _product(cell, **params):
-    try:
-        data = dict(cell.getRow().getData())
-    except Exception:
-        data = {}
-    name = Layout.esc(data.get("product") or "—")
-    return '<span class="cy-clip" title="%s · %s">%s</span>' % (Layout.esc(data.get("id") or ""), name, name)
-
-
 def _when(cell, **params):
-    value = str(_value(cell) or "")
-    if len(value) < 10 or value[4] != "-":
-        return _clip(cell)
-    day = "%s/%s/%s" % (value[8:10], value[5:7], value[2:4])
-    return Layout.esc((day + " " + value[11:16]).strip())
-
-
-def _hours(cell, **params):
     value = _value(cell)
-    if value is None or value == "":
-        return '<span class="cy-empty">—</span>'
-    return Layout.esc(Format.trim(value)) + " h"
+    if not value:
+        return _empty()
+    shown = Format.when(value, "")
+    return Layout.esc(shown) if shown else _clip(cell)
 
 
-def _percent(cell, **params):
+def _day(cell, **params):
     value = _value(cell)
-    if value is None or value == "":
-        return '<span class="cy-empty">—</span>'
-    return Layout.esc(Format.trim(value)) + "%"
+    return Layout.esc(Format.day(value)) if value else _empty()
+
+
+def _suffix(unit):
+    def formatter(cell, **params):
+        value = _value(cell)
+        if value is None or value == "":
+            return _empty()
+        return Layout.esc(Format.trim(value)) + unit
+    return formatter
 
 
 def _edit(cell, **params):
@@ -93,26 +88,19 @@ def _edit(cell, **params):
 def _num(cell, **params):
     value = _value(cell)
     if value is None or value == "":
-        return '<span class="cy-empty">—</span>'
+        return _empty()
     return Layout.esc(Format.trim(value))
 
 
-def _mold_id(cell, **params):
+def _machine_pill(cell, **params):
     value = _value(cell)
     if not value:
-        return '<span class="cy-empty">—</span>'
-    return Format.id_tag("mold", value)
+        return _empty()
+    return '<span class="cy-pill cy-machine">%s</span>' % Layout.esc(value)
 
 
-def _press_pill(cell, **params):
-    value = _value(cell)
-    if not value:
-        return '<span class="cy-empty">—</span>'
-    return '<span class="cy-pill cy-press">%s</span>' % Layout.esc(value)
-
-
-_LOGS = ("issue", "run")
 _NO_AUTOFILL = {"elementAttributes": {"autocomplete": "off", "name": "cy-filter"}}
+_LOGS = ("stoppage", "run")
 
 
 def _col(title, field, **extra):
@@ -125,131 +113,138 @@ def _num_col(title, field, width=96):
     return {"title": title, "field": field, "width": width, "hoz_align": "right", "sorter": "number", "formatter": _num}
 
 
-def _status_col():
-    return {
-        "title": "Status",
-        "field": "status",
-        "width": 140,
-        "formatter": _status,
-        "header_filter": "list",
-        "header_filter_params": dict(_NO_AUTOFILL, valuesLookup=True, clearable=True, sort="asc"),
-        "header_filter_func": "=",
-    }
+def _list_col(title, field, width=130):
+    return {"title": title, "field": field, "width": width, "header_filter": "list",
+            "header_filter_params": dict(_NO_AUTOFILL, valuesLookup=True, clearable=True, sort="asc"), "header_filter_func": "="}
+
+
+def _status_col(width=140):
+    return dict(_list_col("Status", "status", width), formatter=_status)
+
+
+def _machine_col(field="machine"):
+    return {"title": "Machine", "field": field, "width": 130, "formatter": _machine_pill, "header_filter": True,
+            "header_filter_params": dict(_NO_AUTOFILL)}
 
 
 def columns_for(kind, hide=()):
-    if kind == "product":
+    if kind == "item":
         columns = [
-            _col("ID", "id", width=112, formatter=_id("product")),
-            _col("Product", "name", min_width=220, formatter=_text),
+            _col("ID", "id", width=112, formatter=_id("item")),
+            _col("Item", "name", min_width=220, formatter=_text),
             _status_col(),
-            _col("Type", "type", width=130, formatter=_text),
+            _list_col("Type", "typeLabel", 130),
+            _list_col("Category", "category", 130),
             _col("ERP code", "erp", width=110, formatter=_text),
-            {"title": "Mold", "field": "mold", "width": 120, "formatter": _mold_id},
-            {"title": "Runs on", "field": "presses", "min_width": 150, "formatter": _pills("press")},
-            {"title": "Approved on", "field": "approved", "min_width": 150, "formatter": _pills("press")},
-            _num_col("Variants", "variants", 90),
+            {"title": "Runs on", "field": "machines", "min_width": 150, "formatter": _pills("machine")},
             _num_col("Recipes", "recipes", 86),
             _num_col("Trial", "trial", 70),
-            {"title": "Raw materials", "field": "materials", "min_width": 160, "formatter": _pills("material")},
-            {"title": "Colors", "field": "colors", "min_width": 140, "formatter": _pills("color")},
-            _num_col("Links", "links", 70),
+            _num_col("Used in", "usedIn", 84),
+            {"title": "Colors", "field": "colors", "min_width": 140, "formatter": _pills("colorant")},
+            _col("Accounting", "account", width=120, formatter=_text),
         ]
     elif kind == "mold":
         columns = [
             _col("ID", "id", width=112, formatter=_id("mold")),
             _col("Mold", "name", min_width=220, formatter=_text),
             _status_col(),
-            _col("Makes", "product", min_width=180, formatter=_text),
-            {"title": "Runs on", "field": "presses", "min_width": 150, "formatter": _pills("press")},
+            {"title": "Makes", "field": "items", "min_width": 180, "formatter": _pills("item")},
+            {"title": "Runs on", "field": "machines", "min_width": 150, "formatter": _pills("machine")},
             _num_col("Recipes", "recipes", 86),
             _num_col("Cavities", "cavities", 90),
             _num_col("Shot (g)", "shot", 90),
             _col("Location", "location", width=120, formatter=_text),
         ]
-    elif kind == "press":
+    elif kind == "machine":
         columns = [
-            _col("ID", "id", width=100, formatter=_id("press")),
-            _col("Press", "name", width=160, formatter=_text),
+            _col("ID", "id", width=100, formatter=_id("machine")),
+            _col("Machine", "name", width=170, formatter=_text),
             _status_col(),
+            _list_col("Type", "type", 140),
+            _col("Attached to", "attachedTo", width=130, formatter=_text),
             _col("EUROMAP", "euromap", width=120, formatter=_text),
-            _col("Robot", "robot", width=160, formatter=_text),
             _num_col("Molds", "molds", 80),
             _num_col("Recipes", "recipes", 86),
-            _col("On the board", "board", min_width=200, formatter=_text),
+            _col("Running now", "current", min_width=180, formatter=_text),
             _num_col("Changeover (min)", "changeover", 140),
         ]
     elif kind == "recipe":
         columns = [
             _col("ID", "id", width=112, formatter=_id("recipe")),
-            _col("Product", "product", min_width=190, formatter=_text),
-            {"title": "Press", "field": "press", "width": 150, "formatter": _press_pill},
-            {"title": "Colors", "field": "colors", "min_width": 140, "formatter": _pills("color")},
+            _col("Item", "item", min_width=190, formatter=_text),
+            _machine_col(),
+            _col("Mold", "mold", width=110, formatter=_id("mold")),
+            {"title": "Colors", "field": "colors", "min_width": 140, "formatter": _pills("colorant")},
             _num_col("Cycle (s)", "cycle"),
             _num_col("Pcs/h", "pph", 80),
-            {"title": "Raw materials", "field": "materials", "min_width": 160, "formatter": _pills("material")},
-            _col("Last lot", "lot", width=100, formatter=_text),
+            {"title": "Materials", "field": "materials", "min_width": 160, "formatter": _pills("base")},
+            _list_col("Shares", "shares", 96),
             _status_col(),
         ]
     elif kind == "summary":
         columns = [
-            _col("ID", "id", width=112, formatter=_id("product")),
-            _col("Product", "name", min_width=200, formatter=_text),
-            {"title": "Mold", "field": "mold", "width": 120, "formatter": _mold_id},
-            {"title": "Presses", "field": "presses", "min_width": 140, "formatter": _pills("press")},
+            _col("ID", "id", width=112, formatter=_id("item")),
+            _col("Item", "name", min_width=200, formatter=_text),
+            {"title": "Molds", "field": "molds", "min_width": 120, "formatter": _pills("mold")},
+            {"title": "Machines", "field": "machines", "min_width": 140, "formatter": _pills("machine")},
             _num_col("Recipes", "recipes", 90),
             _num_col("Best cycle (s)", "cycle", 120),
-            {"title": "Colors", "field": "colors", "min_width": 140, "formatter": _pills("color")},
+            {"title": "Colors", "field": "colors", "min_width": 140, "formatter": _pills("colorant")},
             _status_col(),
         ]
-    elif kind == "issue":
+    elif kind == "order":
         columns = [
-            _col("Stopped", "start", width=112, formatter=_when),
-            _col("Restarted", "end", width=112, formatter=_when),
-            dict(_num_col("Downtime", "hours", 114), formatter=_hours),
-            {"title": "Press", "field": "press", "width": 118, "formatter": _press_pill, "header_filter": True, "header_filter_params": dict(_NO_AUTOFILL)},
-            _col("Product", "product", min_width=120, width_grow=2, formatter=_product),
-            _col("Cause", "cause", min_width=100, width_grow=3, formatter=_clip),
-            _col("Fix", "fix", min_width=100, width_grow=3, formatter=_clip),
-            _col("Worker", "worker", width=92, formatter=_clip),
-            dict(_status_col(), width=118),
+            _col("ID", "id", width=110, formatter=_id("order")),
+            _col("Item", "item", min_width=200, formatter=_text),
+            _status_col(120),
+            _num_col("Quantity", "quantity", 100),
+            _num_col("Made", "made", 90),
+            dict(_num_col("Done", "progress", 80), formatter=_suffix("%")),
+            _col("Due", "due", width=110, formatter=_day),
+            _col("ERP order", "erp", width=110, formatter=_text),
+            _num_col("Runs", "runs", 70),
         ]
     elif kind == "run":
         columns = [
-            _col("Started", "start", width=112, formatter=_when),
-            dict(_num_col("Hours", "hours", 82), formatter=_hours),
-            {"title": "Press", "field": "press", "width": 118, "formatter": _press_pill, "header_filter": True, "header_filter_params": dict(_NO_AUTOFILL)},
-            _col("Product", "product", min_width=120, width_grow=3, formatter=_product),
+            _col("ID", "id", width=108, formatter=_id("run")),
+            _col("Started", "start", width=120, formatter=_when),
+            dict(_num_col("Hours", "hours", 82), formatter=_suffix(" h")),
+            _machine_col(),
+            _col("Item", "item", min_width=140, width_grow=3, formatter=_clip),
+            _col("Order", "order", width=100, formatter=_text),
             _num_col("Good", "good", 86),
-            dict(_num_col("Scrap", "scrapPct", 84), formatter=_percent),
+            dict(_num_col("Scrap", "scrapPct", 84), formatter=_suffix("%")),
             _num_col("Pcs/h", "pph", 80),
-            dict(_num_col("Vs target", "performance", 108), formatter=_percent),
+            dict(_num_col("Vs target", "performance", 100), formatter=_suffix("%")),
             _col("Operator", "operator", min_width=110, width_grow=1, formatter=_clip),
-            dict(_status_col(), width=104),
+            _status_col(110),
         ]
-    elif kind == "material":
+    elif kind == "stoppage":
         columns = [
-            _col("ID", "id", width=100, formatter=_id("material")),
-            _col("Material", "text", min_width=180, formatter=_text),
-            _status_col(),
-            {"title": "Type", "field": "kind", "width": 110, "header_filter": "list", "header_filter_params": dict(_NO_AUTOFILL, valuesLookup=True, clearable=True)},
-            _col("Supplier", "supplier", width=140, formatter=_text),
-            _col("Family", "family", width=120, formatter=_text),
-            _num_col("MFI", "mfi", 70),
-            _col("Accounting", "account", width=130, formatter=_text),
-            _num_col("Recipes", "recipes", 86),
-            _num_col("Products", "products", 90),
+            _col("Stopped", "start", width=120, formatter=_when),
+            _col("Restarted", "end", width=120, formatter=_when),
+            dict(_num_col("Downtime", "hours", 104), formatter=_suffix(" h")),
+            _machine_col(),
+            _col("Item", "item", min_width=110, width_grow=1, formatter=_clip),
+            _col("Cause", "cause", min_width=110, width_grow=1, formatter=_clip),
+            _list_col("6M", "category", 110),
+            _col("What was seen", "description", min_width=120, width_grow=3, formatter=_clip),
+            _col("Fix", "fix", min_width=100, width_grow=2, formatter=_clip),
+            _col("Reported by", "reportedBy", width=110, formatter=_clip),
+            _status_col(118),
         ]
     else:
         columns = [
-            _col("ID", "id", width=100, formatter=_id("color")),
-            _col("Color", "name", width=140, formatter=_text),
-            _status_col(),
-            _col("Label code", "code", width=120, formatter=_text),
-            _col("Label", "label", min_width=220, formatter=_text),
-            _col("Accounting", "account", width=130, formatter=_text),
-            _num_col("Recipes", "recipes", 86),
-            _num_col("Products", "products", 90),
+            _col("ID", "id", width=118, formatter=_id("lot")),
+            _col("Lot", "number", width=120, formatter=_text),
+            _col("Item", "item", min_width=200, formatter=_text),
+            _list_col("Origin", "origin", 110),
+            _num_col("Quantity", "quantity", 100),
+            _col("Unit", "uom", width=70, formatter=_text, header_filter=False),
+            _col("Received", "received", width=120, formatter=_when),
+            _col("Run", "run", width=110, formatter=_text),
+            _num_col("Used by", "used", 84),
+            _status_col(120),
         ]
     hidden = set(hide or [])
     return [column for column in columns if column.get("field") not in hidden]
@@ -257,7 +252,7 @@ def columns_for(kind, hide=()):
 
 def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False):
     """``on_edit(row_data)`` adds an Edit button to each row; the rest of the row still opens the record,
-    unless ``edit_on_click`` (for a list already on its record's page)."""
+    unless ``edit_on_click`` (stoppages, which have no page of their own)."""
     table = Tabulator()
     if height:
         table.height = height
@@ -267,7 +262,7 @@ def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False
         "pagination_size_selector": [25, 50, 100, True],
         "pagination_counter": "rows",
         "layout": "fitColumns" if kind in _LOGS else "fitDataFill",
-        "index": "key" if kind in _LOGS else "id",
+        "index": "id",
         "placeholder": "No rows match.",
     }
     if on_edit is not None:
@@ -275,7 +270,7 @@ def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False
                                     "header_sort": False, "formatter": _edit, "css_class": "cy-col-edit"}]
     table.columns = columns
     table.data = rows or []
-    target = "recipe" if kind in _LOGS else kind
+    target = "item" if kind == "summary" else kind
 
     def on_row(sender, **event_args):
         row = event_args.get("row")
@@ -294,9 +289,8 @@ def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False
             data = dict(row.getData())
         except Exception:
             return
-        code = data.get("id")
-        if code:
-            Nav.go(target, code)
+        if data.get("id") and target in Nav.SLUG:
+            Nav.go(target, data["id"])
 
     table.set_event_handler("row_click", on_row)
     return Layout.flat(table)

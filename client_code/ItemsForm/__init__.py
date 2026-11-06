@@ -1,9 +1,9 @@
-from ._anvil_designer import MaterialsFormTemplate
+from ._anvil_designer import ItemsFormTemplate
 from anvil import *
 from cyclops_app.Pages import mount_list
 
 
-class MaterialsForm(MaterialsFormTemplate):
+class ItemsForm(ItemsFormTemplate):
     def __init__(self, routing_context=None, **properties):
         self.init_components(**properties)
-        mount_list(self, "material", routing_context)
+        mount_list(self, "item", routing_context)

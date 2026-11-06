@@ -35,14 +35,14 @@ class StructureRoute(AppPage):
     form = "StructureForm"
 
 
-class ProductsRoute(AppPage):
-    path = "/products"
-    form = "ProductsForm"
+class ItemsRoute(AppPage):
+    path = "/items"
+    form = "ItemsForm"
 
 
-class ProductRoute(AppPage):
-    path = "/products/:code"
-    form = "ProductForm"
+class ItemRoute(AppPage):
+    path = "/items/:code"
+    form = "ItemForm"
 
 
 class MoldsRoute(AppPage):
@@ -55,14 +55,14 @@ class MoldRoute(AppPage):
     form = "MoldForm"
 
 
-class PressesRoute(AppPage):
-    path = "/presses"
-    form = "PressesForm"
+class MachinesRoute(AppPage):
+    path = "/machines"
+    form = "MachinesForm"
 
 
-class PressRoute(AppPage):
-    path = "/presses/:code"
-    form = "PressForm"
+class MachineRoute(AppPage):
+    path = "/machines/:code"
+    form = "MachineForm"
 
 
 class RecipesRoute(AppPage):
@@ -75,24 +75,24 @@ class RecipeRoute(AppPage):
     form = "RecipeForm"
 
 
-class MaterialsRoute(AppPage):
-    path = "/materials"
-    form = "MaterialsForm"
+class OrdersRoute(AppPage):
+    path = "/orders"
+    form = "OrdersForm"
 
 
-class MaterialRoute(AppPage):
-    path = "/materials/:code"
-    form = "MaterialForm"
+class OrderRoute(AppPage):
+    path = "/orders/:code"
+    form = "OrderForm"
 
 
-class ColorsRoute(AppPage):
-    path = "/colors"
-    form = "ColorsForm"
+class ProductionRoute(AppPage):
+    path = "/production"
+    form = "ProductionForm"
 
 
-class ColorRoute(AppPage):
-    path = "/colors/:code"
-    form = "ColorForm"
+class RunRoute(AppPage):
+    path = "/production/:code"
+    form = "RunForm"
 
 
 class StoppagesRoute(AppPage):
@@ -100,6 +100,16 @@ class StoppagesRoute(AppPage):
     form = "StoppagesForm"
 
 
-class ProductionRoute(AppPage):
-    path = "/production"
-    form = "ProductionForm"
+class LotsRoute(AppPage):
+    path = "/lots"
+    form = "LotsForm"
+
+
+class LotRoute(AppPage):
+    path = "/lots/:code"
+    form = "LotForm"
+
+
+class SettingsRoute(AppPage):
+    path = "/settings"
+    form = "SettingsForm"

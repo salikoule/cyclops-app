@@ -11,14 +11,17 @@ from cyclops_app import Format, Layout, Nav
 NAV = (
     ("Overview", "overview", "fa:table-cells", True),
     None,
-    ("Products", "product", "fa:box", False),
+    ("Items", "item", "fa:box", False),
     ("Molds", "mold", "fa:cubes", False),
-    ("Presses", "press", "fa:industry", False),
+    ("Machines", "machine", "fa:industry", False),
     ("Recipes", "recipe", "fa:sliders", False),
-    ("Materials", "material", "fa:flask", False),
-    ("Colors", "color", "fa:palette", False),
-    ("Production", "run", "fa:clipboard-list", False),
-    ("Stoppages", "issue", "fa:wrench", False),
+    None,
+    ("Orders", "order", "fa:clipboard-list", False),
+    ("Production", "run", "fa:play", False),
+    ("Stoppages", "stoppage", "fa:wrench", False),
+    ("Lots", "lot", "fa:barcode", False),
+    None,
+    ("Settings", "settings", "fa:gear", False),
 )
 
 BRAND = (
@@ -39,14 +42,15 @@ def _plant_section():
     counted = status.get("counts") or {}
     pairs = (
         ("Imported from", status.get("source") or "—"),
-        ("Records", "%s products · %s molds · %s presses · %s recipes" % (
-            counted.get("products"), counted.get("molds"), counted.get("presses"), counted.get("recipes"))),
-        ("Feeds", "%s materials · %s colors" % (counted.get("materials"), counted.get("colors"))),
+        ("Records", "%s items · %s molds · %s machines · %s recipes" % (
+            counted.get("items"), counted.get("molds"), counted.get("machines"), counted.get("recipes"))),
+        ("Production", "%s orders · %s runs · %s lots" % (
+            counted.get("production_orders"), counted.get("production_runs"), counted.get("lots"))),
         ("Stoppages", "%s logged · %s h of downtime" % (counted.get("stoppages") or 0, Format.trim(counted.get("downtimeHours")) or "0")),
     )
     facts = "".join('<div><dt>%s</dt><dd>%s</dd></div>' % (Layout.esc(label), Layout.esc(value)) for label, value in pairs)
     return Layout.stack(
-        Layout.html('<div><h3>Plant data</h3><p class="cs-lead">Cyclops is the plant record: product, mold, press, recipe, raw material, and color. A recipe is one way of running a mold on a press.</p></div>'),
+        Layout.html('<div><h3>Plant data</h3><p class="cs-lead">Cyclops is the plant record: items, molds, machines, recipes, and the production log with its lots. Shifts, causes, and categories are on the Settings page.</p></div>'),
         Layout.html('<dl class="bc-dl cy-dl">%s</dl>' % facts),
         Layout.note("Every page reads the data tables directly, so rows edited in the Anvil Data Tables view show on the next page load. To load the workbook again, run scripts/import_workbook.py with the server Uplink key. It replaces every record."),
     )
@@ -78,7 +82,7 @@ class CyclopsShell(CyclopsShellTemplate):
             pass
 
     def _build_search(self):
-        self._search = TextBox(placeholder="Find a product, mold, press, recipe, material, or color")
+        self._search = TextBox(placeholder="Find an item, mold, machine, recipe, order, run, or lot")
         self._search.set_event_handler("change", self._schedule_search)
         self._search.set_event_handler("pressed_enter", self._run_search)
         self._hits = HtmlTemplate(

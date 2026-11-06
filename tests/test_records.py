@@ -1,131 +1,63 @@
-import copy
-
 import domain
 import records
 import seed_data
 
-KINDS = ("products", "molds", "presses", "materials", "colors", "recipes", "links", "workers")
-
 
 def _ref(table, code):
-    return code
+    return (table, code)
 
 
-def _round_trip(plant):
-    """Every record through its row writer and back, with links standing in as codes."""
-    mold_product = {item["id"]: item["productId"] for item in plant["molds"]}
-    names = {item["id"]: item["name"] for item in plant["products"]}
-    back = {
-        "workers": [records.worker_row(name)["name"] for name in plant["workers"]],
-        "materials": [records.material_item(records.material_row(item, _ref)) for item in plant["materials"]],
-        "colors": [records.color_item(records.color_row(item, _ref)) for item in plant["colors"]],
-        "products": [],
-        "molds": [],
-        "presses": [],
-        "recipes": [],
-        "links": [],
-    }
-    for item in plant["products"]:
-        row = dict(records.product_row(item, _ref), **records.product_lid_row(item, _ref))
-        back["products"].append(records.product_item(row, row["approved_presses"], row["lid"]))
-    for item in plant["molds"]:
-        row = records.mold_row(item, _ref)
-        back["molds"].append(records.mold_item(row, row["product"]))
-    for item in plant["presses"]:
-        row = dict(records.press_row(item, _ref), **records.press_board_row(item, _ref))
-        back["presses"].append(records.press_item(row, row["mounted_product"], names))
-    for item in plant["recipes"]:
-        row = records.recipe_row(item, _ref)
-        recipe = records.recipe_item(row, row["mold"], mold_product.get(row["mold"]), row["press"])
-        recipe["materialSlots"] = [records.material_slot_item(slot, slot["material"]) for slot in records.material_slot_rows(item, row["code"], _ref)]
-        recipe["colorSlots"] = [records.color_slot_item(slot, slot["color"]) for slot in records.color_slot_rows(item, row["code"], _ref)]
-        recipe["issues"] = [records.stoppage_item(log, log["worker"]) for log in records.stoppage_rows(item, row["code"], _ref)]
-        recipe["runs"] = [records.run_item(log, log["operator"]) for log in records.run_rows(item, row["code"], _ref)]
-        back["recipes"].append(recipe)
-    return back
+def _code_of(table, linked):
+    return linked[1]
 
 
-def _comparable(plant):
-    plain = {kind: copy.deepcopy(plant.get(kind) or []) for kind in KINDS}
-    for product in plain["products"]:
-        product.pop("moldId", None)
-    plain["workers"] = sorted(plain["workers"])
-    return plain
+def _seed():
+    return domain.normalize({table: seed_data.load().get(table) or [] for table in records.ORDER})
 
 
-def test_every_workbook_value_survives_the_tables():
-    seed = seed_data.load()
-    plant = domain.normalize({kind: seed.get(kind) or [] for kind in KINDS})
-    expected = _comparable(plant)
-    actual = _comparable(domain.normalize(_round_trip(plant)))
-    for kind in KINDS:
-        assert len(actual[kind]) == len(expected[kind]), kind
-        for want, got in zip(expected[kind], actual[kind]):
-            assert got == want, (kind, want.get("id") if isinstance(want, dict) else want)
+def test_every_record_round_trips_through_its_row():
+    plant = _seed()
+    for table in records.ORDER:
+        for item in plant[table]:
+            row = records.to_row(table, item, _ref)
+            back = records.to_item(table, row, _code_of)
+            for child, _, _, key, _ in records.CHILDREN_OF.get(table, ()):
+                back[key] = [records.child_item(child, line, _code_of) for line in records.child_rows(child, item, None, _ref)]
+            want = {key: value for key, value in item.items() if key in back}
+            assert back == want, (table, item["id"])
 
 
-def test_machine_settings_are_json_lists_with_numbers_or_the_setters_text():
-    item = {"id": "REC-1", "temps": {"nozzle": "230", "t2": "245", "t1": "210/195", "t5": "-"}, "cycle": "48.19", "cooling": "5,5",
-            "screwRpm": "120", "px": "3", "printPieces": "10+22", "settings": [{"label": "Hold time (s)", "value": "6"}]}
-    row = records.recipe_row(item, _ref)
-    assert row["cycle_s"] == 48.19
-    assert row["temps"] == [{"label": "Nozzle", "value": 230}, {"label": "T2", "value": 245}, {"label": "T1", "value": "210/195"}]
-    assert row["injection"] == [{"label": "Hold time (s)", "value": 6}, {"label": "Cooling time (s)", "value": "5,5"},
-                                {"label": "Screw speed (rpm)", "value": 120}]
-    assert row["extra"] == [{"label": "ΠΧ", "value": 3}, {"label": "ΤΕΜ εκτύπωση", "value": "10+22"}]
-    back = records.recipe_item(row, None, None, None)
-    assert back["temps"] == {"nozzle": "230", "t6": "", "t5": "", "t4": "", "t3": "", "t2": "245", "t1": "210/195"}
-    assert (back["cycle"], back["cooling"], back["screwRpm"], back["px"], back["printPieces"]) == ("48.19", "5,5", "120", "3", "10+22")
-    assert back["settings"] == [{"label": "Hold time (s)", "value": "6"}]
+def test_moments_are_utc_and_bad_ones_are_blank():
+    moment = records.parse_moment("2026-05-25T19:00:00Z")
+    assert records.moment_text(moment) == "2026-05-25T19:00:00Z"
+    assert records.parse_moment("25/05/2026") is None
+    assert records.parse_moment("") is None
 
 
-def test_injection_settings_are_one_ordered_list_on_the_recipe():
-    item = {"id": "REC-1", "settings": [{"label": "Hold time (s)", "value": "6"}, {"label": "Hold pressure", "value": "60/55"},
-                                        {"label": "Nozzle stroke (Arburg)", "value": "12.5"}, {"label": "Hold speed", "value": ""}]}
-    row = records.recipe_row(item, _ref)
-    assert row["injection"] == [{"label": "Hold time (s)", "value": 6}, {"label": "Hold pressure", "value": "60/55"},
-                                {"label": "Nozzle stroke (Arburg)", "value": 12.5}]
-    assert records.recipe_item(row, None, None, None)["settings"] == [
-        {"label": "Hold time (s)", "value": "6"}, {"label": "Hold pressure", "value": "60/55"},
-        {"label": "Nozzle stroke (Arburg)", "value": "12.5"}]
-    assert records.recipe_row({"id": "REC-2"}, _ref)["injection"] is None
+def test_numbers_read_like_the_setter_writes_them():
+    assert records.number("5,5") == 5.5
+    assert records.number("12") == 12
+    assert records.number("") is None
+    assert records.number("abc") is None
+    assert records.number_text(30.0) == "30"
 
 
-def test_recipe_settings_drop_the_copies_of_recipe_fields():
-    plant = domain.normalize({"recipes": [{"id": "REC-1", "cycle": "30", "settings": [
-        {"label": "Cycle time (s)", "value": "30"}, {"label": "Hold pressure", "value": "25"}]}]})
-    assert plant["recipes"][0]["settings"] == [{"label": "Hold pressure", "value": "25"}]
+def test_recipe_settings_keep_text_and_numbers():
+    item = {"id": "REC-1", "temps": {"nozzle": "210/195", "t1": "180"}, "settings": [{"label": "Hold pressure", "value": "450"}],
+            "cooling": "8", "screwRpm": "", "px": "", "py": "", "printPieces": "", "printTotal": ""}
+    row = records.to_row("recipes", item, _ref)
+    assert {"label": "Nozzle", "value": "210/195"} in row["temps"]
+    assert {"label": "T1", "value": 180} in row["temps"]
+    back = records.to_item("recipes", row, _code_of)
+    assert back["temps"]["nozzle"] == "210/195" and back["temps"]["t1"] == "180"
+    assert back["cooling"] == "8"
+    assert back["settings"] == [{"label": "Hold pressure", "value": "450"}]
 
 
-def test_lids_are_a_link_on_the_part():
-    plant = domain.normalize({"products": [{"id": "PRD-0001", "name": "CAVE"}, {"id": "PRD-0002", "name": "ΚΑΠΑΚΙ CAVE"}],
-                              "links": [{"lidId": "PRD-0002", "partId": "PRD-0001", "basis": "exact"}]})
-    part = plant["products"][0]
-    assert (part["lidId"], part["lidBasis"]) == ("PRD-0002", "exact")
-    assert plant["links"] == [{"lidId": "PRD-0002", "partId": "PRD-0001", "basis": "exact"}]
-    assert records.product_lid_row(part, _ref) == {"lid": "PRD-0002"}
-    assert records.product_row(plant["products"][1], _ref)["lid_basis"] == ""
-
-
-def test_read_columns_match_the_row_writers():
-    press = records.press_row({"id": "PRS-01"}, _ref)
-    product = records.product_row({"id": "PRD-0001"}, _ref)
-    assert set(records.PRESS_COLUMNS) == set(press)
-    assert set(records.PRODUCT_COLUMNS) == set(product)
-
-
-def test_a_board_entry_survives_when_its_product_is_not_loaded():
-    plant = domain.normalize({"presses": [{"id": "PRS-01", "board": {"mountedId": "PRD-0009", "mounted": "CAVE"}}]})
-    assert plant["presses"][0]["board"]["mountedId"] == "PRD-0009"
-
-
-def test_new_codes_count_codes_that_are_not_loaded():
-    graph = {"products": [{"id": "PRD-0002"}], "codes": {"products": ["PRD-0001", "PRD-0446"]}}
-    assert domain.new_code(graph, "products", "PRD", 4) == "PRD-0447"
-
-
-def test_board_links_the_mounted_product():
-    plant = domain.normalize({"products": [{"id": "PRD-0001", "name": "CAVE 11 lt"}],
-                              "presses": [{"id": "PRS-01", "board": {"mounted": "cave 11 LT"}}]})
-    board = plant["presses"][0]["board"]
-    assert board["mountedId"] == "PRD-0001" and board["mounted"] == "CAVE 11 lt"
+def test_tables_only_link_to_tables_written_before_them():
+    seen = set()
+    for table, columns in records.TABLES:
+        for column, _, kind in columns:
+            if isinstance(kind, tuple) and column not in records.LATE.get(table, ()):
+                assert kind[1] in seen, (table, column)
+        seen.add(table)

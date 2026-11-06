@@ -1,315 +1,138 @@
+import copy
+
+import pytest
+
 import domain
+import records
 import seed_data
 
-
-def plant():
-    graph = {
-        "products": [
-            {"id": "PRD-0001", "name": "CAVE 11 lt", "erpCode": ""},
-            {"id": "PRD-0002", "name": "ΚΑΠΑΚΙ CAVE 11 lt", "erpCode": "ERP-1"},
-        ],
-        "molds": [{"id": "MLD-0001", "name": "CAVE 11 lt", "productId": "PRD-0001"}],
-        "presses": [{
-            "id": "PRS-01",
-            "name": "NOVA 130T",
-            "board": {"mounted": "CAVE 11 lt", "location": "A1", "note": ""},
-        }],
-        "materials": [
-            {"id": "MAT-001", "text": "J590K", "family": "RANDOM", "account": "910000307", "catalog": True},
-            {"id": "MAT-002", "text": "ροή", "family": "", "account": "", "catalog": True},
-            {"id": "MAT-003", "text": "Unused grade", "family": "RANDOM", "account": "1", "catalog": True},
-        ],
-        "colors": [{"id": "COL-001", "code": "10692", "name": "ΜΠΕΖ", "account": "920000032", "catalog": True}],
-        "recipes": [
-            {
-                "id": "REC-0002",
-                "legacyId": 2,
-                "productId": "PRD-0001",
-                "moldId": "MLD-0001",
-                "pressId": "PRS-01",
-                "temps": {"t6": "170", "t5": "174"},
-                "cycle": "",
-                "trial": True,
-                "materialSlots": [{"slot": 1, "materialId": "MAT-001", "lot": ""}],
-                "colorSlots": [{"slot": 1, "colorId": "COL-001", "lot": ""}],
-            },
-            {
-                "id": "REC-0020",
-                "legacyId": 20,
-                "productId": "PRD-0001",
-                "moldId": "MLD-0001",
-                "pressId": "PRS-01",
-                "temps": {"nozzle": "200", "t6": "200", "t5": "200", "t4": "210"},
-                "cycle": "30",
-                "trial": False,
-                "materialSlots": [{"slot": 1, "materialId": "MAT-002", "lot": ""}],
-                "colorSlots": [{"slot": 1, "colorId": "COL-001", "lot": ""}],
-            },
-            {
-                "id": "REC-0021",
-                "legacyId": 21,
-                "productId": "PRD-0001",
-                "moldId": "MLD-0001",
-                "pressId": "PRS-01",
-                "temps": {"nozzle": "200", "t6": "200", "t5": "200", "t4": "210"},
-                "cycle": "28",
-                "trial": False,
-                "materialSlots": [{"slot": 1, "materialId": "MAT-001", "lot": "L1"}],
-                "colorSlots": [{"slot": 1, "colorId": "COL-001", "lot": ""}],
-            },
-        ],
-        "links": [{"lidId": "PRD-0002", "partId": "PRD-0001", "basis": "exact"}],
-    }
-    domain.normalize(graph)
-    domain.reindex(graph)
-    return graph
+ITEM, RECIPE = "ITM-00090", "REC-0222"
 
 
-def test_defaults_and_kinds():
-    graph = plant()
-    lid = graph["_ix"]["product"]["PRD-0002"]
-    assert lid["type"] == "lid"
-    assert lid["lifecycle"] == "active"
-    assert graph["_ix"]["material"]["MAT-001"]["kind"] == "resin"
-    assert graph["_ix"]["material"]["MAT-002"]["kind"] == "additive"
+@pytest.fixture(scope="module")
+def seed():
+    return domain.normalize({table: seed_data.load().get(table) or [] for table in records.ORDER})
 
 
-def test_statuses_and_pieces_per_hour():
-    graph = plant()
-    index = graph["_ix"]
-    assert domain.setup_status(graph, index["recipe"]["REC-0002"]) == "Trial row"
-    assert domain.setup_status(graph, index["recipe"]["REC-0020"]) == "Cannot produce"
-    assert domain.setup_status(graph, index["recipe"]["REC-0021"]) == "Active"
-    assert domain.product_status(graph, index["product"]["PRD-0001"]) == "Incomplete"
-    assert domain.product_status(graph, index["product"]["PRD-0002"]) == "Name only"
-    assert domain.mold_status(graph, index["mold"]["MLD-0001"]) == "Incomplete"
-    assert domain.press_status(graph, index["press"]["PRS-01"]) == "Mounted"
-    assert domain.pieces_per_hour(index, index["recipe"]["REC-0021"]) is None
-    index["mold"]["MLD-0001"]["cavities"] = 2
-    assert domain.pieces_per_hour(index, index["recipe"]["REC-0021"]) == 257
-    assert domain.pieces_per_hour(index, index["recipe"]["REC-0020"]) == 240
+@pytest.fixture
+def plant(seed):
+    return copy.deepcopy(seed)
 
 
-def test_gaps_and_variants():
-    graph = plant()
-    by_key = {item["key"]: item for item in domain.gaps(graph)}
-    assert "PRD-0001" in by_key["no-erp"]["ids"]
-    assert "PRD-0002" not in by_key["no-erp"]["ids"]
-    assert "MLD-0001" in by_key["no-cavities"]["ids"]
-    assert "REC-0020" in by_key["no-base"]["ids"]
-    assert "REC-0002" in by_key["trial"]["ids"]
-    assert "REC-0020" in by_key["dup-standard"]["ids"]
-    assert "REC-0021" in by_key["dup-standard"]["ids"]
-    assert "MAT-003" in by_key["mat-unused"]["ids"]
-    assert "PRS-01" in by_key["no-changeover"]["ids"]
-    variants = domain.variants_of(graph, graph["_ix"]["product"]["PRD-0001"])
-    assert len(variants) == 1
-    assert variants[0]["label"] == "ΜΠΕΖ"
-    filtered = domain.list_view(graph, "recipe", "no-base")
-    assert [row["id"] for row in filtered["rows"]] == ["REC-0020"]
-    assert filtered["banner"]["count"] == 1
+def act(plant, action, **payload):
+    return domain.dispatch(plant, action, payload)
 
 
-def test_edits_do_not_alias_clones_and_confirm_trials():
-    graph = plant()
-    created = domain.dispatch(graph, "new-product", {"name": "Bucket", "type": "part", "erp": "B-1"})
-    assert created["redirect"]["code"] == "PRD-0003"
-    assert graph["_ix"]["product"]["PRD-0003"]["erpCode"] == "B-1"
-
-    cloned = domain.dispatch(graph, "clone-recipe", {"contextId": "REC-0021"})
-    clone_id = cloned["redirect"]["code"]
-    clone = graph["_ix"]["recipe"][clone_id]
-    clone["materialSlots"][0]["lot"] = "CHANGED"
-    assert graph["_ix"]["recipe"]["REC-0021"]["materialSlots"][0]["lot"] == "L1"
-
-    confirmed = domain.dispatch(graph, "edit-recipe", {
-        "contextId": "REC-0002",
-        "temp_nozzle": "180",
-        "temp_t6": "180",
-        "temp_t5": "180",
-        "temp_t4": "190",
-        "temp_t3": "",
-        "temp_t2": "",
-        "temp_t1": "",
-        "cycle": "22",
-        "cooling": "",
-        "screwRpm": "",
-        "productLot": "LOT",
-    })
-    assert confirmed.get("error") is None
-    recipe = graph["_ix"]["recipe"]["REC-0002"]
-    assert recipe["trial"] is False
-    assert recipe["cycle"] == "22"
-    assert domain.setup_status(graph, recipe) == "Active"
-
-    marked = domain.dispatch(graph, "set-standard", {"contextId": "REC-0021"})
-    assert marked.get("error") is None
-    assert graph["_ix"]["recipe"]["REC-0021"]["standard"] is True
-    assert domain.setup_status(graph, graph["_ix"]["recipe"]["REC-0021"]) == "Standard"
-    same = [item for item in domain.gaps(graph) if item["key"] == "dup-standard"][0]
-    assert "REC-0021" not in same["ids"]
-    assert "REC-0020" not in same["ids"]
-
-    rejected = domain.dispatch(graph, "add-link", {"contextId": "PRD-0001", "other": "PRD-0001", "relation": "lid"})
-    assert rejected["error"]
+def _fed(plant):
+    return [entry["itemId"] for entry in domain.reindex(plant)["recipes"][RECIPE]["inputs"]]
 
 
-def test_seed_module_loads_the_workbook_import():
-    graph = seed_data.load()
-    domain.normalize(graph)
-    domain.reindex(graph)
-    counted = domain.counts(graph)
-    assert counted["products"] == 446
-    assert counted["molds"] == 319
-    assert counted["presses"] == 17
-    assert counted["recipes"] == 501
-    assert counted["materials"] == 66
-    assert counted["colors"] == 75
-    assert counted["links"] == 18
-    assert counted["stoppages"] == 26
-    assert len(graph["workers"]) > 40
-    assert sum(len(product["approvedPressIds"]) for product in graph["products"]) == 364
-    assert len(domain.gaps(graph)) == 16
-    overview = domain.overview(graph, "engineer")
-    assert overview["presses"]
-    assert all(item["count"] > 0 for item in overview["gaps"])
-    detail = domain.detail(graph, "product", "PRD-0001")
-    assert detail["name"] == "CAVE 11 lt"
-    assert detail["missing"] is False
-    assert domain.search(graph, "nova")
-    stoppages = domain.list_view(graph, "issue")["rows"]
-    assert len(stoppages) == 26
-    assert len({row["key"] for row in stoppages}) == 26
-    assert all(row["startDate"] for row in stoppages)
-    runs = domain.list_view(graph, "run")["rows"]
-    assert len(runs) == 4 and all(row["sample"] and row["status"] == "Sample" for row in runs)
-    assert all(row["good"] > 0 and row["pph"] and row["performance"] for row in runs)
-    assert counted["runs"] == 4
-    by_press = domain.choices(graph)["recipesByPress"]
-    assert sum(len(options) for options in by_press.values()) == counted["liveRecipes"]
-    for press in graph["presses"]:
-        mounted = (press.get("board") or {}).get("mounted")
-        options = by_press.get(press["id"]) or []
-        if mounted and any(opt["label"].startswith(mounted) for opt in options):
-            assert options[0]["label"].startswith(mounted)
+def _running(plant):
+    order = act(plant, "new-order", contextKind="item", contextId=ITEM, quantity="5000")["redirect"]["code"]
+    run = act(plant, "add-run", contextKind="order", contextId=order, recipe=RECIPE, shiftId="SHF-01", operatorId="WRK-001",
+              startedAt="2026-11-06T05:00:00Z")["redirect"]["code"]
+    return order, run
 
 
-def test_runs_take_out_stoppages_and_validate():
-    graph = plant()
-    for recipe in graph["recipes"]:
-        recipe["runs"] = []
-    domain.dispatch(graph, "add-issue", {
-        "contextId": "REC-0021", "startDate": "2026-06-03", "startTime": "10:00", "cause": "Heater",
-        "endDate": "2026-06-03", "endTime": "12:00",
-    })
-    added = domain.dispatch(graph, "add-run", {
-        "contextId": "REC-0021", "startDate": "2026-06-03", "startTime": "06:00", "endDate": "2026-06-03", "endTime": "14:00",
-        "good": "5700", "scrap": "300", "cycle": "18", "cavities": "2", "lot": "041126",
-    })
-    assert added.get("error") is None
-    assert graph["_ix"]["recipe"]["REC-0021"]["productLot"] == "041126"
-    row = domain.list_view(graph, "run")["rows"][0]
-    assert row["hours"] == 8 and row["downHours"] == 2
-    assert row["pph"] == 1000 and row["target"] == 400 and row["performance"] == 250
-    assert row["scrapPct"] == 5 and row["status"] == "Done"
-    recipe = domain.detail(graph, "recipe", "REC-0021")
-    assert [run["key"] for run in recipe["production"]] == [row["key"]]
-    assert [run["key"] for run in domain.detail(graph, "press", recipe["pressId"])["production"]] == [row["key"]]
-    assert domain.dispatch(graph, "add-run", {"contextId": "REC-0021", "startDate": "2026-06-03", "startTime": "06:00",
-                                              "endDate": "2026-06-02", "endTime": "14:00"})["error"]
-    assert domain.dispatch(graph, "add-run", {"contextId": "REC-0021", "startDate": "2026-06-03", "good": "lots"})["error"]
-    assert domain.dispatch(graph, "edit-run", {"contextId": "REC-0021", "index": "0", "startDate": "2026-06-03", "startTime": "06:00"}).get("error") is None
-    assert domain.list_view(graph, "run")["rows"][0]["status"] == "Running"
-    assert domain.dispatch(graph, "remove-run", {"contextId": "REC-0021", "index": "0"}).get("error") is None
-    assert domain.counts(graph)["runs"] == 0
+def test_every_page_builds(plant):
+    for kind, table in domain.KIND_TABLE.items():
+        assert domain.list_view(plant, kind)["kind"] == kind
+        if kind != "stoppage":
+            for entry in plant[table][:25]:
+                assert not domain.detail(plant, kind, entry["id"])["missing"]
+    assert domain.overview(plant)["machines"]
+    assert domain.choices(plant)["presses"]
 
 
-def test_stoppages_downtime_and_states():
-    assert domain.downtime_hours({"startDate": "2026-05-25", "startTime": "22:00", "endDate": "2026-05-26", "endTime": "07:30"}) == 9.5
-    assert domain.issue_state({"startDate": "2027-07-28", "startTime": "06:30", "endDate": "2026-07-28", "endTime": "09:15"}) == "check dates"
-    assert domain.issue_state({"startDate": "2026-07-08", "startTime": "-", "endDate": "", "endTime": ""}) == "open"
-    graph = plant()
-    added = domain.dispatch(graph, "add-issue", {
-        "contextId": "REC-0021", "startDate": "2026-06-03", "startTime": "17:30", "cause": "Power cut",
-        "worker": "IRA VLAEVA", "fix": "Restarted", "endDate": "2026-06-03", "endTime": "18:00",
-    })
-    assert added.get("error") is None
-    detail = domain.detail(graph, "recipe", "REC-0021")
-    assert detail["issues"][0]["hours"] == 0.5
-    assert domain.counts(graph)["stoppages"] == 1
-    backwards = domain.dispatch(graph, "add-issue", {
-        "contextId": "REC-0021", "startDate": "2026-06-03", "startTime": "17:30", "cause": "x",
-        "endDate": "2026-06-02", "endTime": "18:00",
-    })
-    assert backwards["error"]
-    open_one = domain.dispatch(graph, "add-issue", {"contextId": "REC-0021", "startDate": "2026-06-04", "startTime": "08:00", "cause": "Nozzle"})
-    assert open_one.get("error") is None
-    gap = [item for item in domain.gaps(graph) if item["key"] == "stoppage-open"][0]
-    assert gap["ids"] == ["REC-0021"]
-    cloned = domain.dispatch(graph, "clone-recipe", {"contextId": "REC-0021"})
-    assert graph["_ix"]["recipe"][cloned["redirect"]["code"]]["issues"] == []
-    removed = domain.dispatch(graph, "remove-issue", {"contextId": "REC-0021", "index": "1"})
-    assert removed.get("error") is None
-    assert len(graph["_ix"]["recipe"]["REC-0021"]["issues"]) == 1
+def test_recipe_rules_follow_category_roles(plant):
+    index = domain.reindex(plant)
+    recipe = index["recipes"][RECIPE]
+    assert domain.has_base(index, recipe)
+    for entry in list(recipe["inputs"]):
+        if domain.role_of(index, entry["itemId"]) == "base":
+            recipe["inputs"].remove(entry)
+    assert domain.recipe_status(plant, recipe) == "Cannot produce"
 
 
-def test_approvals_material_color_edits_and_delete():
-    graph = plant()
-    graph["presses"].append({"id": "PRS-02", "name": "VE 300"})
-    domain.normalize(graph)
-    domain.reindex(graph)
-    domain.dispatch(graph, "set-approved", {"contextId": "PRD-0001", "presses": "PRS-01,PRS-02,PRS-99"})
-    product = graph["_ix"]["product"]["PRD-0001"]
-    assert product["approvedPressIds"] == ["PRS-01", "PRS-02"]
-    assert domain.approved_without_recipe(graph, product) == ["PRS-02"]
-    gap = [item for item in domain.gaps(graph) if item["key"] == "approved-no-recipe"][0]
-    assert gap["ids"] == ["PRD-0001"]
-    press = domain.detail(graph, "press", "PRS-02")
-    assert press["approved"][0]["status"] == "No recipe here"
-
-    edited = domain.dispatch(graph, "edit-material", {"contextId": "MAT-002", "text": "ροή", "kind": "additive", "account": "9100"})
-    assert edited.get("error") is None
-    assert graph["_ix"]["material"]["MAT-002"]["account"] == "9100"
-    assert domain.dispatch(graph, "edit-color", {"contextId": "COL-001", "code": ""})["error"]
-    domain.dispatch(graph, "edit-color", {"contextId": "COL-001", "code": "10692", "notes": "mix"})
-    assert graph["_ix"]["color"]["COL-001"]["notes"] == "mix"
-
-    deleted = domain.dispatch(graph, "delete-recipe", {"contextId": "REC-0002"})
-    assert deleted["redirect"] == {"kind": "product", "code": "PRD-0001"}
-    assert deleted["dirty"] == {"recipes": ["REC-0002"]}
-    assert "REC-0002" not in graph["_ix"]["recipe"]
+def test_gaps_name_the_open_data(plant):
+    counted = {entry["key"]: entry["count"] for entry in domain.gaps(plant)}
+    assert counted["no-cavities"] == len(plant["molds"])
+    assert counted["stop-no-cause"] == len(plant["stoppages"])
+    assert counted["trial"] == 15
 
 
-def test_search_folds_greek_lookalikes_and_accents():
-    assert domain.fold("ΚΑΛΥΚΑΣ Α100").endswith(domain.fold("A100"))
-    assert domain.fold("ΤΟΣΤ SAFE-T") == domain.fold("τοστ safe-t")
-    assert domain.fold("Αρίδα") == domain.fold("αριδα")
-    graph = plant()
-    name = graph["products"][0]["name"]
-    assert domain.search(graph, name.lower())[0]["id"] == graph["products"][0]["id"]
+def test_a_run_needs_its_full_data(plant):
+    order = act(plant, "new-order", contextKind="item", contextId=ITEM, quantity="5000")["redirect"]["code"]
+    base = dict(contextKind="order", contextId=order, recipe=RECIPE, shiftId="SHF-01", operatorId="WRK-001", startedAt="2026-11-06T05:00:00Z")
+    assert "shift" in act(plant, "add-run", **dict(base, shiftId=""))["error"]
+    assert "operator" in act(plant, "add-run", **dict(base, operatorId=""))["error"]
+    assert "start" in act(plant, "add-run", **dict(base, startedAt=""))["error"]
+    assert "good pieces" in act(plant, "add-run", **dict(base, endedAt="2026-11-06T13:00:00Z"))["error"]
+    assert "before" in act(plant, "add-run", **dict(base, endedAt="2026-11-06T04:00:00Z", good="1"))["error"]
+    assert "but the order is for" in act(plant, "add-run", **dict(base, recipe="REC-0002"))["error"]
+    assert act(plant, "add-run", **base)["redirect"]["kind"] == "run"
 
 
-def test_injection_settings_list_every_standard_label():
-    graph = plant()
-    recipe = graph["_ix"]["recipe"]["REC-0021"]
-    recipe["settings"] = [{"label": "Hold pressure", "value": "60"}, {"label": "Cycle time (s)", "value": "28"},
-                          {"label": "Back pressure P2", "value": "5"}]
-    shown = domain.injection_settings(recipe)
-    assert [item["label"] for item in shown] == list(domain.SETTING_LABELS) + ["Back pressure P2"]
-    assert dict((item["label"], item["value"]) for item in shown)["Hold pressure"] == "60"
-    payload = {"contextId": "REC-0021", "setting::Hold pressure": "", "setting::Injection speed u1": " 45 "}
-    assert domain.dispatch(graph, "edit-injection", payload).get("error") is None
-    assert recipe["settings"] == [{"label": "Injection speed u1", "value": "45"}, {"label": "Back pressure P2", "value": "5"},
-                                  {"label": "Cycle time (s)", "value": "28"}]
+def test_a_stoppage_closes_only_with_a_cause(plant):
+    _, run = _running(plant)
+    result = act(plant, "add-stoppage", contextKind="run", contextId=run, startedAt="2026-11-06T07:00:00Z", endedAt="2026-11-06T08:00:00Z")
+    assert "cause" in result["error"]
+    assert not act(plant, "add-stoppage", contextKind="run", contextId=run, startedAt="2026-11-06T07:00:00Z", description="flash").get("error")
+    closing = dict(contextKind="run", contextId=run, shiftId="SHF-01", operatorId="WRK-001", startedAt="2026-11-06T05:00:00Z",
+                   endedAt="2026-11-06T13:00:00Z", good="4000")
+    assert "still open" in act(plant, "edit-run", **closing)["error"]
 
 
-def test_numeric_fields_reject_text():
-    graph = plant()
-    recipe = graph["_ix"]["recipe"]["REC-0021"]
-    before = recipe.get("cycle")
-    bad = domain.dispatch(graph, "edit-recipe", {"contextId": "REC-0021", "cycle": "abc"})
-    assert bad["error"] == "Cycle has to be a number."
-    assert recipe.get("cycle") == before
-    assert domain.dispatch(graph, "edit-recipe", {"contextId": "REC-0021", "cycle": "31,5"}).get("error") is None
-    assert domain.dispatch(graph, "edit-press", {"contextId": "PRS-01", "changeoverMin": "soon"})["error"]
-    assert domain.dispatch(graph, "edit-mold", {"contextKind": "mold", "contextId": "MLD-0001", "cavities": "four"})["error"]
+def test_run_metrics_leave_out_its_stoppages(plant):
+    _, run = _running(plant)
+    act(plant, "add-stoppage", contextKind="run", contextId=run, startedAt="2026-11-06T07:00:00Z", endedAt="2026-11-06T09:00:00Z", cause="CAU-01")
+    act(plant, "add-scrap", contextKind="run", contextId=run, reason="SCR-01", quantity="60")
+    act(plant, "edit-run", contextKind="run", contextId=run, shiftId="SHF-01", operatorId="WRK-001", startedAt="2026-11-06T05:00:00Z",
+        endedAt="2026-11-06T13:00:00Z", good="5940")
+    page = domain.detail(plant, "run", run)
+    assert (page["hours"], page["downHours"], page["pph"], page["scrapPct"]) == (8.0, 2.0, 1000, 1.0)
+
+
+def test_lots_trace_back_and_forward(plant):
+    _, run = _running(plant)
+    received = act(plant, "receive-lot", item=_fed(plant)[0], number="R-1", receivedAt="2026-11-01T08:00:00Z", quantity="1000")["redirect"]["code"]
+    assert "already exists" in act(plant, "receive-lot", item=_fed(plant)[0], number="R-1", receivedAt="2026-11-01T08:00:00Z", quantity="5")["error"]
+    act(plant, "add-run-input", contextKind="run", contextId=run, lot=received, quantity="25")
+    act(plant, "add-output-lot", contextKind="run", contextId=run, number="061126", quantity="4000")
+    made = plant["lots"][-1]["id"]
+    back = domain.detail(plant, "lot", made)["back"]
+    assert back["run"]["id"] == run and back["inputs"][0]["lot"]["id"] == received
+    forward = domain.detail(plant, "lot", received)["forward"]
+    assert forward["runs"][0]["outputs"][0]["lot"]["id"] == made
+    assert "Block it instead" in act(plant, "delete-lot", contextKind="lot", contextId=received)["error"]
+    assert "used by later runs" not in (act(plant, "delete-run", contextKind="run", contextId=run).get("error") or "")
+
+
+def test_history_blocks_deletes(plant):
+    order, run = _running(plant)
+    assert "Retire it" in act(plant, "delete-recipe", contextKind="recipe", contextId=RECIPE)["error"]
+    assert "Cancel it" in act(plant, "delete-order", contextKind="order", contextId=order)["error"]
+
+
+def test_a_standard_is_one_per_color_and_machine(plant):
+    index = domain.reindex(plant)
+    recipe = index["recipes"][RECIPE]
+    twin = act(plant, "clone-recipe", contextKind="recipe", contextId=RECIPE)["redirect"]["code"]
+    act(plant, "edit-recipe", contextKind="recipe", contextId=twin, status="approved")
+    act(plant, "set-standard", contextKind="recipe", contextId=RECIPE)
+    act(plant, "set-standard", contextKind="recipe", contextId=twin)
+    index = domain.reindex(plant)
+    assert index["recipes"][twin]["standard"] and not index["recipes"][RECIPE]["standard"]
+    assert recipe["machineId"] == index["recipes"][twin]["machineId"]
+
+
+def test_settings_reject_duplicates_without_adding(plant):
+    before = len(plant["stoppage_causes"])
+    assert act(plant, "save-setting", settingKind="cause", name="Mold change", category="Method")["error"]
+    assert len(plant["stoppage_causes"]) == before
+    assert "HH:MM" in act(plant, "save-setting", settingKind="shift", name="Late", start="25:00", end="06:00")["error"]
+
+
+def test_fold_reads_greek_lookalikes_as_latin():
+    assert domain.fold("Α100") == domain.fold("a100")
+    assert domain.search({"items": [{"id": "ITM-1", "name": "ΚΑΛΥΚΑΣ Α100"}]}, "a100")

@@ -5,12 +5,13 @@ from anvil import *
 from cyclops_app import Format, Layout, Nav
 
 _LABELS = {
-    "product": "Product",
+    "item": "Item",
     "mold": "Mold",
-    "press": "Press",
+    "machine": "Machine",
     "recipe": "Recipe",
-    "material": "Raw material",
-    "color": "Color",
+    "base": "Base material",
+    "colorant": "Colorant",
+    "additive": "Additive",
 }
 
 
@@ -24,7 +25,7 @@ def _node(kind, title, meta, nav=None, extra=""):
     root_attr = ' data-root="1"' if extra and "root" in extra.split() else ""
     return (
         '<div class="%s"%s%s><div class="k">%s</div><div class="n">%s</div><div class="m">%s</div></div>'
-        % (classes, nav_attr, root_attr, Layout.esc(_LABELS.get(kind, kind)), Layout.esc(title or ""), Layout.esc(meta or ""))
+        % (classes, nav_attr, root_attr, Layout.esc(_LABELS.get(kind, "Input")), Layout.esc(title or ""), Layout.esc(meta or ""))
     )
 
 
@@ -32,74 +33,67 @@ def _empty(text):
     return {"innerHTML": '<div class="cy-tn cy-empty cy-static"><div class="n">%s</div></div>' % Layout.esc(text)}
 
 
-def _feed(recipe):
+def _inputs(recipe):
     nodes = []
-    for item in recipe.get("materials") or []:
-        account = (" · " + item["account"]) if item.get("account") else " · no code"
-        nodes.append({"innerHTML": _node("material", item.get("label"), "%s%s" % (item.get("id") or "", account), Nav.path("material", item.get("id")))})
-    for item in recipe.get("colors") or []:
-        account = (" · " + item["account"]) if item.get("account") else ""
-        nodes.append({"innerHTML": _node("color", item.get("label"), "%s%s" % (item.get("id") or "", account), Nav.path("color", item.get("id")))})
+    for entry in recipe.get("inputs") or []:
+        share = ("%s%%" % Format.trim(entry["share"])) if entry.get("share") is not None else "share ?"
+        role = entry.get("role") if entry.get("role") in _LABELS else "additive"
+        nodes.append({"innerHTML": _node(role, entry.get("label"), "%s · %s" % (entry.get("id") or "", share), Nav.path("item", entry.get("id")))})
     if not nodes:
-        nodes.append(_empty("No material or color written"))
+        nodes.append(_empty("No input written"))
     return nodes
 
 
 def _recipe_node(recipe, depth):
-    bits = [recipe.get("id") or ""]
-    if recipe.get("cycle") is None:
-        bits.append("no cycle")
-    else:
-        bits.append("%s s" % Format.trim(recipe.get("cycle")))
+    bits = [recipe.get("id") or "", "no cycle" if recipe.get("cycle") is None else "%s s" % Format.trim(recipe.get("cycle"))]
     if recipe.get("standard"):
         bits.append("standard")
     if recipe.get("trial"):
         bits.append("trial row")
     return {
-        "innerHTML": _node("recipe", recipe.get("label"), " · ".join(bit for bit in bits if bit), Nav.path("recipe", recipe.get("id")), "trial" if recipe.get("trial") else ""),
-        "children": _feed(recipe) if depth >= 5 else [],
+        "innerHTML": _node("recipe", recipe.get("label"), " · ".join(bits), Nav.path("recipe", recipe.get("id")), "trial" if recipe.get("trial") else ""),
+        "children": _inputs(recipe) if depth >= 5 else [],
     }
 
 
-def _press_meta(group, recipes):
+def _machine_meta(group, recipes):
     cycles = [recipe.get("cycle") for recipe in recipes if recipe.get("cycle") is not None]
     rates = [recipe.get("pph") for recipe in recipes if recipe.get("pph")]
     cycle = "no cycle" if not cycles else ("%s s" % Format.trim(min(cycles)))
     rate = (" · %s pcs/h" % max(rates)) if rates else ""
-    return "%s · %s · %s%s" % (group.get("pressId") or "", Format.plural(len(recipes), "recipe"), cycle, rate)
+    return "%s · %s · %s%s" % (group.get("machineId") or "", Format.plural(len(recipes), "recipe"), cycle, rate)
 
 
 def build(flow, depth, include_trial):
     flow = flow or {}
     erp = (" · " + flow["erpCode"]) if flow.get("erpCode") else ""
-    root = {
-        "innerHTML": _node("product", flow.get("productName"), "%s%s" % (flow.get("productId") or "", erp), None, "root"),
-        "children": [],
-    }
-    mold = flow.get("mold")
-    if not mold:
+    root = {"innerHTML": _node("item", flow.get("itemName"), "%s%s" % (flow.get("itemId") or "", erp), None, "root"), "children": []}
+    molds = flow.get("molds") or []
+    if not molds:
         root["children"].append(_empty("No mold and no recipe recorded"))
         return root
-    cavities = ("%s cavities" % mold.get("cavities")) if mold.get("cavities") else "cavities unknown"
-    mold_node = {
-        "innerHTML": _node("mold", mold.get("name"), "%s · %s" % (mold.get("id") or "", cavities), Nav.path("mold", mold.get("id"))),
-        "children": [],
-    }
-    root["children"].append(mold_node)
-    hidden = False
-    for group in flow.get("groups") or []:
-        recipes = group.get("recipes") or []
-        visible = recipes if include_trial else [recipe for recipe in recipes if not recipe.get("trial")]
-        if recipes and not visible:
-            hidden = True
-        if not visible:
-            continue
-        mold_node["children"].append({
-            "innerHTML": _node("press", group.get("pressName"), _press_meta(group, visible), Nav.path("press", group.get("pressId"))),
-            "children": [_recipe_node(recipe, depth) for recipe in visible] if depth >= 4 else [],
-        })
-    if not mold_node["children"]:
-        mold_node["children"].append(_empty("Only trial rows exist. Show trial rows to see them." if hidden else "No recipe"))
+    for mold in molds:
+        cavities = ("%s cavities" % mold.get("cavities")) if mold.get("cavities") else "cavities unknown"
+        mold_node = {"innerHTML": _node("mold", mold.get("name"), "%s · %s" % (mold.get("id") or "", cavities), Nav.path("mold", mold.get("id"))), "children": []}
+        hidden = False
+        for group in mold.get("groups") or []:
+            recipes = group.get("recipes") or []
+            visible = recipes if include_trial else [recipe for recipe in recipes if not recipe.get("trial")]
+            if recipes and not visible:
+                hidden = True
+            if not visible:
+                continue
+            mold_node["children"].append({
+                "innerHTML": _node("machine", group.get("machineName"), _machine_meta(group, visible), Nav.path("machine", group.get("machineId"))),
+                "children": [_recipe_node(recipe, depth) for recipe in visible] if depth >= 4 else [],
+            })
+        if not mold_node["children"]:
+            if not hidden:
+                continue
+            mold_node["children"].append(_empty("Only trial rows exist. Show trial rows to see them."))
+        root["children"].append(mold_node)
+    if not root["children"]:
+        root["children"].append(_empty("No recipe"))
     return root
 
 
@@ -134,7 +128,7 @@ class FlowView:
 
     def component(self):
         tools = FlowPanel(spacing="small", align="left")
-        for value, label in ((5, "Full flow"), (4, "Recipes"), (3, "Presses")):
+        for value, label in ((5, "Full flow"), (4, "Recipes"), (3, "Machines")):
             button = Layout.button(label, lambda value=value, **e: self._set_depth(value), primary=value == self.depth)
             self._depth_buttons.append((value, button))
             tools.add_component(button)
@@ -145,15 +139,15 @@ class FlowView:
         self._trial_button = Layout.button("Show trial rows", self._toggle_trial)
         tools.add_component(self._trial_button)
         tools.add_component(Layout.html(
-            '<div class="cy-legend"><span><i class="cy-material"></i>raw material</span>'
-            '<span><i class="cy-color"></i>color</span><span><i class="cy-recipe"></i>recipe</span>'
-            '<span><i class="cy-press"></i>press</span><span><i class="cy-mold"></i>mold</span>'
-            '<span><i class="cy-product"></i>product</span></div>'
+            '<div class="cy-legend"><span><i class="cy-base"></i>base material</span>'
+            '<span><i class="cy-colorant"></i>colorant</span><span><i class="cy-additive"></i>additive</span><span><i class="cy-recipe"></i>recipe</span>'
+            '<span><i class="cy-machine"></i>machine</span><span><i class="cy-mold"></i>mold</span>'
+            '<span><i class="cy-item"></i>item</span></div>'
         ))
         return Layout.stack(
             tools,
             Layout.flat(self.host),
-            Layout.note("Read left to right: material and color feed a recipe, the recipe runs on a press with the mold, and the product comes out. Dashed recipes are trial rows."),
+            Layout.note("Read left to right: inputs feed a recipe, the recipe runs on a machine with the mold, and the item comes out. Dashed recipes are trial rows."),
         )
 
     def _mark(self, pairs, current):

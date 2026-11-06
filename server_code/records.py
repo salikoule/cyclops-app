@@ -1,35 +1,231 @@
 """Plant records to table rows and back.
 
-No Anvil imports, so the mapping can be tested on its own. Writers take ``ref(table, code)``
-and return the row's columns with links resolved through it. Readers take a row (or a dict
-with the same columns) whose links have already been turned into codes.
+No Anvil imports, so the mapping can be tested on its own. ``TABLES`` names every record table
+in the order rows are written (a table only links to tables before it, except the links listed
+in ``LATE``), with its columns as ``(column, key, kind)``:
 
-Numbers are stored as numbers. A recipe's machine settings are the press's own parameters, so
-they sit on the recipe as JSON lists of ``{label, value}`` in the order written: ``temps`` holds
-the barrel zones the press has, ``injection`` the injection page with cooling and screw speed,
-``extra`` the remaining setting-sheet boxes. Values that are plain numbers are numbers; anything
-else ("210/195", "5,5") keeps the setter's text. A "-" for a zone means the press has none.
+- ``text``, ``num``, ``bool``: plain values; an empty number is None.
+- ``date``: an ISO date string; ``moment``: an ISO UTC moment ``YYYY-MM-DDTHH:MM:SSZ``.
+- ``json``: a dict kept as is.
+- ``("link", table)`` and ``("links", table)``: the code, or list of codes, of the linked rows.
+
+``CHILDREN`` are line tables that belong to one record and are written with it, as a list on
+the record (a recipe's inputs, a run's scrap and consumed lots).
+
+A recipe's machine settings are the press's own parameters, so they sit on the recipe as JSON
+lists of ``{label, value}`` in the order written: ``temps`` holds the barrel zones the press
+has, ``injection`` the injection page with cooling and screw speed, ``extra`` the remaining
+setting-sheet boxes. Values that are plain numbers are numbers; anything else ("210/195",
+"5,5") keeps the setter's text.
 """
 
 import datetime
 
-import domain
+TEXT, NUM, BOOL, DATE, MOMENT, JSON = "text", "num", "bool", "date", "moment", "json"
 
+
+def link(table):
+    return ("link", table)
+
+
+def links(table):
+    return ("links", table)
+
+
+TABLES = (
+    ("item_categories", [("name", "name", TEXT), ("item_type", "type", TEXT), ("role", "role", TEXT)]),
+    ("machine_types", [("name", "name", TEXT)]),
+    ("shifts", [("name", "name", TEXT), ("start_time", "start", TEXT), ("end_time", "end", TEXT), ("status", "status", TEXT)]),
+    ("stoppage_causes", [("name", "name", TEXT), ("category", "category", TEXT), ("planned", "planned", BOOL), ("status", "status", TEXT)]),
+    ("scrap_reasons", [("name", "name", TEXT), ("category", "category", TEXT), ("status", "status", TEXT)]),
+    ("machines", [("name", "name", TEXT), ("alias", "alias", TEXT), ("machine_type", "typeId", link("machine_types")),
+                  ("attached_to", "attachedToId", link("machines")), ("floor_number", "floor", NUM), ("serial", "serial", TEXT),
+                  ("euromap", "euromap", TEXT), ("year", "year", TEXT), ("changeover_min", "changeoverMin", NUM),
+                  ("location", "location", TEXT), ("status", "status", TEXT), ("notes", "notes", TEXT)]),
+    ("workers", [("name", "name", TEXT), ("status", "status", TEXT), ("qualified_machines", "machineIds", links("machines"))]),
+    ("items", [("name", "name", TEXT), ("item_type", "type", TEXT), ("category", "categoryId", link("item_categories")),
+               ("uom", "uom", TEXT), ("erp_code", "erpCode", TEXT), ("approved_machines", "approvedMachineIds", links("machines")),
+               ("supplier", "supplier", TEXT), ("properties", "properties", JSON), ("status", "status", TEXT), ("notes", "notes", TEXT)]),
+    ("molds", [("name", "name", TEXT), ("cavities", "cavities", NUM), ("shot_weight_g", "shotWeight", NUM),
+               ("location", "location", TEXT), ("status", "status", TEXT), ("notes", "notes", TEXT)]),
+    ("recipes", [("item", "itemId", link("items")), ("mold", "moldId", link("molds")), ("machine", "machineId", link("machines")),
+                 ("status", "status", TEXT), ("standard", "standard", BOOL), ("cycle_s", "cycle", NUM),
+                 ("settings_note", "settingsNote", TEXT), ("comment", "comment", TEXT)]),
+    ("production_orders", [("item", "itemId", link("items")), ("quantity", "quantity", NUM), ("due_date", "dueDate", DATE),
+                           ("status", "status", TEXT), ("erp_order_no", "erpOrderNo", TEXT), ("notes", "notes", TEXT)]),
+    ("production_runs", [("order", "orderId", link("production_orders")), ("recipe", "recipeId", link("recipes")),
+                         ("shift", "shiftId", link("shifts")), ("operator", "operatorId", link("workers")),
+                         ("started_at", "startedAt", MOMENT), ("ended_at", "endedAt", MOMENT), ("good_qty", "good", NUM),
+                         ("cavities_running", "cavities", NUM), ("cycle_s", "cycle", NUM), ("status", "status", TEXT),
+                         ("notes", "notes", TEXT)]),
+    ("lots", [("number", "number", TEXT), ("item", "itemId", link("items")), ("origin", "origin", TEXT),
+              ("run", "runId", link("production_runs")), ("supplier_lot", "supplierLot", TEXT), ("received_at", "receivedAt", MOMENT),
+              ("quantity", "quantity", NUM), ("status", "status", TEXT), ("notes", "notes", TEXT)]),
+    ("stoppages", [("machine", "machineId", link("machines")), ("run", "runId", link("production_runs")),
+                   ("started_at", "startedAt", MOMENT), ("ended_at", "endedAt", MOMENT), ("cause", "causeId", link("stoppage_causes")),
+                   ("description", "description", TEXT), ("fix", "fix", TEXT), ("reported_by", "reportedById", link("workers"))]),
+)
+COLUMNS = dict(TABLES)
+ORDER = tuple(name for name, _ in TABLES)
+LATE = {"machines": ("attached_to",)}
+
+CHILDREN = (
+    ("recipe_inputs", "recipes", "recipe", "inputs", [("item", "itemId", link("items")), ("share_pct", "share", NUM)]),
+    ("run_scrap", "production_runs", "run", "scrap", [("reason", "reasonId", link("scrap_reasons")), ("quantity", "quantity", NUM)]),
+    ("run_inputs", "production_runs", "run", "inputs", [("lot", "lotId", link("lots")), ("quantity", "quantity", NUM)]),
+)
+CHILDREN_OF = {}
+for _child in CHILDREN:
+    CHILDREN_OF.setdefault(_child[1], []).append(_child)
+
+TEMP_LABELS = (("nozzle", "Nozzle"), ("t6", "T6"), ("t5", "T5"), ("t4", "T4"), ("t3", "T3"), ("t2", "T2"), ("t1", "T1"))
 RECIPE_INJECTION_FIELDS = (("cooling", "Cooling time (s)"), ("screwRpm", "Screw speed (rpm)"))
 RECIPE_EXTRA_FIELDS = (("px", "ΠΧ"), ("py", "ΠΥ"), ("printPieces", "ΤΕΜ εκτύπωση"), ("printTotal", "TOT εκτύπωσης"))
-PRESS_COLUMNS = ("code", "name", "alias", "floor_number", "serial", "robot", "robot_serial", "robot_year", "euromap",
-                 "changeover_min", "lifecycle", "board_location", "board_note")
-PRODUCT_COLUMNS = ("code", "name", "erp_code", "item_type", "lifecycle", "only_on_cards", "notes",
-                   "approved_presses", "lid_basis")
+RECIPE_FIELD_SETTINGS = tuple(label for _, label in RECIPE_INJECTION_FIELDS) + ("Cycle time (s)",)
 
 
 def _text(value):
     return str(value if value is not None else "").strip()
 
 
+def number(value):
+    """A number from a cell or a typed box ("5,5" reads as 5.5), as an int when whole; None when empty or not a number."""
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number_value = float(value)
+    else:
+        try:
+            number_value = float(str(value).strip().replace(",", "."))
+        except ValueError:
+            return None
+    return int(number_value) if number_value.is_integer() else number_value
+
+
+def number_text(value):
+    value = number(value)
+    if value is None:
+        return ""
+    return str(value) if isinstance(value, int) else ("%s" % value).rstrip("0").rstrip(".")
+
+
+def parse_moment(text):
+    """An ISO UTC moment as an aware datetime, or None."""
+    text = _text(text)
+    if not text:
+        return None
+    try:
+        return datetime.datetime.strptime(text[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return None
+
+
+def moment_text(value):
+    if not isinstance(value, datetime.datetime):
+        return ""
+    if value.tzinfo is not None:
+        value = value.astimezone(datetime.timezone.utc)
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _date_in(text):
+    try:
+        return datetime.datetime.strptime(_text(text)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _date_out(value):
+    return value.isoformat() if isinstance(value, datetime.date) else ""
+
+
+def _write(kind, value, ref):
+    if kind == TEXT:
+        return _text(value)
+    if kind == NUM:
+        return number(value)
+    if kind == BOOL:
+        return bool(value)
+    if kind == DATE:
+        return _date_in(value)
+    if kind == MOMENT:
+        return parse_moment(value)
+    if kind == JSON:
+        return dict(value or {}) or None
+    if kind[0] == "link":
+        return ref(kind[1], value) if value else None
+    found = [ref(kind[1], code) for code in value or [] if code]
+    return [row for row in found if row is not None]
+
+
+def _read(kind, value, code_of):
+    if kind == TEXT:
+        return _text(value)
+    if kind == NUM:
+        return number(value)
+    if kind == BOOL:
+        return bool(value)
+    if kind == DATE:
+        return _date_out(value)
+    if kind == MOMENT:
+        return moment_text(value)
+    if kind == JSON:
+        return dict(value or {})
+    if kind[0] == "link":
+        return code_of(kind[1], value) if value is not None else ""
+    return [code for code in (code_of(kind[1], linked) for linked in value or []) if code]
+
+
+def to_row(table, item, ref, skip=()):
+    """The columns of ``table`` for ``item``; ``ref(table, code)`` resolves links, and columns in ``skip`` are left out."""
+    columns = {"code": item["id"]}
+    for column, key, kind in COLUMNS[table]:
+        if column not in skip:
+            columns[column] = _write(kind, item.get(key), ref)
+    if table == "recipes":
+        columns.update(_recipe_settings_row(item))
+    return columns
+
+
+def late_row(table, item, ref):
+    keys = {column: (key, kind) for column, key, kind in COLUMNS[table]}
+    return {column: _write(keys[column][1], item.get(keys[column][0]), ref) for column in LATE.get(table, ())}
+
+
+def to_item(table, row, code_of):
+    """The record for a row (or a dict with the same columns); ``code_of(table, linked_row)`` names a linked row."""
+    item = {"id": row["code"]}
+    for column, key, kind in COLUMNS[table]:
+        item[key] = _read(kind, row[column], code_of)
+    if table == "recipes":
+        item.update(_recipe_settings_item(row))
+    for child, _, _, list_key, _ in CHILDREN_OF.get(table, ()):
+        item[list_key] = []
+    return item
+
+
+def child_rows(child, item, parent_row, ref):
+    """The rows of line table ``child`` for ``item``."""
+    _, _, parent_column, list_key, columns = next(spec for spec in CHILDREN if spec[0] == child)
+    rows = []
+    for entry in item.get(list_key) or []:
+        row = {parent_column: parent_row}
+        for column, key, kind in columns:
+            row[column] = _write(kind, entry.get(key), ref)
+        rows.append(row)
+    return rows
+
+
+def child_item(child, row, code_of):
+    _, _, _, _, columns = next(spec for spec in CHILDREN if spec[0] == child)
+    return {key: _read(kind, row[column], code_of) for column, key, kind in columns}
+
+
+# Recipe machine settings --------------------------------------------------------------------
+
 def _setting_in(text):
-    number = domain.num(text)
-    return domain.whole(number) if number is not None and domain.trim_num(number) == text else text
+    value = number(text)
+    return value if value is not None and number_text(value) == text else text
 
 
 def _settings_in(settings):
@@ -43,353 +239,29 @@ def _settings_in(settings):
 
 
 def _setting_out(value):
-    return domain.trim_num(value) if isinstance(value, (int, float)) else _text(value)
+    return number_text(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else _text(value)
 
 
-def _settings_out(stored):
-    return [{"label": setting["label"], "value": _setting_out(setting["value"])} for setting in stored or []]
-
-
-def _date_in(text):
-    text = _text(text)
-    if not text:
-        return None
-    try:
-        return datetime.datetime.strptime(text, "%Y-%m-%d").date()
-    except ValueError:
-        return None
-
-
-def _date_out(value):
-    return value.isoformat() if value else ""
-
-
-def _ref(ref, table, code):
-    return ref(table, code) if code else None
-
-
-# Writers ----------------------------------------------------------------------------------
-
-def worker_row(name):
-    return {"name": _text(name)}
-
-
-def press_row(item, ref):
-    """The mounted product is set later by ``press_board_row``: products link back to presses."""
-    board = item.get("board") or {}
-    return {
-        "code": item["id"],
-        "name": _text(item.get("name")),
-        "alias": _text(item.get("alias")),
-        "floor_number": domain.whole(item.get("aa")),
-        "serial": _text(item.get("serial")),
-        "robot": _text(item.get("robot")),
-        "robot_serial": _text(item.get("robotSerial")),
-        "robot_year": _text(item.get("robotYear")),
-        "euromap": _text(item.get("euromap")),
-        "changeover_min": domain.whole(item.get("changeoverMin")),
-        "lifecycle": item.get("lifecycle") or "active",
-        "board_location": _text(board.get("location")),
-        "board_note": _text(board.get("note")),
-    }
-
-
-def press_board_row(item, ref):
-    board = item.get("board") or {}
-    return {"mounted_product": _ref(ref, "products", board.get("mountedId"))}
-
-
-def material_row(item, ref):
-    return {
-        "code": item["id"],
-        "grade": _text(item.get("text")),
-        "kind": item.get("kind") or "resin",
-        "supplier": _text(item.get("supplier")),
-        "family": _text(item.get("family")),
-        "mfi": domain.whole(item.get("mfi")),
-        "account": _text(item.get("account")),
-        "invoice_code": _text(item.get("invoiceCode")),
-        "description": _text(item.get("description")),
-        "notes": _text(item.get("notes")),
-        "datasheet_link": _text(item.get("link")),
-        "in_catalog": bool(item.get("catalog")),
-    }
-
-
-def color_row(item, ref):
-    return {
-        "code": item["id"],
-        "label_code": _text(item.get("code")),
-        "name": _text(item.get("name")),
-        "label": _text(item.get("label")),
-        "shade": _text(item.get("shade")),
-        "account": _text(item.get("account")),
-        "notes": _text(item.get("notes")),
-        "datasheet_link": _text(item.get("link")),
-        "in_catalog": bool(item.get("catalog")),
-    }
-
-
-def product_row(item, ref):
-    return {
-        "code": item["id"],
-        "name": _text(item.get("name")),
-        "erp_code": _text(item.get("erpCode")),
-        "item_type": item.get("type") or "part",
-        "lifecycle": item.get("lifecycle") or "active",
-        "only_on_cards": bool(item.get("onlyOnCards")),
-        "notes": _text(item.get("notes")),
-        "approved_presses": [row for row in (_ref(ref, "presses", code) for code in item.get("approvedPressIds") or []) if row is not None],
-        "lid_basis": _text(item.get("lidBasis")) if item.get("lidId") else "",
-    }
-
-
-def product_lid_row(item, ref):
-    """Set after the products exist: the lid is another product."""
-    return {"lid": _ref(ref, "products", item.get("lidId"))}
-
-
-def mold_row(item, ref):
-    return {
-        "code": item["id"],
-        "name": _text(item.get("name")),
-        "product": _ref(ref, "products", item.get("productId")),
-        "cavities": domain.whole(item.get("cavities")),
-        "shot_weight_g": domain.whole(item.get("shotWeight")),
-        "location": _text(item.get("location")),
-        "status": item.get("status") or "in use",
-    }
-
-
-def recipe_row(item, ref):
-    """The product is the mold's product, so it is not stored twice."""
+def _recipe_settings_row(item):
     temps = item.get("temps") or {}
+    injection = [setting for setting in item.get("settings") or [] if _text(setting.get("label")) not in RECIPE_FIELD_SETTINGS]
+    injection += [{"label": label, "value": item.get(key)} for key, label in RECIPE_INJECTION_FIELDS]
     return {
-        "code": item["id"],
-        "mold": _ref(ref, "molds", item.get("moldId")),
-        "press": _ref(ref, "presses", item.get("pressId")),
-        "trial": bool(item.get("trial")),
-        "standard": bool(item.get("standard")),
-        "cycle_s": domain.whole(item.get("cycle")),
-        "product_lot": _text(item.get("productLot")),
-        "status_note": _text(item.get("status")),
-        "comment": _text(item.get("comment")),
-        "settings_note": _text(item.get("settingsNote")),
-        "temps": _settings_in([{"label": label, "value": temps.get(key)} for key, label in domain.TEMP_LABELS
-                               if _text(temps.get(key)) != "-"]),
-        "injection": _settings_in(list(item.get("settings") or [])
-                                  + [{"label": label, "value": item.get(key)} for key, label in RECIPE_INJECTION_FIELDS]),
-        "extra": _settings_in([{"label": label, "value": item.get(key)} for key, label in RECIPE_EXTRA_FIELDS]),
+        "temps": _settings_in({"label": label, "value": temps.get(key)} for key, label in TEMP_LABELS),
+        "injection": _settings_in(injection),
+        "extra": _settings_in({"label": label, "value": item.get(key)} for key, label in RECIPE_EXTRA_FIELDS),
     }
 
 
-def material_slot_rows(item, recipe, ref):
-    return [{
-        "recipe": recipe,
-        "material": _ref(ref, "materials", slot.get("materialId")),
-        "slot": domain.whole(slot.get("slot")) or position + 1,
-        "lot": _text(slot.get("lot")),
-    } for position, slot in enumerate(item.get("materialSlots") or [])]
-
-
-def color_slot_rows(item, recipe, ref):
-    return [{
-        "recipe": recipe,
-        "color": _ref(ref, "colors", slot.get("colorId")),
-        "slot": domain.whole(slot.get("slot")) or position + 1,
-        "lot": _text(slot.get("lot")),
-    } for position, slot in enumerate(item.get("colorSlots") or [])]
-
-
-def stoppage_rows(item, recipe, ref):
-    return [{
-        "recipe": recipe,
-        "worker": _ref(ref, "workers", _text(issue.get("worker"))),
-        "position": position,
-        "start_date": _date_in(issue.get("startDate")),
-        "start_time": _text(issue.get("startTime")),
-        "end_date": _date_in(issue.get("endDate")),
-        "end_time": _text(issue.get("endTime")),
-        "cause": _text(issue.get("cause")),
-        "fix": _text(issue.get("fix")),
-    } for position, issue in enumerate(item.get("issues") or [])]
-
-
-def run_rows(item, recipe, ref):
-    return [{
-        "recipe": recipe,
-        "operator": _ref(ref, "workers", _text(run.get("operator"))),
-        "position": position,
-        "start_date": _date_in(run.get("startDate")),
-        "start_time": _text(run.get("startTime")),
-        "end_date": _date_in(run.get("endDate")),
-        "end_time": _text(run.get("endTime")),
-        "shift": _text(run.get("shift")),
-        "good": domain.whole(run.get("good")),
-        "scrap": domain.whole(run.get("scrap")),
-        "scrap_reason": _text(run.get("scrapReason")),
-        "cycle_s": domain.whole(run.get("cycle")),
-        "cavities": domain.whole(run.get("cavities")),
-        "lot": _text(run.get("lot")),
-        "order_no": _text(run.get("order")),
-        "notes": _text(run.get("notes")),
-        "sample": bool(run.get("sample")),
-    } for position, run in enumerate(item.get("runs") or [])]
-
-
-# Readers ----------------------------------------------------------------------------------
-
-def press_item(row, mounted_code, product_names):
-    return {
-        "id": row["code"],
-        "name": row["name"] or "",
-        "alias": row["alias"] or "",
-        "aa": domain.whole(row["floor_number"]),
-        "serial": row["serial"] or "",
-        "robot": row["robot"] or "",
-        "robotSerial": row["robot_serial"] or "",
-        "robotYear": row["robot_year"] or "",
-        "euromap": row["euromap"] or "",
-        "changeoverMin": domain.whole(row["changeover_min"]),
-        "lifecycle": row["lifecycle"] or "active",
-        "board": {
-            "mountedId": mounted_code or "",
-            "mounted": product_names.get(mounted_code, "") if mounted_code else "",
-            "location": row["board_location"] or "",
-            "note": row["board_note"] or "",
-        },
-    }
-
-
-def material_item(row):
-    return {
-        "id": row["code"],
-        "text": row["grade"] or "",
-        "kind": row["kind"] or "resin",
-        "supplier": row["supplier"] or "",
-        "family": row["family"] or "",
-        "mfi": domain.trim_num(row["mfi"]),
-        "account": row["account"] or "",
-        "invoiceCode": row["invoice_code"] or "",
-        "description": row["description"] or "",
-        "notes": row["notes"] or "",
-        "link": row["datasheet_link"] or "",
-        "catalog": bool(row["in_catalog"]),
-    }
-
-
-def color_item(row):
-    return {
-        "id": row["code"],
-        "code": row["label_code"] or "",
-        "name": row["name"] or "",
-        "label": row["label"] or "",
-        "shade": row["shade"] or "",
-        "account": row["account"] or "",
-        "notes": row["notes"] or "",
-        "link": row["datasheet_link"] or "",
-        "catalog": bool(row["in_catalog"]),
-    }
-
-
-def product_item(row, approved_codes, lid_code):
-    return {
-        "id": row["code"],
-        "name": row["name"] or "",
-        "erpCode": row["erp_code"] or "",
-        "type": row["item_type"] or "part",
-        "lifecycle": row["lifecycle"] or "active",
-        "onlyOnCards": bool(row["only_on_cards"]),
-        "notes": row["notes"] or "",
-        "approvedPressIds": list(approved_codes),
-        "lidId": lid_code or "",
-        "lidBasis": (row["lid_basis"] or "") if lid_code else "",
-    }
-
-
-def mold_item(row, product_code):
-    return {
-        "id": row["code"],
-        "name": row["name"] or "",
-        "productId": product_code or "",
-        "cavities": domain.whole(row["cavities"]),
-        "shotWeight": domain.whole(row["shot_weight_g"]),
-        "location": row["location"] or "",
-        "status": row["status"] or "in use",
-    }
-
-
-def recipe_item(row, mold_code, product_code, press_code):
-    temps = {setting["label"]: setting["value"] for setting in _settings_out(row["temps"])}
-    injection = _settings_out(row["injection"])
-    fields = {setting["label"]: setting["value"] for setting in injection}
-    extra = {setting["label"]: setting["value"] for setting in _settings_out(row["extra"])}
-    item = {
-        "id": row["code"],
-        "productId": product_code or "",
-        "moldId": mold_code or "",
-        "pressId": press_code or "",
-        "trial": bool(row["trial"]),
-        "standard": bool(row["standard"]),
-        "cycle": domain.trim_num(row["cycle_s"]),
-        "productLot": row["product_lot"] or "",
-        "status": row["status_note"] or "",
-        "comment": row["comment"] or "",
-        "settingsNote": row["settings_note"] or "",
-        "temps": {key: temps.get(label, "") for key, label in domain.TEMP_LABELS},
-        "settings": [setting for setting in injection if setting["label"] not in domain.RECIPE_FIELD_SETTINGS],
-        "materialSlots": [],
-        "colorSlots": [],
-        "issues": [],
-        "runs": [],
-    }
+def _recipe_settings_item(row):
+    temps = {setting["label"]: _setting_out(setting["value"]) for setting in row["temps"] or []}
+    injection = [{"label": setting["label"], "value": _setting_out(setting["value"])} for setting in row["injection"] or []]
+    extra = {setting["label"]: _setting_out(setting["value"]) for setting in row["extra"] or []}
+    item = {"temps": {key: temps.get(label, "") for key, label in TEMP_LABELS}}
+    by_label = {setting["label"]: setting["value"] for setting in injection}
     for key, label in RECIPE_INJECTION_FIELDS:
-        item[key] = fields.get(label, "")
+        item[key] = by_label.get(label, "")
+    item["settings"] = [setting for setting in injection if setting["label"] not in RECIPE_FIELD_SETTINGS]
     for key, label in RECIPE_EXTRA_FIELDS:
         item[key] = extra.get(label, "")
     return item
-
-
-def material_slot_item(row, material_code):
-    return {"slot": domain.whole(row["slot"]), "lot": row["lot"] or "", "materialId": material_code or ""}
-
-
-def color_slot_item(row, color_code):
-    return {"slot": domain.whole(row["slot"]), "lot": row["lot"] or "", "colorId": color_code or ""}
-
-
-def stop_times(row):
-    return {"startDate": _date_out(row["start_date"]), "startTime": row["start_time"] or "",
-            "endDate": _date_out(row["end_date"]), "endTime": row["end_time"] or ""}
-
-
-def stoppage_item(row, worker_name):
-    return {
-        "startDate": _date_out(row["start_date"]),
-        "startTime": row["start_time"] or "",
-        "cause": row["cause"] or "",
-        "worker": worker_name or "",
-        "fix": row["fix"] or "",
-        "endDate": _date_out(row["end_date"]),
-        "endTime": row["end_time"] or "",
-    }
-
-
-def run_item(row, operator_name):
-    return {
-        "startDate": _date_out(row["start_date"]),
-        "startTime": row["start_time"] or "",
-        "endDate": _date_out(row["end_date"]),
-        "endTime": row["end_time"] or "",
-        "shift": row["shift"] or "",
-        "operator": operator_name or "",
-        "good": domain.trim_num(row["good"]),
-        "scrap": domain.trim_num(row["scrap"]),
-        "scrapReason": row["scrap_reason"] or "",
-        "cycle": domain.trim_num(row["cycle_s"]),
-        "cavities": domain.trim_num(row["cavities"]),
-        "lot": row["lot"] or "",
-        "order": row["order_no"] or "",
-        "notes": row["notes"] or "",
-        "sample": bool(row["sample"]),
-    }

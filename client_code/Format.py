@@ -1,6 +1,45 @@
-"""Small HTML fragments for ids, status, and pills."""
+"""Small HTML fragments for ids, status, and pills, and moments in local time."""
+
+from datetime import datetime
+
+import anvil.tz
 
 from cyclops_app import Layout, Nav
+
+
+def local(moment):
+    """An ISO UTC moment from the server as a local datetime, or None."""
+    try:
+        parsed = datetime.strptime(str(moment or "")[:19], "%Y-%m-%dT%H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+    return parsed.replace(tzinfo=anvil.tz.tzutc()).astimezone(anvil.tz.tzlocal())
+
+
+def utc(day, clock):
+    """A local day and HH:MM as an ISO UTC moment; "" without a day; the bare day when the time is missing, which the server refuses."""
+    if not day:
+        return ""
+    if not clock:
+        return day.isoformat()
+    try:
+        hour, minute = [int(part) for part in str(clock).replace(".", ":").split(":")[:2]]
+        moment = datetime(day.year, day.month, day.day, hour, minute, tzinfo=anvil.tz.tzlocal())
+    except (TypeError, ValueError):
+        return day.isoformat()
+    return moment.astimezone(anvil.tz.tzutc()).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def when(moment, fallback="—"):
+    shown = local(moment)
+    return shown.strftime("%d/%m/%y %H:%M") if shown else fallback
+
+
+def day(value, fallback="—"):
+    text = str(value or "")
+    if len(text) < 10:
+        return fallback
+    return "%s/%s/%s" % (text[8:10], text[5:7], text[0:4])
 
 
 def trim(value):

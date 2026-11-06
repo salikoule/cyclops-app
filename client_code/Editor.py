@@ -1,18 +1,14 @@
-"""Record editors in a side drawer. Field values go to cyclops_apply as strings."""
+"""Record editors in a side drawer. Field values go to cyclops_apply as strings; moments as ISO UTC."""
 
 from datetime import datetime
 
 from anvil import *
-import anvil.js
 from craftify_library.CraftifyUtils import dialogs, drawer
 from craftify_library.CustomComponents.TimePicker import TimePicker
 
-from cyclops_app import Data, Layout
+from cyclops_app import Data, Format, Layout
 
 WIDE = ("area", "checks", "datetime")
-LOGS = ("issue", "run")
-_REMOVE = {"issue": ("remove-issue", "Delete this stoppage?", "The record of this stop and its fix is removed from the recipe."),
-           "run": ("remove-run", "Delete this run?", "The pieces, scrap, and settings logged for this run are removed.")}
 
 
 def _text(value):
@@ -29,15 +25,22 @@ def _as_date(value):
 
 
 class _Moment:
-    """A day picker and a time box side by side. Picking a day needs no Apply, and the time stays optional."""
+    """A day picker and a time box side by side, in local time."""
 
-    def __init__(self, date_text, time_text):
-        self.day = DatePicker(format="%d %b %Y", date=_as_date(date_text), pick_time=False, placeholder="Not set")
-        self.clock = TimePicker(time=str(time_text or "").strip().replace(".", ":"), placeholder="HH:MM")
+    def __init__(self, moment, default_now=False):
+        shown = Format.local(moment)
+        if shown is None and default_now:
+            shown = datetime.now()
+            shown = shown.replace(minute=shown.minute - shown.minute % 5)
+        self.day = DatePicker(format="%d %b %Y", date=shown.date() if shown else None, pick_time=False, placeholder="Not set")
+        self.clock = TimePicker(time=shown.strftime("%H:%M") if shown else "", placeholder="HH:MM")
         self.panel = Layout.grid("minmax(0, 1fr) 120px", self.day, self.clock)
 
     def parts(self):
         return (self.day.date.isoformat() if self.day.date else ""), (self.clock.time or "")
+
+    def value(self):
+        return Format.utc(self.day.date, self.clock.time or "")
 
     def set_event_handler(self, name, handler):
         self.day.set_event_handler(name, handler)
@@ -81,7 +84,7 @@ def _widget(field):
         widget = DatePicker(format="%d %b %Y", date=_as_date(field.get("value")), pick_time=False)
         return widget, widget
     if kind == "datetime":
-        moment = _Moment(field.get("date"), field.get("time"))
+        moment = _Moment(field.get("value"), field.get("now"))
         return moment, moment.panel
     widget = TextBox(text=_text(field.get("value")), placeholder=field.get("placeholder") or "")
     if kind == "number":
@@ -90,7 +93,7 @@ def _widget(field):
 
 
 def _read(widget):
-    if isinstance(widget, _Checks):
+    if isinstance(widget, (_Checks, _Moment)):
         return widget.value()
     if isinstance(widget, DropDown):
         return widget.selected_value or ""
@@ -109,9 +112,8 @@ def _order(first, then, box, field):
     root = hint.parentElement
 
     def check(**event_args):
-        (start_day, start_time), (end_day, end_time) = first.parts(), then.parts()
-        reversed_pair = bool(start_day and end_day and (
-            end_day < start_day or (end_day == start_day and start_time and end_time and end_time < start_time)))
+        start, end = first.value(), then.value()
+        reversed_pair = bool(start.endswith("Z") and end.endswith("Z") and end < start)
         hint.textContent = field.get("after_error") if reversed_pair else usual
         if reversed_pair:
             root.classList.add("is-bad")
@@ -123,12 +125,14 @@ def _order(first, then, box, field):
     check()
 
 
-def _follow(parent, child, groups, empty):
-    """Refill ``child`` with ``groups[parent value]`` whenever the parent dropdown changes."""
+def _follow(parent, child, groups, empty, keep):
+    """Refill ``child`` with ``groups[parent value]`` whenever the parent dropdown changes; ``keep`` stays selected while it is offered."""
     def refill(**event_args):
         options = groups.get(parent.selected_value) or []
         child.items = [(opt.get("label") or "", opt.get("value")) for opt in options] or [(empty, "")]
-        child.selected_value = options[0].get("value") if options else ""
+        values = [opt.get("value") for opt in options]
+        child.selected_value = keep["value"] if keep["value"] in values else (values[0] if values else "")
+        keep["value"] = None
 
     parent.set_event_handler("change", refill)
     refill()
@@ -169,7 +173,8 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
     flush()
     for field in fields:
         if field.get("follows") in widgets:
-            _follow(widgets[field["follows"]], widgets[field["name"]], field.get("groups") or {}, field.get("empty") or "")
+            _follow(widgets[field["follows"]], widgets[field["name"]], field.get("groups") or {}, field.get("empty") or "",
+                    {"value": field.get("value")})
     error = Layout.html('<p class="bc-note bc-note-warn cy-form-error" anvil-name="msg"></p>')
     content = Layout.stack(error, *rows)
     for name, (field, box) in moments.items():
@@ -177,14 +182,7 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
             _order(widgets[field["after"]], widgets[name], box, field)
 
     def values():
-        out = {}
-        for name, widget in widgets.items():
-            if name not in moments:
-                out[name] = _read(widget)
-                continue
-            day_key, time_key = moments[name][0]["keys"]
-            out[day_key], out[time_key] = widget.parts()
-        return out
+        return {name: _read(widget) for name, widget in widgets.items()}
 
     initial = values()
     holder = {"drawer": None}
@@ -195,29 +193,27 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
         if holder["drawer"] is not None:
             holder["drawer"].close(force=force)
 
+    def report(problem):
+        error.dom_nodes["msg"].textContent = problem or ""
+        if problem:
+            error.dom_nodes["msg"].classList.add("is-on")
+        else:
+            error.dom_nodes["msg"].classList.remove("is-on")
+
     def save(**event_args):
-        error.dom_nodes["msg"].textContent = ""
-        error.dom_nodes["msg"].classList.remove("is-on")
+        report("")
         save_button.enabled = False
         try:
             problem = on_save(values(), close)
         finally:
             save_button.enabled = True
-        if problem:
-            error.dom_nodes["msg"].textContent = problem
-            error.dom_nodes["msg"].classList.add("is-on")
+        report(problem)
 
     save_button.set_event_handler("click", save)
     cancel_button.set_event_handler("click", lambda **e: close(force=False))
     footer = (cancel_button, save_button)
     if on_delete is not None:
-        def delete(**event_args):
-            problem = on_delete(close)
-            if problem:
-                error.dom_nodes["msg"].textContent = problem
-                error.dom_nodes["msg"].classList.add("is-on")
-
-        footer = (Layout.button("Delete", delete, danger=True),) + footer
+        footer = (Layout.button("Delete", lambda **e: report(on_delete(close)), danger=True),) + footer
     holder["drawer"] = drawer.open(
         content,
         host=get_open_form(),
@@ -232,10 +228,6 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
     return holder["drawer"]
 
 
-def _blank(label):
-    return {"value": "", "label": label}
-
-
 def open_editor(screen, action, extra=None):
     extra = extra or {}
     spec = _spec(screen, action, extra)
@@ -243,283 +235,325 @@ def open_editor(screen, action, extra=None):
         return False
     title, fields, hint = spec[:3]
     save_text = spec[3] if len(spec) > 3 else "Save"
-    eyebrow = (screen.data or {}).get("id") or ""
-    on_save = lambda payload, close: screen.apply(action, payload, close)
+    removal = spec[4] if len(spec) > 4 else None
+    eyebrow = (extra.get("row") or {}).get("id") or (screen.data or {}).get("id") or ""
     on_delete = None
-    row = extra.get("row") or {}
-    if screen.kind in LOGS or row or action in ("add-issue", "add-run"):
-        eyebrow = row.get("id") or eyebrow
-
-        def on_save(payload, close):
-            recipe = row.get("id") or payload.get("recipe") or (screen.code if screen.kind == "recipe" else "")
-            if not recipe:
-                return "Choose the recipe that was running."
-            return screen.apply(action, dict(payload, contextKind="recipe", contextId=recipe), close)
-
-    if row and action[5:] in _REMOVE:
-        remove, question, detail = _REMOVE[action[5:]]
+    if removal:
+        remove, question, detail, payload = removal
 
         def on_delete(close):
             if not dialogs.confirm(detail, title=question, confirm_text="Delete", danger=True):
                 return None
-            return screen.apply(remove, {"contextKind": "recipe", "contextId": row.get("id"), "index": row.get("index")}, close)
+            return screen.apply(remove, payload, close)
 
-    show(title, fields, on_save, hint, eyebrow=eyebrow, save_text=save_text, on_delete=on_delete)
+    show(title, fields, lambda payload, close: screen.apply(action, payload, close), hint, eyebrow=eyebrow,
+         save_text=save_text, on_delete=on_delete)
     return True
 
 
-def _worker_options(workers, current):
-    options = sorted(workers or [], key=lambda opt: (opt.get("label") or opt.get("value") or "").lower())
-    if current and current not in [opt.get("value") for opt in options]:
-        options.append({"label": current, "value": current})
-    return [{"label": "Not recorded", "value": ""}] + options
+def _blank(label):
+    return {"value": "", "label": label}
 
 
-def _now_rounded():
-    now = datetime.now()
-    return now.strftime("%Y-%m-%d"), "%02d:%02d" % (now.hour, now.minute - now.minute % 5)
+def _sorted(options):
+    return sorted(options or [], key=lambda opt: (opt.get("label") or "").lower())
 
 
-def _shift_at(time_text):
-    try:
-        hour = int(str(time_text or "")[:2])
-    except ValueError:
-        return ""
-    return "morning" if 6 <= hour < 14 else ("afternoon" if 14 <= hour < 22 else "night")
+def _moment(name, label, value="", now=False, after=None, after_error="", hint=""):
+    return {"name": name, "label": label, "type": "datetime", "value": value, "now": now, "after": after,
+            "after_error": after_error, "hint": hint}
 
 
-def _job_fields(choices):
-    return [
-        {"name": "press", "label": "Press", "type": "select", "options": [_blank("Choose a press")] + (choices.get("presses") or [])},
-        {"name": "recipe", "label": "Recipe that was running", "type": "select", "options": [], "follows": "press", "wide": True,
-         "groups": choices.get("recipesByPress") or {}, "empty": "Choose a press first"},
-    ]
+def _shift_now(choices):
+    now = datetime.now().strftime("%H:%M")
+    for shift in choices.get("shifts") or []:
+        start, end = shift.get("start") or "", shift.get("end") or ""
+        if (start <= now < end) if start < end else (now >= start or now < end):
+            return shift["value"]
+    return ""
 
 
-def _run_fields(run, choices):
-    start_date, start_time = run.get("startDate"), run.get("startTime")
-    if not run:
-        start_date, start_time = _now_rounded()
-    return [
-        {"name": "start", "label": "Started", "type": "datetime", "keys": ("startDate", "startTime"), "date": start_date, "time": start_time},
-        {"name": "end", "label": "Ended", "type": "datetime", "keys": ("endDate", "endTime"), "date": run.get("endDate"), "time": run.get("endTime"),
-         "after": "start", "after_error": "The end is before the start.", "hint": "Leave empty while the job is still running."},
-        {"name": "shift", "label": "Shift", "type": "select", "options": [_blank("Not recorded")] + (choices.get("shifts") or []),
-         "value": run.get("shift") if run else _shift_at(start_time)},
-        {"name": "operator", "label": "Operator", "type": "select", "options": _worker_options(choices.get("workers") or [], run.get("operator")), "value": run.get("operator") or ""},
+def _run_fields(run, choices, order_field=None, recipes=None):
+    fields = []
+    if order_field is not None:
+        fields.append(order_field)
+    if recipes is not None:
+        fields.append(recipes)
+    fields.extend([
+        _moment("startedAt", "Started", run.get("startedAt"), now=not run),
+        _moment("endedAt", "Ended", run.get("endedAt"), after="startedAt", after_error="The end is before the start.",
+                hint="Leave empty while the job is still running. Closing it needs the good pieces."),
+        {"name": "shiftId", "label": "Shift", "type": "select", "options": [_blank("Choose the shift")] + (choices.get("shifts") or []),
+         "value": run.get("shiftId") if run else _shift_now(choices)},
+        {"name": "operatorId", "label": "Operator", "type": "select", "options": [_blank("Choose the operator")] + _sorted(choices.get("workers")),
+         "value": run.get("operatorId") or ""},
         {"name": "good", "label": "Good pieces", "type": "number", "value": run.get("good")},
-        {"name": "scrap", "label": "Scrap pieces", "type": "number", "value": run.get("scrap")},
-        {"name": "scrapReason", "label": "Scrap reason", "value": run.get("scrapReason"), "placeholder": "short shots, flash, streaks…"},
         {"name": "cycle", "label": "Actual cycle (s)", "type": "number", "value": run.get("cycle"), "placeholder": "from the press display"},
         {"name": "cavities", "label": "Cavities running", "type": "number", "value": run.get("cavities"), "placeholder": "blocked ones excluded"},
-        {"name": "lot", "label": "Product lot", "value": run.get("lot"), "placeholder": "printed on the boxes, e.g. 060526"},
-        {"name": "order", "label": "Order / ERP no.", "value": run.get("order")},
         {"name": "notes", "label": "Notes", "type": "area", "value": run.get("notes"), "height": 64},
+    ])
+    return fields
+
+
+def _stoppage_fields(stop, choices, machine=None, run=None):
+    fields = []
+    if machine is not None:
+        fields.append(machine)
+    if run is not None:
+        fields.append(run)
+    fields.extend([
+        _moment("startedAt", "Stopped at", stop.get("startedAt"), now=not stop),
+        _moment("endedAt", "Restarted at", stop.get("endedAt"), after="startedAt", after_error="The restart is before the stop.",
+                hint="Leave empty while the machine is still down. Closing it needs the cause."),
+        {"name": "cause", "label": "Cause", "type": "select", "options": [_blank("Not known yet")] + (choices.get("causes") or []),
+         "value": stop.get("causeId") or "", "wide": True},
+        {"name": "reportedBy", "label": "Reported by", "type": "select", "options": [_blank("Not recorded")] + _sorted(choices.get("workers")),
+         "value": stop.get("reportedById") or ""},
+        {"name": "description", "label": "What was seen", "type": "area", "value": stop.get("description")},
+        {"name": "fix", "label": "What was done", "type": "area", "value": stop.get("fix")},
+    ])
+    return fields
+
+
+def _runs_by_machine(choices):
+    return {code: [_blank("No run (machine idle)")] + runs for code, runs in (choices.get("runsByMachine") or {}).items()}
+
+
+def _machine_run_fields(choices, stop):
+    machine = {"name": "machine", "label": "Machine", "type": "select", "options": [_blank("Choose the machine")] + (choices.get("machines") or []),
+               "value": stop.get("machineId") or ""}
+    run = {"name": "run", "label": "During run", "type": "select", "options": [], "follows": "machine", "wide": True,
+           "groups": _runs_by_machine(choices), "empty": "No run logged on this machine", "value": stop.get("runId") or ""}
+    return machine, run
+
+
+def _item_fields(data, choices, item_type):
+    properties = data.get("properties") or []
+    fields = [
+        {"name": "name", "label": "Name", "value": data.get("name"), "wide": True},
+        {"name": "type", "label": "Type", "type": "select", "options": choices.get("types") or [], "value": item_type},
+        {"name": "categoryId", "label": "Category", "type": "select", "options": [], "follows": "type",
+         "groups": choices.get("categoriesByType") or {}, "empty": "Add a category for this type in Settings", "value": data.get("categoryId")},
+        {"name": "uom", "label": "Unit", "type": "select", "options": choices.get("uoms") or [], "value": data.get("uom") or ("kg" if item_type == "RAW" else "pcs")},
+        {"name": "erpCode", "label": "ERP code", "value": data.get("erpCode"), "placeholder": "from the ERP"},
+        {"name": "supplier", "label": "Supplier", "value": data.get("supplier")},
     ]
+    if data.get("id"):
+        fields.append({"name": "status", "label": "Status", "type": "select", "options": choices.get("statuses") or [], "value": data.get("itemStatus")})
+    for entry in properties:
+        fields.append({"name": "prop::" + entry["key"], "label": entry["label"], "value": entry.get("value")})
+    if data.get("id"):
+        fields.append({"name": "notes", "label": "Notes", "type": "area", "value": data.get("notes"), "height": 64})
+    return fields
 
 
-def _issue_fields(issue, workers):
-    now = datetime.now()
-    start_date, start_time = issue.get("startDate"), issue.get("startTime")
-    if not issue:
-        start_date, start_time = now.strftime("%Y-%m-%d"), "%02d:%02d" % (now.hour, now.minute - now.minute % 5)
+def _machine_fields(data, choices):
+    others = [opt for opt in choices.get("machines") or [] if opt.get("value") != data.get("id")]
     return [
-        {"name": "start", "label": "Stopped at", "type": "datetime", "keys": ("startDate", "startTime"), "date": start_date, "time": start_time},
-        {"name": "end", "label": "Restarted at", "type": "datetime", "keys": ("endDate", "endTime"), "date": issue.get("endDate"), "time": issue.get("endTime"),
-         "after": "start", "after_error": "The restart is before the stop.", "hint": "Leave empty while the press is still down."},
-        {"name": "worker", "label": "Reported by", "type": "select", "options": _worker_options(workers, issue.get("worker")), "value": issue.get("worker") or ""},
-        {"name": "cause", "label": "What stopped it", "type": "area", "value": issue.get("cause")},
-        {"name": "fix", "label": "What was done", "type": "area", "value": issue.get("fix")},
+        {"name": "name", "label": "Name", "value": data.get("name")},
+        {"name": "typeId", "label": "Type", "type": "select", "options": choices.get("machineTypes") or [], "value": data.get("typeId")},
+        {"name": "attachedToId", "label": "Attached to", "type": "select", "options": [_blank("Stands alone")] + others, "value": data.get("attachedToId") or ""},
+        {"name": "alias", "label": "Alias", "value": data.get("alias")},
+        {"name": "euromap", "label": "EUROMAP class", "value": data.get("euromap")},
+        {"name": "serial", "label": "Serial", "value": data.get("serial")},
+        {"name": "year", "label": "Year", "value": data.get("year")},
+        {"name": "floor", "label": "Floor number", "type": "number", "value": data.get("floor")},
+        {"name": "changeoverMin", "label": "Changeover (min)", "type": "number", "value": data.get("changeoverMin")},
+        {"name": "location", "label": "Location", "value": data.get("location")},
+        {"name": "status", "label": "Status", "type": "select", "options": choices.get("statuses") or [], "value": data.get("machineStatus") or "active"},
+        {"name": "notes", "label": "Notes", "type": "area", "value": data.get("notes"), "height": 64},
     ]
+
+
+def _mold_fields(mold, choices):
+    return [
+        {"name": "name", "label": "Name", "value": mold.get("name"), "wide": True},
+        {"name": "cavities", "label": "Cavities", "type": "number", "value": mold.get("cavities")},
+        {"name": "shotWeight", "label": "Shot weight (g)", "type": "number", "value": mold.get("shotWeight")},
+        {"name": "location", "label": "Location", "value": mold.get("location")},
+        {"name": "status", "label": "Status", "type": "select", "options": choices.get("moldStatuses") or [], "value": mold.get("moldStatus") or "in use"},
+        {"name": "notes", "label": "Notes", "type": "area", "value": mold.get("notes"), "height": 64},
+    ]
+
+
+def _order_fields(order, choices):
+    return [
+        {"name": "item", "label": "Item to make", "type": "select", "options": [_blank("Choose the item")] + (choices.get("made") or []),
+         "value": order.get("itemId") or "", "wide": True},
+        {"name": "quantity", "label": "Quantity", "type": "number", "value": order.get("quantity")},
+        {"name": "dueDate", "label": "Due", "type": "date", "value": order.get("dueDate")},
+        {"name": "erpOrderNo", "label": "ERP order no.", "value": order.get("erpOrderNo")},
+        {"name": "status", "label": "Status", "type": "select", "options": choices.get("orderStatuses") or [], "value": order.get("orderStatus") or "planned"},
+        {"name": "notes", "label": "Notes", "type": "area", "value": order.get("notes"), "height": 64},
+    ]
+
+
+def _setting_spec(kind, entry, choices):
+    entry = entry or {}
+    fields = [{"name": "settingKind", "type": "hidden", "value": kind}, {"name": "code", "type": "hidden", "value": entry.get("id") or ""},
+              {"name": "name", "label": "Name", "value": entry.get("name"), "wide": True}]
+    if kind == "shift":
+        fields += [{"name": "start", "label": "Starts", "value": entry.get("start"), "placeholder": "06:00"},
+                   {"name": "end", "label": "Ends", "value": entry.get("end"), "placeholder": "14:00"}]
+    if kind in ("cause", "reason"):
+        fields.append({"name": "category", "label": "6M category", "type": "select", "options": choices.get("fishbone") or [],
+                       "value": entry.get("category") or "Machine"})
+    if kind == "cause":
+        fields.append({"name": "planned", "label": "Planned stop", "type": "select", "value": "yes" if entry.get("planned") else "no",
+                       "options": [{"value": "no", "label": "No, a breakdown or a fault"}, {"value": "yes", "label": "Yes (mold change, maintenance)"}]})
+    if kind == "category":
+        fields += [{"name": "type", "label": "Item type", "type": "select", "options": choices.get("types") or [], "value": entry.get("type") or "RAW"},
+                   {"name": "role", "label": "Role in a recipe", "type": "select", "options": choices.get("roles") or [], "value": entry.get("role") or "",
+                    "hint": "Raw materials only. A recipe needs at least one base input; colorants make its color."}]
+    if kind == "worker":
+        fields.append({"name": "machines", "label": "Qualified on", "type": "checks", "options": choices.get("presses") or [],
+                       "value": entry.get("machineIds") or []})
+    if "status" in entry or kind in ("shift", "cause", "reason", "worker"):
+        fields.append({"name": "status", "label": "Status", "type": "select", "options": choices.get("statuses") or [], "value": entry.get("status") or "active"})
+    titles = {"shift": "shift", "cause": "stoppage cause", "reason": "scrap reason", "category": "item category",
+              "machineType": "machine type", "worker": "worker"}
+    title = ("Edit %s" if entry.get("id") else "New %s") % titles.get(kind, "setting")
+    return (title, fields, "Retire a value instead of deleting it, so the records that use it keep it.")
 
 
 def _spec(screen, action, extra):
     choices = Data.choices()
     data = screen.data or {}
-    if action == "new-product":
-        return ("New product", [
-            {"name": "name", "label": "Name"},
-            {"name": "type", "label": "Type", "type": "select", "options": choices.get("types") or [], "value": "part"},
-            {"name": "erp", "label": "ERP code"},
-        ], "", "Create product")
-    if action == "new-mold":
-        return ("New mold", [
-            {"name": "name", "label": "Mold name"},
-            {"name": "product", "label": "Makes", "type": "select", "options": [_blank("Choose a product")] + (choices.get("products") or [])},
-            {"name": "cavities", "label": "Cavities", "type": "number"},
-            {"name": "shot", "label": "Shot weight (g)", "type": "number"},
-        ], "", "Create mold")
-    if action == "new-press":
-        return ("New press", [
-            {"name": "name", "label": "Name"},
-            {"name": "euromap", "label": "EUROMAP class"},
-            {"name": "changeover", "label": "Changeover (min)", "type": "number"},
-        ], "", "Create press")
-    if action == "new-material":
-        return ("New raw material", [
-            {"name": "text", "label": "Grade"},
-            {"name": "kind", "label": "Type", "type": "select", "options": choices.get("kinds") or [], "value": "resin"},
-            {"name": "supplier", "label": "Supplier"},
-            {"name": "family", "label": "Family"},
-            {"name": "account", "label": "Accounting code"},
-        ], "Only resin and regrind count as a base material. A setup with additives or colors alone is flagged Cannot produce.", "Create material")
-    if action == "new-color":
-        return ("New color", [
-            {"name": "name", "label": "Color"},
-            {"name": "code", "label": "Label code"},
-            {"name": "account", "label": "Accounting code"},
-        ], "", "Create color")
-    if action == "edit-product":
-        return ("Edit product", [
-            {"name": "name", "label": "Name", "value": data.get("name")},
-            {"name": "type", "label": "Type", "type": "select", "options": choices.get("types") or [], "value": data.get("type")},
-            {"name": "lifecycle", "label": "Lifecycle", "type": "select", "options": choices.get("lifecycles") or [], "value": data.get("lifecycle")},
-            {"name": "erpCode", "label": "ERP code", "value": data.get("erpCode"), "placeholder": "from the ERP"},
-            {"name": "notes", "label": "Notes", "type": "area", "value": data.get("notes")},
-        ], "The ERP code is what lets orders and stock meet this record. Status is otherwise computed from the setups.")
+    row = extra.get("row") or {}
+    if action == "new-item":
+        return ("New item", _item_fields({}, choices, extra.get("type") or "SFG"), "Every product, part, and material is an item. The type and category decide where it is used.", "Create item")
+    if action == "edit-item":
+        return ("Edit item", _item_fields(data, choices, data.get("type")), "The ERP code is what lets orders and stock meet this record.")
     if action == "set-approved":
-        return ("Approved presses", [
-            {"name": "presses", "label": "This product may run on", "type": "checks", "options": choices.get("presses") or [], "value": data.get("approvedPressIds") or []},
-        ], "The product sheet's press columns. A press that is approved but has no recipe shows up as a gap for the planner.")
+        return ("Approved machines", [
+            {"name": "machines", "label": "This item may run on", "type": "checks", "options": choices.get("presses") or [], "value": data.get("approvedMachineIds") or []},
+        ], "A machine that is approved but has no recipe shows up as a gap for the planner.")
+    if action == "new-mold":
+        return ("New mold", _mold_fields({}, choices), "", "Create mold")
     if action == "edit-mold":
-        mold = data if screen.kind == "mold" else (data.get("mold") or None)
-        if not mold:
-            Notification("This product has no mold yet. Add a recipe and one will be created.", style="warning", timeout=4).show()
-            return None
-        return ("Edit mold %s" % mold.get("id"), [
-            {"name": "cavities", "label": "Cavities", "type": "number", "value": mold.get("cavities")},
-            {"name": "shotWeight", "label": "Shot weight (g)", "type": "number", "value": mold.get("shotWeight")},
-            {"name": "location", "label": "Location", "value": mold.get("location")},
-            {"name": "status", "label": "Status", "type": "select", "options": choices.get("moldStatuses") or [], "value": mold.get("moldStatus") or mold.get("status") or "in use"},
-        ], "Cavities turn every cycle time of this mold into pieces per hour. Shot weight turns a run into kilograms of resin.")
-    if action == "edit-press":
-        return ("Edit press %s" % data.get("name"), [
-            {"name": "lifecycle", "label": "Lifecycle", "type": "select", "options": choices.get("lifecycles") or [], "value": data.get("lifecycle")},
-            {"name": "changeoverMin", "label": "Changeover (min)", "type": "number", "value": data.get("changeoverMin")},
-            {"name": "mounted", "label": "On the board", "type": "select",
-             "options": [_blank("Nothing mounted")] + (choices.get("products") or []), "value": data.get("mountedId") or ""},
-            {"name": "location", "label": "Board note", "value": data.get("location")},
-            {"name": "euromap", "label": "EUROMAP class", "value": data.get("euromap")},
-            {"name": "serial", "label": "Serial", "value": data.get("serial")},
-            {"name": "robot", "label": "Robot", "value": data.get("robot")},
-            {"name": "robotSerial", "label": "Robot serial", "value": data.get("robotSerial")},
-            {"name": "robotYear", "label": "Robot year", "value": data.get("robotYear")},
-        ], "Changeover minutes let the planner sequence mold and color changes.")
+        return ("Edit mold %s" % data.get("id"), _mold_fields(data, choices),
+                "Cavities turn every cycle time of this mold into pieces per hour. Shot weight turns a run into kilograms of resin.")
+    if action == "new-machine":
+        return ("New machine", _machine_fields({}, choices), "A robot or a dryer is a machine too, attached to its press.", "Create machine")
+    if action == "edit-machine":
+        return ("Edit machine", _machine_fields(data, choices), "Changeover minutes let the planner sequence mold and color changes.")
+    if action == "add-recipe":
+        molds = [opt for opt in choices.get("molds") or [] if opt.get("value") in (data.get("molds") or [])]
+        others = [opt for opt in choices.get("molds") or [] if opt.get("value") not in (data.get("molds") or [])]
+        return ("Add a recipe", [
+            {"name": "machine", "label": "Machine", "type": "select", "options": choices.get("presses") or []},
+            {"name": "mold", "label": "Mold", "type": "select", "options": molds + [_blank("New mold for this item")] + others},
+            {"name": "from", "label": "Start from", "type": "select", "options": [_blank("Empty recipe")] + (data.get("liveRecipes") or []), "wide": True},
+            {"name": "color", "label": "Colorant (optional)", "type": "select", "options": [_blank("Keep / none")] + (choices.get("colorants") or []), "wide": True},
+        ], "A new machine for this item, or a new color on a machine, is a new recipe.", "Create recipe")
     if action == "edit-recipe":
         temps = data.get("temps") or {}
-        fields = [{"name": "temp_" + key, "label": label + " °C", "value": temps.get(key)} for key, label in (
-            ("nozzle", "Nozzle"), ("t6", "T6"), ("t5", "T5"), ("t4", "T4"), ("t3", "T3"), ("t2", "T2"), ("t1", "T1"),
-        )]
+        fields = [{"name": "temp_" + zone["key"], "label": zone["label"] + " °C", "value": temps.get(zone["key"])} for zone in data.get("zones") or []]
         fields.extend([
             {"name": "cycle", "label": "Cycle (s)", "value": data.get("cycle")},
             {"name": "cooling", "label": "Cooling (s)", "value": data.get("cooling")},
             {"name": "screwRpm", "label": "Screw (rpm)", "value": data.get("screwRpm")},
-            {"name": "productLot", "label": "Product lot", "value": data.get("productLot")},
+            {"name": "status", "label": "Status", "type": "select", "options": choices.get("recipeStatuses") or [], "value": data.get("recipeStatus")},
+            {"name": "px", "label": "ΠΧ", "value": data.get("px")},
+            {"name": "py", "label": "ΠΥ", "value": data.get("py")},
+            {"name": "printPieces", "label": "ΤΕΜ εκτύπωση", "value": data.get("printPieces")},
+            {"name": "printTotal", "label": "TOT εκτύπωσης", "value": data.get("printTotal")},
             {"name": "settingsNote", "label": "Note on the settings", "type": "area", "value": data.get("settingsNote"), "height": 64},
             {"name": "comment", "label": "Comment", "type": "area", "value": data.get("comment"), "height": 64},
         ])
-        hint = "Saving confirms this row: it leaves the trial block." if data.get("trial") else "Barrel zones in °C, nozzle first."
-        return ("Edit settings", fields, hint)
+        return ("Edit settings", fields, "Barrel zones in °C, nozzle first. Approve a trial recipe to make it live.")
     if action == "edit-injection":
-        fields = [{"name": "setting::" + item.get("label"), "label": item.get("label"), "value": item.get("value")}
-                  for item in data.get("settings") or []]
-        return ("Injection settings", fields,
-                "As set on the machine's injection page. Leave a box empty when the press does not use that step.")
-    if action == "add-recipe":
-        live = data.get("liveRecipes") or []
-        return ("Add a recipe", [
-            {"name": "press", "label": "Press", "type": "select", "options": choices.get("presses") or []},
-            {"name": "from", "label": "Start from", "type": "select", "options": [_blank("Empty recipe")] + live},
-            {"name": "color", "label": "Color (optional)", "type": "select", "options": [_blank("Keep / none")] + (choices.get("colors") or [])},
-        ], "A new press for this product, or a new color on an existing press, is a new recipe.", "Create recipe")
-    if action == "add-material":
-        live = [{"value": "all", "label": "All %s live recipes" % len(data.get("liveRecipes") or [])}]
-        live.extend({"value": item["value"], "label": item["label"]} for item in (data.get("liveRecipes") or []))
-        return ("Add a raw material", [
-            {"name": "material", "label": "Raw material", "type": "select", "options": choices.get("materials") or []},
-            {"name": "recipe", "label": "On", "type": "select", "options": live, "value": "all"},
-        ], "", "Add material")
-    if action == "add-color":
-        live = [{"value": "all", "label": "All %s live recipes" % len(data.get("liveRecipes") or [])}]
-        live.extend(data.get("liveRecipes") or [])
-        return ("Add a color", [
-            {"name": "color", "label": "Color", "type": "select", "options": choices.get("colors") or []},
-            {"name": "recipe", "label": "On", "type": "select", "options": live, "value": "all"},
-        ], "Adding a color to one recipe makes a new color variant for that press.", "Add color")
-    if action == "add-link":
-        return ("Link another part", [
-            {"name": "relation", "label": "This product", "type": "select", "options": [
-                {"value": "part", "label": "is the body; the other is its lid"},
-                {"value": "lid", "label": "is the lid; it fits onto the other"},
-            ], "value": "part"},
-            {"name": "other", "label": "Other product", "type": "select", "options": choices.get("products") or []},
-        ], "", "Link")
-    if action == "add-slot-material":
-        return ("Add raw material", [
-            {"name": "material", "label": "Raw material", "type": "select", "options": choices.get("materials") or []},
-            {"name": "lot", "label": "Lot"},
-        ], "", "Add")
-    if action == "add-slot-color":
-        return ("Add color", [
-            {"name": "color", "label": "Color", "type": "select", "options": choices.get("colors") or []},
-            {"name": "lot", "label": "Lot"},
-        ], "", "Add")
-    if action == "add-issue":
-        fields = _issue_fields({}, choices.get("workers") or [])
-        if screen.kind == "issue":
-            fields = _job_fields(choices) + fields
-        elif screen.kind == "product":
+        fields = [{"name": "setting::" + entry.get("label"), "label": entry.get("label"), "value": entry.get("value")} for entry in data.get("settings") or []]
+        return ("Injection settings", fields, "As set on the machine's injection page. Leave a box empty when the press does not use that step.")
+    if action == "add-input":
+        fields = [{"name": "item", "label": "Raw material", "type": "select", "options": choices.get("raw") or [], "wide": True},
+                  {"name": "share", "label": "Share of the shot (%)", "type": "number", "placeholder": "e.g. 97"}]
+        if screen.kind == "item":
             live = data.get("liveRecipes") or []
-            fields = [{"name": "recipe", "label": "Recipe that was running", "type": "select",
-                       "options": ([_blank("Choose the recipe")] if len(live) > 1 else []) + live}] + fields
-        return ("Log a stoppage", fields, "Leave the restart empty while the press is still down.", "Log stoppage")
+            fields.append({"name": "recipe", "label": "On", "type": "select", "wide": True,
+                           "options": [{"value": "all", "label": "All %s live recipes" % len(live)}] + live, "value": "all"})
+        return ("Add an input", fields, "Shares are the percentage of the shot weight. With them the kilograms per order are a calculation.", "Add")
+    if action == "edit-input":
+        return ("Share of %s" % row.get("name"), [
+            {"name": "item", "type": "hidden", "value": row.get("id")},
+            {"name": "share", "label": "Share of the shot (%)", "type": "number", "value": row.get("share")},
+        ], "Leave empty when not known.", "Save",
+            ("remove-input", "Remove this input?", "The material comes off this recipe.", {"item": row.get("id")}))
+    if action == "new-order":
+        order = {"itemId": data.get("id")} if screen.kind == "item" else {}
+        return ("New production order", _order_fields(order, choices), "Until the ERP sends orders, write them here.", "Create order")
+    if action == "edit-order":
+        return ("Edit order", _order_fields(data, choices), "")
     if action == "add-run":
-        fields = _run_fields({}, choices)
-        if screen.kind == "run":
-            fields = _job_fields(choices) + fields
-        return ("Log a run", fields,
-                "Cycle and cavities as they really ran. Empty cycle or cavities fall back to the recipe and the mold.", "Log run")
+        if screen.kind == "order":
+            recipes = {"name": "recipe", "label": "Recipe", "type": "select", "options": data.get("recipes") or [], "wide": True}
+            return ("Log a run", _run_fields({}, choices, recipes=recipes), "One run is one job on one machine, start to end.", "Log run")
+        order = {"name": "order", "label": "Production order", "type": "select", "options": [_blank("Choose the order")] + (choices.get("openOrders") or []), "wide": True}
+        if screen.kind == "recipe":
+            return ("Log a run", _run_fields({}, choices, order_field=order), "The order has to be for this recipe's item.", "Log run")
+        recipes = {"name": "recipe", "label": "Recipe", "type": "select", "options": [], "follows": "order", "wide": True,
+                   "groups": choices.get("recipesByOrder") or {}, "empty": "Choose an order with a live recipe"}
+        return ("Log a run", _run_fields({}, choices, order_field=order, recipes=recipes), "One run is one job on one machine, start to end.", "Log run")
     if action == "edit-run":
-        row = extra.get("row") or {}
-        fields = [{"name": "index", "type": "hidden", "value": row.get("index")}] + _run_fields(row, choices)
-        hint = "%s on %s" % (row.get("product") or "", row.get("press") or "")
-        if row.get("sample"):
-            hint += ". This is a sample run: saving it makes it a real one."
-        return ("Edit run", fields, hint)
-    if action == "edit-issue" and extra.get("row"):
-        row = extra.get("row") or {}
-        fields = [{"name": "index", "type": "hidden", "value": row.get("index")}] + _issue_fields(row, choices.get("workers") or [])
-        return ("Edit stoppage", fields, "%s on %s" % (row.get("product") or "", row.get("press") or ""))
-    if action == "edit-issue":
-        issues = data.get("rawIssues") or []
-        try:
-            issue = issues[int(extra.get("index"))]
-        except (TypeError, ValueError, IndexError):
-            Notification("That stoppage is no longer on the recipe.", style="warning").show()
+        return ("Edit run", _run_fields(data, choices), "%s on %s" % (data.get("item") or "", data.get("machine") or ""), "Save",
+                ("delete-run", "Delete this run?", "Its scrap, consumed lots, and output lots are removed. Its stoppages stay on the machine.", {}))
+    if action == "add-scrap":
+        return ("Add scrap", [
+            {"name": "reason", "label": "Reason", "type": "select", "options": choices.get("reasons") or [], "wide": True},
+            {"name": "quantity", "label": "Pieces", "type": "number"},
+        ], "", "Add")
+    if action == "add-run-input":
+        lots = data.get("candidateLots") or []
+        if not lots:
+            Notification("No lot of this recipe's materials is recorded. Receive the lot first.", style="warning", timeout=5).show()
             return None
-        fields = [{"name": "index", "type": "hidden", "value": issue.get("index")}] + _issue_fields(issue, choices.get("workers") or [])
-        return ("Edit stoppage", fields, "")
-    if action == "edit-material":
-        return ("Edit raw material", [
-            {"name": "text", "label": "Grade", "value": data.get("name")},
-            {"name": "kind", "label": "Type", "type": "select", "options": choices.get("kinds") or [], "value": data.get("kind")},
-            {"name": "supplier", "label": "Supplier", "value": data.get("supplier")},
-            {"name": "family", "label": "Family", "value": data.get("family")},
-            {"name": "mfi", "label": "MFI", "value": data.get("mfi")},
-            {"name": "account", "label": "Accounting code", "value": data.get("account")},
-            {"name": "invoiceCode", "label": "Invoice code", "value": data.get("invoiceCode")},
-            {"name": "link", "label": "Datasheet link", "value": data.get("rawLink"), "placeholder": "https://"},
-            {"name": "description", "label": "Description", "type": "area", "value": data.get("description"), "height": 64},
-            {"name": "notes", "label": "Notes", "type": "area", "value": data.get("notes"), "height": 64},
-        ], "Saving adds the grade to the catalog. Resin and regrind count as base material.")
-    if action == "edit-color":
-        return ("Edit color", [
-            {"name": "name", "label": "Color", "value": data.get("colorName")},
-            {"name": "code", "label": "Label code", "value": data.get("code")},
-            {"name": "account", "label": "Accounting code", "value": data.get("account")},
-            {"name": "shade", "label": "Shade / supplier ref.", "value": data.get("shade")},
-            {"name": "label", "label": "Label text", "type": "area", "value": data.get("label"), "height": 56},
-            {"name": "link", "label": "Sample link", "value": data.get("link"), "placeholder": "https://"},
-            {"name": "notes", "label": "Notes", "type": "area", "value": data.get("notes"), "height": 56},
-        ], "Saving adds the code to the catalog.")
+        return ("Add a consumed lot", [
+            {"name": "lot", "label": "Lot", "type": "select", "options": lots, "wide": True},
+            {"name": "quantity", "label": "Quantity used", "type": "number", "placeholder": "kg"},
+        ], "The resin, masterbatch, and additive lots fed into this run. This is what traces a complaint back to its supplier.", "Add")
+    if action == "add-output-lot":
+        return ("Add an output lot", [
+            {"name": "number", "label": "Lot printed on the boxes", "placeholder": "e.g. 061126"},
+            {"name": "quantity", "label": "Pieces", "type": "number"},
+            {"name": "notes", "label": "Notes", "type": "area", "height": 56},
+        ], "", "Add lot")
+    if action == "receive-lot":
+        return ("Receive a lot", [
+            {"name": "item", "label": "Material or packaging", "type": "select", "options": [_blank("Choose the item")] + _sorted(choices.get("received")),
+             "value": data.get("id") if screen.kind == "item" else "", "wide": True},
+            {"name": "number", "label": "Lot number", "placeholder": "on the bag or box"},
+            {"name": "supplierLot", "label": "Supplier batch", "placeholder": "if different"},
+            _moment("receivedAt", "Received", now=True),
+            {"name": "quantity", "label": "Quantity", "type": "number"},
+            {"name": "status", "label": "Status", "type": "select", "options": choices.get("lotStatuses") or [], "value": "released"},
+            {"name": "notes", "label": "Notes", "type": "area", "height": 56},
+        ], "Every bag or box that comes in gets a lot, so a run can say what it consumed.", "Receive")
+    if action == "edit-lot":
+        fields = [
+            {"name": "number", "label": "Lot number", "value": data.get("number")},
+            {"name": "supplierLot", "label": "Supplier batch", "value": data.get("supplierLot")},
+            {"name": "quantity", "label": "Quantity", "type": "number", "value": data.get("quantity")},
+            {"name": "status", "label": "Status", "type": "select", "options": choices.get("lotStatuses") or [], "value": data.get("lotStatus")},
+        ]
+        if data.get("origin") == "Received":
+            fields.append(_moment("receivedAt", "Received", data.get("receivedAt")))
+        fields.append({"name": "notes", "label": "Notes", "type": "area", "value": data.get("notes"), "height": 56})
+        return ("Edit lot", fields, "Block a lot to stop it being fed; it stays on the runs that used it.", "Save",
+                ("delete-lot", "Delete this lot?", "Only a lot no run has used can be deleted.", {}))
+    if action == "add-stoppage":
+        if screen.kind == "run":
+            return ("Log a stoppage", _stoppage_fields({}, choices), "On this run.", "Log stoppage")
+        if screen.kind == "machine":
+            run = {"name": "run", "label": "During run", "type": "select", "wide": True,
+                   "options": [_blank("No run (machine idle)")] + ((choices.get("runsByMachine") or {}).get(data.get("id")) or [])}
+            return ("Log a stoppage", _stoppage_fields({}, choices, run=run), "", "Log stoppage")
+        machine, run = _machine_run_fields(choices, {})
+        return ("Log a stoppage", _stoppage_fields({}, choices, machine, run), "", "Log stoppage")
+    if action == "edit-stoppage":
+        machine, run = _machine_run_fields(choices, row)
+        fields = [{"name": "stoppage", "type": "hidden", "value": row.get("id")}] + _stoppage_fields(row, choices, machine, run)
+        return ("Edit stoppage", fields, "", "Save",
+                ("delete-stoppage", "Delete this stoppage?", "The record of this stop and its fix is removed.", {"stoppage": row.get("id")}))
+    if action == "save-setting":
+        return _setting_spec(extra.get("settingKind"), row, choices)
     return None

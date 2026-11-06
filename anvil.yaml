@@ -1,157 +1,193 @@
 allow_embedding: false
 db_schema:
-  colors:
+  item_categories:
     client: none
     columns:
     - {name: code, type: string}
-    - {name: label_code, type: string}
     - {name: name, type: string}
-    - {name: label, type: string}
-    - {name: shade, type: string}
-    - {name: account, type: string}
-    - {name: notes, type: string}
-    - {name: datasheet_link, type: string}
-    - {name: in_catalog, type: bool}
+    - {name: item_type, type: string}
+    - {name: role, type: string}
     server: full
-    title: Colors
-  materials:
+    title: Item categories
+  items:
     client: none
     columns:
     - {name: code, type: string}
-    - {name: grade, type: string}
-    - {name: kind, type: string}
+    - {name: name, type: string}
+    - {name: item_type, type: string}
+    - {name: category, target: item_categories, type: link_single}
+    - {name: uom, type: string}
+    - {name: erp_code, type: string}
+    - {name: approved_machines, target: machines, type: link_multiple}
     - {name: supplier, type: string}
-    - {name: family, type: string}
-    - {name: mfi, type: number}
-    - {name: account, type: string}
-    - {name: invoice_code, type: string}
-    - {name: description, type: string}
+    - {name: properties, type: simpleObject}
+    - {name: status, type: string}
     - {name: notes, type: string}
-    - {name: datasheet_link, type: string}
-    - {name: in_catalog, type: bool}
     server: full
-    title: Raw materials
-  molds:
+    title: Items
+  lots:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: number, type: string}
+    - {name: item, target: items, type: link_single}
+    - {name: origin, type: string}
+    - {name: run, target: production_runs, type: link_single}
+    - {name: supplier_lot, type: string}
+    - {name: received_at, type: datetime}
+    - {name: quantity, type: number}
+    - {name: status, type: string}
+    - {name: notes, type: string}
+    server: full
+    title: Lots
+  machine_types:
     client: none
     columns:
     - {name: code, type: string}
     - {name: name, type: string}
-    - admin_ui: {order: 2}
-      client_hidden: false
-      name: product
-      target: products
-      type: link_single
-    - {name: cavities, type: number}
-    - {name: shot_weight_g, type: number}
-    - {name: location, type: string}
-    - {name: status, type: string}
-    indexes: []
     server: full
-    title: Molds
-  presses:
+    title: Machine types
+  machines:
     client: none
     columns:
     - {name: code, type: string}
     - {name: name, type: string}
     - {name: alias, type: string}
+    - {name: machine_type, target: machine_types, type: link_single}
+    - {name: attached_to, target: machines, type: link_single}
     - {name: floor_number, type: number}
     - {name: serial, type: string}
-    - {name: robot, type: string}
-    - {name: robot_serial, type: string}
-    - {name: robot_year, type: string}
     - {name: euromap, type: string}
+    - {name: year, type: string}
     - {name: changeover_min, type: number}
-    - {name: lifecycle, type: string}
-    - {name: mounted_product, target: products, type: link_single}
-    - {name: board_location, type: string}
-    - {name: board_note, type: string}
-    server: full
-    title: Presses
-  production_runs:
-    client: none
-    columns:
-    - {name: recipe, target: recipes, type: link_single}
-    - {name: operator, target: workers, type: link_single}
-    - {name: position, type: number}
-    - {name: start_date, type: date}
-    - {name: start_time, type: string}
-    - {name: end_date, type: date}
-    - {name: end_time, type: string}
-    - {name: shift, type: string}
-    - {name: good, type: number}
-    - {name: scrap, type: number}
-    - {name: scrap_reason, type: string}
-    - {name: cycle_s, type: number}
-    - {name: cavities, type: number}
-    - {name: lot, type: string}
-    - {name: order_no, type: string}
+    - {name: location, type: string}
+    - {name: status, type: string}
     - {name: notes, type: string}
-    - {name: sample, type: bool}
     server: full
-    title: Production runs
-  products:
+    title: Machines
+  molds:
     client: none
     columns:
     - {name: code, type: string}
     - {name: name, type: string}
-    - {name: erp_code, type: string}
-    - {name: item_type, type: string}
-    - {name: lifecycle, type: string}
-    - {name: only_on_cards, type: bool}
+    - {name: cavities, type: number}
+    - {name: shot_weight_g, type: number}
+    - {name: location, type: string}
+    - {name: status, type: string}
     - {name: notes, type: string}
-    - {name: approved_presses, target: presses, type: link_multiple}
-    - {name: lid, target: products, type: link_single}
-    - {name: lid_basis, type: string}
     server: full
-    title: Products
-  recipe_colors:
+    title: Molds
+  production_orders:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: item, target: items, type: link_single}
+    - {name: quantity, type: number}
+    - {name: due_date, type: date}
+    - {name: status, type: string}
+    - {name: erp_order_no, type: string}
+    - {name: notes, type: string}
+    server: full
+    title: Production orders
+  production_runs:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: order, target: production_orders, type: link_single}
+    - {name: recipe, target: recipes, type: link_single}
+    - {name: shift, target: shifts, type: link_single}
+    - {name: operator, target: workers, type: link_single}
+    - {name: started_at, type: datetime}
+    - {name: ended_at, type: datetime}
+    - {name: good_qty, type: number}
+    - {name: cavities_running, type: number}
+    - {name: cycle_s, type: number}
+    - {name: status, type: string}
+    - {name: notes, type: string}
+    server: full
+    title: Production runs
+  recipe_inputs:
     client: none
     columns:
     - {name: recipe, target: recipes, type: link_single}
-    - {name: color, target: colors, type: link_single}
-    - {name: slot, type: number}
-    - {name: lot, type: string}
+    - {name: item, target: items, type: link_single}
+    - {name: share_pct, type: number}
     server: full
-    title: Recipe colors
-  recipe_materials:
-    client: none
-    columns:
-    - {name: recipe, target: recipes, type: link_single}
-    - {name: material, target: materials, type: link_single}
-    - {name: slot, type: number}
-    - {name: lot, type: string}
-    server: full
-    title: Recipe raw materials
+    title: Recipe inputs
   recipes:
     client: none
     columns:
     - {name: code, type: string}
+    - {name: item, target: items, type: link_single}
     - {name: mold, target: molds, type: link_single}
-    - {name: press, target: presses, type: link_single}
-    - {name: trial, type: bool}
+    - {name: machine, target: machines, type: link_single}
+    - {name: status, type: string}
     - {name: standard, type: bool}
     - {name: cycle_s, type: number}
-    - {name: product_lot, type: string}
-    - {name: status_note, type: string}
-    - {name: comment, type: string}
-    - {name: settings_note, type: string}
     - {name: temps, type: simpleObject}
     - {name: injection, type: simpleObject}
     - {name: extra, type: simpleObject}
+    - {name: settings_note, type: string}
+    - {name: comment, type: string}
     server: full
     title: Recipes
+  run_inputs:
+    client: none
+    columns:
+    - {name: run, target: production_runs, type: link_single}
+    - {name: lot, target: lots, type: link_single}
+    - {name: quantity, type: number}
+    server: full
+    title: Run inputs
+  run_scrap:
+    client: none
+    columns:
+    - {name: run, target: production_runs, type: link_single}
+    - {name: reason, target: scrap_reasons, type: link_single}
+    - {name: quantity, type: number}
+    server: full
+    title: Run scrap
+  scrap_reasons:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: name, type: string}
+    - {name: category, type: string}
+    - {name: status, type: string}
+    server: full
+    title: Scrap reasons
+  shifts:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: name, type: string}
+    - {name: start_time, type: string}
+    - {name: end_time, type: string}
+    - {name: status, type: string}
+    server: full
+    title: Shifts
+  stoppage_causes:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: name, type: string}
+    - {name: category, type: string}
+    - {name: planned, type: bool}
+    - {name: status, type: string}
+    server: full
+    title: Stoppage causes
   stoppages:
     client: none
     columns:
-    - {name: recipe, target: recipes, type: link_single}
-    - {name: worker, target: workers, type: link_single}
-    - {name: position, type: number}
-    - {name: start_date, type: date}
-    - {name: start_time, type: string}
-    - {name: end_date, type: date}
-    - {name: end_time, type: string}
-    - {name: cause, type: string}
+    - {name: code, type: string}
+    - {name: machine, target: machines, type: link_single}
+    - {name: run, target: production_runs, type: link_single}
+    - {name: started_at, type: datetime}
+    - {name: ended_at, type: datetime}
+    - {name: cause, target: stoppage_causes, type: link_single}
+    - {name: description, type: string}
     - {name: fix, type: string}
+    - {name: reported_by, target: workers, type: link_single}
     server: full
     title: Stoppages
   users:
@@ -195,7 +231,10 @@ db_schema:
   workers:
     client: none
     columns:
+    - {name: code, type: string}
     - {name: name, type: string}
+    - {name: status, type: string}
+    - {name: qualified_machines, target: machines, type: link_multiple}
     server: full
     title: Workers
 dependencies:

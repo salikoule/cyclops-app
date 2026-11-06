@@ -6,9 +6,11 @@
     python3 scripts/import_workbook.py --uplink-key KEY      # replace the data in a running app
     python3 scripts/import_workbook.py --uplink-key KEY --url ws://localhost:3032/_/uplink
 
-IDs follow the sheet order (PRD-0001, MLD-0001, PRS-01, REC-<sheet row id>, MAT-001,
-COL-001), the same scheme as cyclops/sketch/build_data.py, so a re-import keeps
-every link and bookmark. Nothing is written back to the workbook.
+Codes follow the sheet order, so a re-import keeps every link and bookmark: items are
+ITM-00001 onward (products, then raw materials, then masterbatches), molds MLD-0001,
+machines MCH-01 in the Machines sheet order with robots after the presses, recipes
+REC-<sheet row id>. Times are plant local (Europe/Athens) and stored in UTC. Nothing is
+written back to the workbook.
 
 Needs openpyxl. The --uplink-key mode also needs anvil-uplink.
 """
@@ -344,6 +346,220 @@ def parse(path):
     return graph, counted
 
 
+PLANT_ZONE = "Europe/Athens"
+ADDITIVE_TEXT = {"ροή", "διόγκωση", "αντιστατικό", "αντηλιακό"}
+CATEGORIES = (
+    ("SFG", "Part", ""), ("SFG", "Lid", ""),
+    ("RAW", "Resin", "base"), ("RAW", "Regrind", "base"), ("RAW", "Additive", "additive"), ("RAW", "Masterbatch", "colorant"),
+    ("PAK", "Packaging", ""), ("FG", "Finished good", ""), ("TRD", "Trading good", ""),
+)
+MACHINE_TYPES = ("Injection press", "Robot")
+SHIFTS = (("Morning", "06:00", "14:00"), ("Afternoon", "14:00", "22:00"), ("Night", "22:00", "06:00"))
+CAUSES = (
+    ("Machine breakdown", "Machine", False), ("Mold fault", "Machine", False), ("Robot fault", "Machine", False),
+    ("Planned maintenance", "Machine", True), ("Mold change", "Method", True), ("Color or material change", "Method", True),
+    ("Process setting", "Method", False), ("Material problem", "Material", False), ("No operator", "Man", False),
+    ("Quality hold", "Measurement", False), ("Power or utilities", "Environment", False),
+)
+SCRAP_REASONS = (
+    ("Start-up scrap", "Method"), ("Short shot", "Machine"), ("Flash", "Machine"), ("Sink marks", "Method"),
+    ("Color streaks", "Material"), ("Contamination", "Material"), ("Handling damage", "Man"),
+)
+
+
+def material_category(material):
+    text = (material.get("text") or "").strip().lower()
+    family = (material.get("family") or "").upper()
+    if text in ADDITIVE_TEXT or family == "ΠΡΟΣΘΕΤΑ":
+        return "Additive"
+    if re.search(r"κ[όο]κκος|σπασμ[έε]νο|^mix$|μιξ", text) or family == "RECYCLE" or re.match(r"^9199", material.get("account") or ""):
+        return "Regrind"
+    return "Resin"
+
+
+def utc_moment(date_value, time_value):
+    """A plant-local date and HH:MM as a UTC ISO moment, or "" when either part is missing or unreadable."""
+    from zoneinfo import ZoneInfo
+
+    try:
+        local = datetime.datetime.strptime("%s %s" % (date_value, (time_value or "").replace(".", ":")), "%Y-%m-%d %H:%M")
+    except (TypeError, ValueError):
+        return ""
+    moment = local.replace(tzinfo=ZoneInfo(PLANT_ZONE)).astimezone(datetime.timezone.utc)
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _code(prefix, number, width):
+    return "%s-%s" % (prefix, str(number).zfill(width))
+
+
+def _number(text):
+    try:
+        value = float(str(text).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    return int(value) if value.is_integer() else value
+
+
+def to_plant(graph):
+    """The workbook graph in the item-master model. Nothing is guessed: unreadable times stay
+    empty, inputs carry no share, and each product becomes one SFG item."""
+    plant = {}
+    plant["item_categories"] = [{"id": _code("CAT", n, 2), "name": name, "type": kind, "role": role}
+                                for n, (kind, name, role) in enumerate(CATEGORIES, start=1)]
+    category = {(item["type"], item["name"]): item["id"] for item in plant["item_categories"]}
+    plant["machine_types"] = [{"id": _code("MTY", n, 2), "name": name} for n, name in enumerate(MACHINE_TYPES, start=1)]
+    press_type, robot_type = plant["machine_types"][0]["id"], plant["machine_types"][1]["id"]
+    plant["shifts"] = [{"id": _code("SHF", n, 2), "name": name, "start": start, "end": end, "status": "active"}
+                       for n, (name, start, end) in enumerate(SHIFTS, start=1)]
+    plant["stoppage_causes"] = [{"id": _code("CAU", n, 2), "name": name, "category": group, "planned": planned, "status": "active"}
+                                for n, (name, group, planned) in enumerate(CAUSES, start=1)]
+    plant["scrap_reasons"] = [{"id": _code("SCR", n, 2), "name": name, "category": group, "status": "active"}
+                              for n, (name, group) in enumerate(SCRAP_REASONS, start=1)]
+
+    workers = []
+    worker_by_name = {}
+
+    def worker(name):
+        name = (name or "").strip()
+        if not name:
+            return ""
+        if name not in worker_by_name:
+            entry = {"id": _code("WRK", len(workers) + 1, 3), "name": name, "status": "active", "machineIds": []}
+            workers.append(entry)
+            worker_by_name[name] = entry["id"]
+        return worker_by_name[name]
+
+    for name in graph.get("workers") or []:
+        worker(name)
+
+    machines, machine_of = [], {}
+    for press in graph["presses"]:
+        code = "MCH-" + press["id"].split("-")[1]
+        machine_of[press["id"]] = code
+        note = ""
+        if not press.get("robot") and press.get("robotSerial"):
+            note = "Robot serial %s (no robot name in the Machines sheet)" % press["robotSerial"]
+        machines.append({
+            "id": code, "name": press["name"], "alias": "" if press.get("alias") == press["name"] else press.get("alias") or "",
+            "typeId": press_type, "attachedToId": "", "floor": press.get("aa") if press.get("aa") != 99 else None,
+            "serial": press.get("serial") or "", "euromap": press.get("euromap") or "", "year": "",
+            "changeoverMin": None, "location": (press.get("board") or {}).get("location") or "", "status": "active", "notes": note,
+        })
+    for press in graph["presses"]:
+        if press.get("robot"):
+            machines.append({
+                "id": _code("MCH", len(machines) + 1, 2), "name": press["robot"], "alias": "", "typeId": robot_type,
+                "attachedToId": machine_of[press["id"]], "floor": None, "serial": press.get("robotSerial") or "",
+                "euromap": "", "year": press.get("robotYear") or "", "changeoverMin": None, "location": "",
+                "status": "active", "notes": "",
+            })
+    plant["machines"] = machines
+
+    items, item_of = [], {}
+
+    def add_item(old_id, entry):
+        entry["id"] = _code("ITM", len(items) + 1, 5)
+        items.append(entry)
+        item_of[old_id] = entry["id"]
+
+    for product in graph["products"]:
+        lid = re.match(r"^ΚΑΠΑΚΙ", product.get("name") or "", re.IGNORECASE)
+        add_item(product["id"], {
+            "name": product["name"], "type": "SFG", "categoryId": category[("SFG", "Lid" if lid else "Part")], "uom": "pcs",
+            "erpCode": product.get("erpCode") or "", "approvedMachineIds": [machine_of[p] for p in product.get("approvedPressIds") or []],
+            "supplier": "", "properties": {}, "status": "active", "notes": "",
+        })
+    for material in graph["materials"]:
+        properties = {key: material.get(key) or "" for key in ("mfi", "family", "account", "invoiceCode", "description", "link", "notes")}
+        properties["catalog"] = bool(material.get("catalog"))
+        add_item(material["id"], {
+            "name": material["text"], "type": "RAW", "categoryId": category[("RAW", material_category(material))], "uom": "kg",
+            "erpCode": "", "approvedMachineIds": [], "supplier": material.get("supplier") or "",
+            "properties": {key: value for key, value in properties.items() if value != ""}, "status": "active", "notes": "",
+        })
+    for color in graph["colors"]:
+        properties = {"labelCode": color.get("code") or "", "colorName": color.get("name") or "", "label": color.get("label") or "",
+                      "account": color.get("account") or "", "shade": color.get("shade") or "", "link": color.get("link") or "",
+                      "notes": color.get("notes") or "", "catalog": bool(color.get("catalog"))}
+        add_item(color["id"], {
+            "name": " ".join(part for part in (color.get("name"), color.get("code")) if part) or color["id"], "type": "RAW",
+            "categoryId": category[("RAW", "Masterbatch")], "uom": "kg", "erpCode": "", "approvedMachineIds": [], "supplier": "",
+            "properties": {key: value for key, value in properties.items() if value != ""}, "status": "active", "notes": "",
+        })
+    plant["items"] = items
+
+    plant["molds"] = [{"id": mold["id"], "name": mold["name"], "cavities": None, "shotWeight": None, "location": "",
+                       "status": "in use", "notes": ""} for mold in graph["molds"]]
+
+    lots, lot_of = [], {}
+
+    def lot(item_id, number, origin):
+        number = (number or "").strip()
+        if not number or number == "-":
+            return
+        key = (item_id, number)
+        if key not in lot_of:
+            entry = {"id": _code("LOT", len(lots) + 1, 6), "number": number, "itemId": item_id, "origin": origin, "runId": "",
+                     "supplierLot": "", "receivedAt": "", "quantity": None, "status": "released",
+                     "notes": "From the workbook: the lot written on the recipe row, not linked to a run."}
+            lots.append(entry)
+            lot_of[key] = entry["id"]
+
+    recipes, stoppages = [], []
+    for recipe in graph["recipes"]:
+        item_id = item_of[recipe["productId"]]
+        inputs, seen = [], set()
+        for slot in recipe["materialSlots"]:
+            target = item_of[slot["materialId"]]
+            lot(target, slot.get("lot"), "received")
+            if target not in seen:
+                seen.add(target)
+                inputs.append({"itemId": target, "share": None})
+        for slot in recipe["colorSlots"]:
+            target = item_of[slot["colorId"]]
+            lot(target, slot.get("lot"), "received")
+            if target not in seen:
+                seen.add(target)
+                inputs.append({"itemId": target, "share": None})
+        lot(item_id, recipe.get("productLot"), "produced")
+        comment = recipe.get("comment") or ""
+        if recipe.get("status"):
+            comment = " · ".join(part for part in ("Κατάσταση: " + recipe["status"], comment) if part)
+        recipes.append({
+            "id": recipe["id"], "itemId": item_id, "moldId": recipe["moldId"], "machineId": machine_of[recipe["pressId"]],
+            "status": "trial" if recipe.get("trial") else "approved", "standard": False,
+            "cycle": recipe.get("cycle") or "", "cooling": recipe.get("cooling") or "", "screwRpm": recipe.get("screwRpm") or "",
+            "temps": {key: "" if str(value or "").strip() == "-" else value or "" for key, value in (recipe.get("temps") or {}).items()},
+            "settings": [entry for entry in recipe.get("settings") or []
+                         if entry.get("label") not in ("Cycle time (s)", "Cooling time (s)", "Screw speed (rpm)")],
+            "px": recipe.get("px") or "", "py": recipe.get("py") or "", "printPieces": recipe.get("printPieces") or "",
+            "printTotal": recipe.get("printTotal") or "", "settingsNote": recipe.get("settingsNote") or "", "comment": comment,
+            "inputs": inputs,
+        })
+        for issue in recipe.get("issues") or []:
+            stoppages.append({
+                "machineId": machine_of[recipe["pressId"]], "runId": "",
+                "startedAt": utc_moment(issue.get("startDate"), issue.get("startTime")),
+                "endedAt": utc_moment(issue.get("endDate"), issue.get("endTime")),
+                "causeId": "", "description": issue.get("cause") or "", "fix": issue.get("fix") or "",
+                "reportedById": worker(issue.get("worker")),
+                "sort": "%s %s" % (issue.get("startDate") or "", issue.get("startTime") or ""),
+            })
+    stoppages.sort(key=lambda entry: entry.pop("sort"))
+    for number, entry in enumerate(stoppages, start=1):
+        entry["id"] = _code("STP", number, 5)
+    plant.update({"recipes": recipes, "stoppages": stoppages, "lots": lots, "workers": workers,
+                  "production_orders": [], "production_runs": []})
+    plant["meta"] = graph["meta"]
+    counted = OrderedDict((key, len(plant[key])) for key in (
+        "items", "molds", "machines", "recipes", "stoppages", "lots", "workers", "item_categories", "stoppage_causes", "scrap_reasons"))
+    counted["recipe inputs"] = sum(len(recipe["inputs"]) for recipe in recipes)
+    counted["stoppages without a usable stop time"] = sum(1 for entry in stoppages if not entry["startedAt"])
+    counted["stoppages without a restart time"] = sum(1 for entry in stoppages if not entry["endedAt"])
+    return plant, counted
+
+
 def encode(graph):
     raw = json.dumps(graph, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return zlib.compress(raw, 9)
@@ -392,7 +608,8 @@ def main(argv=None):
     path = Path(args.workbook).expanduser()
     if not path.exists():
         sys.exit("workbook not found: %s" % path)
-    graph, counted = parse(path)
+    graph, _ = parse(path)
+    graph, counted = to_plant(graph)
     print(" · ".join("%s %s" % (value, key) for key, value in counted.items()))
     if args.json:
         Path(args.json).write_text(json.dumps(graph, ensure_ascii=False, indent=1), encoding="utf-8")

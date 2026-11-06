@@ -4,6 +4,7 @@ import anvil.server
 import anvil.users
 from craftify_library.Startup import configure as configure_craftify_client
 from craftify_library.CustomComponents.AccountMenu import AccountMenu
+from craftify_library.CustomComponents.SearchPalette import SearchPalette
 from craftify_library.CustomComponents.SettingsOverlay import SettingsOverlay
 from craftify_library.CraftifyRouting import NavLink, add_event_handler, get_routing_context, navigate
 from cyclops_app import Format, Layout, Nav
@@ -34,9 +35,19 @@ BRAND = (
 _ERRORS = False
 
 
-def _shortcut():
-    from anvil.js.window import navigator
-    return "⌘K" if "Mac" in str(navigator.platform or "") else "Ctrl K"
+def _search(text):
+    hits = anvil.server.call_s("cyclops_search", text) or []
+    return [
+        {
+            "id": hit.get("id"),
+            "title": hit.get("label"),
+            "badge": hit.get("id"),
+            "badge_class": "cy-id cy-%s" % hit.get("kind"),
+            "kind": Nav.LABEL.get(hit.get("kind"), ""),
+            "path": Nav.path(hit.get("kind"), hit.get("id")),
+        }
+        for hit in hits
+    ]
 
 
 def _plant_section():
@@ -66,7 +77,6 @@ class CyclopsShell(CyclopsShellTemplate):
         self.init_components(**properties)
         self._install_errors()
         configure_craftify_client()
-        self._search_timer = None
         self._build_search()
         self._build_nav()
         self._build_footer()
@@ -87,140 +97,16 @@ class CyclopsShell(CyclopsShellTemplate):
             pass
 
     def _build_search(self):
-        """Search lives in a pop-up opened from the sidebar button or Ctrl/Cmd+K, so no top bar is needed."""
-        self._search = TextBox(placeholder="Find an item, mold, machine, recipe, order, run, or lot")
-        self._search.set_event_handler("change", self._schedule_search)
-        self._hits = HtmlTemplate(
-            html=(
-                '<div class="cy-palette" anvil-name="root"><div class="cy-search">'
-                '<div class="cy-search-box" anvil-slot="box"></div>'
-                '<div class="cy-hits" anvil-name="hits"></div>'
-                '<div class="cy-palette-keys">↑ ↓ to move · Enter to open · Esc to close</div>'
-                "</div></div>"
-            )
+        self._search = SearchPalette(
+            search=_search,
+            placeholder="Find an item, mold, machine, recipe, order, run, or lot",
+            recent_key="cyclops",
         )
-        self._hits.add_component(self._search, slot="box")
-        self._active = -1
-        root = self._hits.dom_nodes["root"]
+        self._search.set_event_handler("select", self._on_search_select)
+        self.add_component(self._search)
 
-        def on_click(event):
-            target = getattr(event, "target", None)
-            if target is None:
-                return
-            if target == root:
-                self.close_search()
-                return
-            node = Layout.closest(target, "[data-nav]")
-            if node is None:
-                return
-            event.preventDefault()
-            self._open_hit(node)
-
-        def on_key(event):
-            key = getattr(event, "key", "")
-            if key == "Escape":
-                self.close_search()
-            elif key in ("ArrowDown", "ArrowUp"):
-                event.preventDefault()
-                self._move_active(1 if key == "ArrowDown" else -1)
-            elif key == "Enter":
-                event.preventDefault()
-                links = self._hit_links()
-                if 0 <= self._active < len(links):
-                    self._open_hit(links[self._active])
-                else:
-                    self._run_search()
-
-        def on_global(event):
-            if (getattr(event, "metaKey", False) or getattr(event, "ctrlKey", False)) and str(getattr(event, "key", "")).lower() == "k":
-                event.preventDefault()
-                self.open_search()
-
-        from anvil.js.window import document
-        root.addEventListener("click", on_click)
-        root.addEventListener("keydown", on_key)
-        document.addEventListener("keydown", on_global)
-        self.add_component(self._hits)
-
-    def open_search(self, *args):
-        self._search.text = ""
-        self._clear_hits()
-        self._hits.dom_nodes["root"].classList.add("open")
-        self._search.focus()
-
-    def close_search(self):
-        self._hits.dom_nodes["root"].classList.remove("open")
-        self._clear_hits()
-
-    def _open_hit(self, node):
-        path = Layout.attr(node, "data-nav")
-        self.close_search()
-        Nav.open_path(path)
-
-    def _hit_links(self):
-        return list(self._hits.dom_nodes["hits"].querySelectorAll("a[data-nav]"))
-
-    def _move_active(self, step):
-        links = self._hit_links()
-        if not links:
-            return
-        self._active = (self._active + step) % len(links)
-        for index, link in enumerate(links):
-            if index == self._active:
-                link.classList.add("is-active")
-                link.scrollIntoView({"block": "nearest"})
-            else:
-                link.classList.remove("is-active")
-
-    def _schedule_search(self, **event_args):
-        try:
-            from anvil.js.window import clearTimeout, setTimeout
-            if self._search_timer is not None:
-                clearTimeout(self._search_timer)
-            self._search_timer = setTimeout(self._run_search, 260)
-        except Exception:
-            self._run_search()
-
-    def _run_search(self, *args, **event_args):
-        self._search_timer = None
-        text = (self._search.text or "").strip()
-        if len(text) < 2:
-            self._clear_hits()
-            return
-        try:
-            hits = anvil.server.call("cyclops_search", text)
-        except Exception:
-            return
-        if (self._search.text or "").strip() != text:
-            return
-        self._render_hits(hits or [])
-
-    def _render_hits(self, hits):
-        node = self._hits.dom_nodes["hits"]
-        if not hits:
-            node.innerHTML = '<div class="cy-hit cy-muted">Nothing matches.</div>'
-        else:
-            rows = []
-            for hit in hits:
-                rows.append(
-                    '<a href="javascript:void(0)" data-nav="%s">%s<span>%s</span><span class="cy-kind">%s</span></a>'
-                    % (
-                        Layout.esc(Nav.path(hit.get("kind"), hit.get("id"))),
-                        Format.id_tag(hit.get("kind"), hit.get("id")),
-                        Layout.esc(hit.get("label")),
-                        Layout.esc(Nav.LABEL.get(hit.get("kind"), "")),
-                    )
-                )
-            node.innerHTML = "".join(rows)
-        node.classList.add("open")
-        self._active = -1
-        self._move_active(1)
-
-    def _clear_hits(self):
-        self._active = -1
-        node = self._hits.dom_nodes["hits"]
-        node.innerHTML = ""
-        node.classList.remove("open")
+    def _on_search_select(self, hit, **event_args):
+        Nav.open_path(hit.get("path"))
 
     def refresh_counts(self):
         self._build_nav()
@@ -233,12 +119,7 @@ class CyclopsShell(CyclopsShellTemplate):
             counts = {}
         self.menu_panel.clear()
         self.menu_panel.add_component(Layout.html(BRAND), full_width_row=True)
-        find = Layout.html(
-            '<a class="cy-find" anvil-name="root" href="javascript:void(0)" data-nav-label="Search" aria-label="Search">'
-            '<i class="fa fa-magnifying-glass"></i><span class="link-text">Search</span><kbd>%s</kbd></a>' % _shortcut()
-        )
-        find.dom_nodes["root"].addEventListener("click", self.open_search)
-        self.menu_panel.add_component(find, full_width_row=True)
+        self.menu_panel.add_component(self._search.trigger(), full_width_row=True)
         for item in NAV:
             if item is None:
                 self.menu_panel.add_component(Layout.html('<div class="cy-nav-sep"></div>'), full_width_row=True)
@@ -300,7 +181,7 @@ class CyclopsShell(CyclopsShellTemplate):
         navigate(path="/login")
 
     def _on_router_navigate(self, routing_context=None, **event_args):
-        self.close_search()
+        self._search.close()
         self._maybe_open_from_query(routing_context)
 
     def _maybe_open_from_query(self, routing_context=None):

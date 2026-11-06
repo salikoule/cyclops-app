@@ -25,10 +25,9 @@ import zlib
 from collections import OrderedDict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import production_log  # noqa: E402
+HERE = Path(globals().get("__file__") or Path.cwd() / "scripts" / "import_workbook.py").resolve().parent
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = HERE.parent
 WORKBOOK = Path.home() / "Downloads" / "CLONE- Cyclops παραγωγη.xlsx"
 SEED_MODULE = ROOT / "server_code" / "seed_data.py"
 
@@ -608,6 +607,9 @@ def push_uplink(graph, key, url=None):
 
 
 def main(argv=None):
+    sys.path.insert(0, str(HERE))
+    import production_log
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--workbook", default=str(WORKBOOK), help="path to the .xlsx (default: %(default)s)")
     parser.add_argument("--json", help="also write the parsed graph to this JSON file")

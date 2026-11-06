@@ -20,7 +20,7 @@ import statistics
 import unicodedata
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(globals().get("__file__") or Path.cwd() / "scripts" / "production_log.py").resolve().parents[1]
 LOG = Path.home() / "Downloads" / "ΠΑΡΑΓΩΓΗ 2025.xlsx"
 MAP_FILE = ROOT / "scripts" / "production_log_map.json"
 YEAR = 2025

@@ -11,6 +11,7 @@ from cyclops_app import Format, Layout, Nav
 
 NAV = (
     ("Overview", "overview", "fa:table-cells", True),
+    ("Performance", "performance", "fa:chart-line", False),
     None,
     ("Items", "item", "fa:box", False),
     ("Molds", "mold", "fa:cubes", False),

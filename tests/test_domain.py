@@ -57,7 +57,7 @@ def test_recipe_rules_follow_category_roles(plant):
 def test_gaps_name_the_open_data(plant):
     counted = {entry["key"]: entry["count"] for entry in domain.gaps(plant)}
     assert counted["no-cavities"] == len(plant["molds"])
-    assert counted["stop-no-cause"] == len(plant["stoppages"])
+    assert counted["stop-no-cause"] == sum(1 for entry in plant["stoppages"] if not entry.get("causeId"))
     assert counted["trial"] == 15
 
 

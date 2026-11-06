@@ -80,6 +80,15 @@ def cyclops_detail(kind, code):
 
 
 @anvil.server.callable
+def cyclops_performance(year=None, month=0, machine=""):
+    _guard()
+    result = _timed("performance", store.performance, year, month or 0, machine or "")
+    result["checks"] = getattr(seed_data, "CHECKS", [])
+    result["source"] = seed_data.SOURCE
+    return result
+
+
+@anvil.server.callable
 def cyclops_search(term):
     _guard()
     return _timed("search", store.search, term or "")

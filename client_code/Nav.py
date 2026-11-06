@@ -2,6 +2,7 @@
 
 SLUG = {
     "overview": "overview",
+    "performance": "performance",
     "structure": "structure",
     "item": "items",
     "mold": "molds",
@@ -16,6 +17,7 @@ SLUG = {
 KIND = {slug: kind for kind, slug in SLUG.items()}
 LABEL = {
     "overview": "Overview",
+    "performance": "Performance",
     "structure": "Structure",
     "item": "Item",
     "mold": "Mold",

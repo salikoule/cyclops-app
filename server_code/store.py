@@ -14,6 +14,7 @@ from anvil.tables import app_tables
 
 import domain
 import loader
+import performance as performance_view
 import records
 
 _BATCH = 200
@@ -227,6 +228,12 @@ def list_view(kind, gap=None):
 def _whole():
     plant = _plant("items", "molds", "recipes", "production_orders", "production_runs", "stoppages", "lots", *(_PEOPLE + _REASONS))
     return _run_context(plant).graph()
+
+
+def performance(year=None, month=0, machine=""):
+    plant = _plant("recipes", "items", "production_runs", "stoppages", "shifts", "stoppage_causes")
+    plant.lines("run_scrap")
+    return performance_view.view(plant.graph(), year, month, machine)
 
 
 def overview(who="all"):

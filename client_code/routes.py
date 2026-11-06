@@ -30,6 +30,11 @@ class OverviewRoute(AppPage):
     form = "OverviewForm"
 
 
+class PerformanceRoute(AppPage):
+    path = "/performance"
+    form = "PerformanceForm"
+
+
 class StructureRoute(AppPage):
     path = "/structure"
     form = "StructureForm"

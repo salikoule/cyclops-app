@@ -401,4 +401,21 @@ html.ipac-dark .anvil-role-login-divider::after { background: #334155; }
 .cy-trace, .cy-trace ul { list-style: none; margin: 0; padding-left: 0; }
 .cy-trace ul { padding-left: 18px; border-left: 2px solid var(--bc-border, #e5e7eb); margin: 6px 0 6px 6px; }
 .cy-trace li { padding: 4px 0; line-height: 1.5; }
-.cy-settings .cy-row { text-decoration: none; color: inherit; }
+
+.cy-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--cy-line); }
+.cy-tab { padding: 8px 14px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--cy-muted); font-weight: 600; font-size: 13px; text-decoration: none; }
+.cy-tab:hover { color: var(--cy-ink); text-decoration: none; }
+.cy-tab span { margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: var(--cy-chip); color: var(--cy-chip-ink); font-size: 11px; }
+.cy-tab.is-active { color: var(--bc-navy); border-bottom-color: var(--bc-navy); }
+
+.cy-tags { display: flex; flex-direction: column; gap: 8px; }
+.cy-tag-list { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; align-items: center; }
+.cy-tag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 0; border-radius: 999px; background: var(--bc-soft); color: var(--bc-navy); font-size: 12px; font-weight: 600; cursor: pointer; }
+.cy-tag span { font-size: 13px; line-height: 1; opacity: 0.7; }
+.cy-tag:hover span { opacity: 1; }
+
+.cy-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--cy-line); vertical-align: -2px; }
+.cy-swatch-field { display: flex; align-items: center; gap: 10px; min-height: 34px; }
+.cy-swatch-field input[type="color"] { width: 40px; height: 30px; padding: 2px; border: 1px solid var(--cy-line); border-radius: 6px; background: var(--cy-surface); cursor: pointer; }
+.cy-swatch-field span { font-size: 13px; color: var(--cy-muted); font-variant-numeric: tabular-nums; }
+.cy-swatch-field a { font-size: 12px; }

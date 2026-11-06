@@ -18,7 +18,6 @@ ITEM_TYPES = (("RAW", "Raw material"), ("PAK", "Packaging"), ("SFG", "Semi-finis
 TYPE_LABEL = dict(ITEM_TYPES)
 ROLES = (("base", "Base material (resin, regrind)"), ("colorant", "Colorant (masterbatch)"), ("additive", "Additive"), ("", "None"))
 ROLE_LABEL = {"base": "Base", "colorant": "Colorant", "additive": "Additive", "": ""}
-UOMS = ("pcs", "kg", "g", "m", "l")
 STATUSES = ("active", "retired")
 RECIPE_STATUSES = ("trial", "approved", "retired")
 MOLD_STATUSES = ("in use", "in repair", "stored", "retired")
@@ -44,11 +43,12 @@ STATUS_TONE = {
 PREFIX = {
     "items": ("ITM", 5), "molds": ("MLD", 4), "machines": ("MCH", 2), "recipes": ("REC", 4), "production_orders": ("PO", 5),
     "production_runs": ("RUN", 5), "lots": ("LOT", 6), "stoppages": ("STP", 5), "item_categories": ("CAT", 2),
-    "machine_types": ("MTY", 2), "shifts": ("SHF", 2), "stoppage_causes": ("CAU", 2), "scrap_reasons": ("SCR", 2), "workers": ("WRK", 3),
+    "machine_types": ("MTY", 2), "shifts": ("SHF", 2), "stoppage_causes": ("CAU", 2), "scrap_reasons": ("SCR", 2), "personnel": ("PER", 3),
+    "person_roles": ("ROL", 2), "units": ("UNT", 2),
 }
 SETTING_TABLES = {
     "shift": "shifts", "cause": "stoppage_causes", "reason": "scrap_reasons", "category": "item_categories",
-    "machineType": "machine_types", "worker": "workers",
+    "machineType": "machine_types", "person": "personnel", "role": "person_roles", "unit": "units",
 }
 CREATES = {
     "new-item": ("items",), "clone-item": ("items", "recipes"), "new-mold": ("molds",), "new-machine": ("machines",),
@@ -148,8 +148,10 @@ _DEFAULTS = {
     "scrap_reasons": {"name": "", "category": "Method", "status": "active"},
     "machines": {"name": "", "alias": "", "typeId": "", "attachedToId": "", "floor": None, "serial": "", "euromap": "", "year": "",
                  "changeoverMin": None, "location": "", "status": "active", "notes": ""},
-    "workers": {"name": "", "status": "active", "machineIds": []},
-    "items": {"name": "", "type": "SFG", "categoryId": "", "uom": "pcs", "erpCode": "", "approvedMachineIds": [], "supplier": "",
+    "personnel": {"name": "", "roleId": "", "status": "active", "machineIds": []},
+    "person_roles": {"name": "", "runsMachines": False, "status": "active"},
+    "units": {"name": "", "status": "active"},
+    "items": {"name": "", "type": "SFG", "categoryId": "", "uomId": "", "erpCode": "", "approvedMachineIds": [], "supplier": "",
               "properties": {}, "status": "active", "notes": ""},
     "molds": {"name": "", "cavities": None, "shotWeight": None, "location": "", "status": "in use", "notes": ""},
     "recipes": {"itemId": "", "moldId": "", "machineId": "", "status": "approved", "standard": False, "cycle": None,
@@ -229,6 +231,17 @@ def name_of(index, table, code):
 def role_of(index, item_code):
     item = index["items"].get(item_code) or {}
     return (index["item_categories"].get(item.get("categoryId")) or {}).get("role") or ""
+
+
+def unit_of(index, item_code):
+    item = index["items"].get(item_code) or {}
+    return name_of(index, "units", item["uomId"]) if item.get("uomId") else ""
+
+
+def can_operate(index, person):
+    """A role that runs machines. A person whose role is not set yet is still offered, so an imported list stays usable."""
+    role = index["person_roles"].get(person.get("roleId"))
+    return role is None or bool(role.get("runsMachines"))
 
 
 def category_name(index, item):
@@ -338,7 +351,7 @@ def item_status(graph, item):
     if item.get("type") == "RAW":
         if not live(index["recipesUsing"].get(item["id"]) or []):
             return "Unused"
-        if not (item.get("properties") or {}).get("account"):
+        if not item.get("erpCode"):
             return "No code"
         return "Active"
     if item.get("type") != "SFG":
@@ -450,12 +463,12 @@ def item_row(graph, item):
     running = live(every)
     row = {
         "id": item["id"], "name": item.get("name") or "", "type": item.get("type") or "", "typeLabel": TYPE_LABEL.get(item.get("type"), ""),
-        "category": category_name(index, item), "uom": item.get("uom") or "", "erp": item.get("erpCode") or "",
+        "category": category_name(index, item), "uom": unit_of(index, item["id"]), "erp": item.get("erpCode") or "",
         "machines": uniq([name_of(index, "machines", recipe.get("machineId")) for recipe in running]),
         "recipes": len(running), "trial": len([recipe for recipe in every if recipe.get("status") == "trial"]),
         "usedIn": len(live(index["recipesUsing"].get(item["id"]) or [])),
         "colors": uniq([color_label(index, code) for recipe in running for code in colorants(index, recipe)]),
-        "supplier": item.get("supplier") or "", "account": (item.get("properties") or {}).get("account") or "",
+        "supplier": item.get("supplier") or "",
     }
     row.update(_status(item_status(graph, item)))
     return row
@@ -544,7 +557,7 @@ def run_row(graph, run):
         "itemId": item_of_run(index, run), "recipe": run.get("recipeId") or "",
         "machine": name_of(index, "machines", machine_of_run(index, run)), "machineId": machine_of_run(index, run),
         "start": run.get("startedAt") or "", "end": run.get("endedAt") or "", "good": run.get("good"),
-        "operator": name_of(index, "workers", run.get("operatorId")) if run.get("operatorId") else "",
+        "operator": name_of(index, "personnel", run.get("operatorId")) if run.get("operatorId") else "",
         "shift": name_of(index, "shifts", run.get("shiftId")) if run.get("shiftId") else "",
         "lots": [lot.get("number") for lot in index["lotsByRun"].get(run["id"]) or []],
         "status": cap(state), "tone": {"done": "ok", "check dates": "bad"}.get(state, "warn"),
@@ -563,7 +576,7 @@ def stoppage_row(graph, stop):
         "start": stop.get("startedAt") or "", "end": stop.get("endedAt") or "", "hours": span_hours(stop.get("startedAt"), stop.get("endedAt")),
         "cause": cause.get("name") or "", "category": cause.get("category") or "", "planned": bool(cause.get("planned")),
         "description": stop.get("description") or "", "fix": stop.get("fix") or "",
-        "reportedBy": name_of(index, "workers", stop.get("reportedById")) if stop.get("reportedById") else "",
+        "reportedBy": name_of(index, "personnel", stop.get("reportedById")) if stop.get("reportedById") else "",
         "causeId": stop.get("causeId") or "", "runId": stop.get("runId") or "", "reportedById": stop.get("reportedById") or "",
         "startedAt": stop.get("startedAt") or "", "endedAt": stop.get("endedAt") or "",
         "state": state, "status": cap(state), "tone": {"closed": "ok", "open": "warn"}.get(state, "bad"),
@@ -576,7 +589,7 @@ def lot_row(graph, lot):
     return {
         "id": lot["id"], "number": lot.get("number") or "", "item": name_of(index, "items", lot.get("itemId")), "itemId": lot.get("itemId") or "",
         "origin": cap(lot.get("origin")), "run": lot.get("runId") or "", "quantity": lot.get("quantity"),
-        "uom": (index["items"].get(lot.get("itemId")) or {}).get("uom") or "", "received": lot.get("receivedAt") or "",
+        "uom": unit_of(index, lot.get("itemId")), "received": lot.get("receivedAt") or "",
         "supplierLot": lot.get("supplierLot") or "", "used": len(index["consumers"].get(lot["id"]) or []),
         "status": status, "tone": tone(status),
     }
@@ -645,9 +658,9 @@ def gaps(graph):
         ("approved-no-recipe", "item", ("planner", "engineer"), "Approved on a machine, but no recipe there",
          "Every machine a planner may book has a setting sheet, so a job can move without a trial run.",
          [item["id"] for item in parts if approved_without_recipe(graph, item)]),
-        ("raw-no-code", "item", ("manager",), "Raw materials without an accounting code",
+        ("raw-no-code", "item", ("manager",), "Raw materials without an ERP code",
          "Purchasing and stock reconcile with what production actually feeds.",
-         [item["id"] for item in raws if not (item.get("properties") or {}).get("account")]),
+         [item["id"] for item in raws if not item.get("erpCode")]),
         ("raw-unused", "item", ("manager",), "Raw materials never used on a recipe",
          "The stock list matches what production uses; the rest is questioned.",
          [item["id"] for item in raws if not (index["recipesUsing"].get(item["id"]) or [])]),
@@ -695,7 +708,7 @@ def counts(graph):
         "stoppages": len(stops),
         "downtimeHours": round(sum(span_hours(stop.get("startedAt"), stop.get("endedAt")) or 0 for stop in stops), 1),
         "lots": len(graph.get("lots") or []),
-        "workers": len(graph.get("workers") or []),
+        "personnel": len(graph.get("personnel") or []),
         "categories": len(graph.get("item_categories") or []),
     }
 
@@ -836,8 +849,8 @@ def _item_missing(graph, item):
     running = live(every)
     missing = []
     if item.get("type") == "RAW":
-        if not (item.get("properties") or {}).get("account"):
-            missing.append({"what": "Accounting code", "why": "Purchasing and stock cannot be matched to this material.", "action": "edit-item"})
+        if not item.get("erpCode"):
+            missing.append({"what": "ERP code", "why": "Purchasing and stock cannot be matched to this material.", "action": "edit-item"})
         return missing
     if item.get("type") != "SFG":
         if not item.get("erpCode"):
@@ -878,12 +891,12 @@ def _properties(item, role):
     properties = item.get("properties") or {}
     if role == "colorant":
         keys = (("labelCode", "Label code"), ("colorName", "Color"), ("label", "Label text"), ("shade", "Shade / supplier ref."),
-                ("account", "Accounting code"), ("link", "Sample link"))
+                ("standard", "Color standard (RAL, Pantone)"), ("swatch", "Swatch"), ("link", "Sample link"))
     elif item.get("type") == "RAW":
-        keys = (("family", "Family"), ("mfi", "MFI"), ("account", "Accounting code"), ("invoiceCode", "Invoice code"),
+        keys = (("family", "Family"), ("mfi", "MFI (g/10 min)"),
                 ("description", "Description"), ("link", "Datasheet link"))
     else:
-        keys = (("account", "Accounting code"), ("link", "Datasheet link"))
+        keys = (("link", "Datasheet link"),)
     return [{"key": key, "label": label, "value": properties.get(key) or ""} for key, label in keys]
 
 
@@ -902,7 +915,7 @@ def detail_item(graph, code):
     return {
         "kind": "item", "missing": False, "id": item["id"], "name": item.get("name") or "", "status": status, "tone": tone(status),
         "type": item.get("type") or "", "typeLabel": TYPE_LABEL.get(item.get("type"), ""), "categoryId": item.get("categoryId") or "",
-        "category": category_name(index, item), "role": role, "uom": item.get("uom") or "", "erpCode": item.get("erpCode") or "",
+        "category": category_name(index, item), "role": role, "uom": unit_of(index, item["id"]), "uomId": item.get("uomId") or "", "erpCode": item.get("erpCode") or "",
         "supplier": item.get("supplier") or "", "itemStatus": item.get("status") or "active", "notes": item.get("notes") or "",
         "catalog": properties.get("catalog", True), "properties": _properties(item, role),
         "link": link if link.startswith(("https://", "http://")) else "",
@@ -982,7 +995,7 @@ def detail_recipe(graph, code):
         inputs.append({
             "index": position, "id": entry.get("itemId") or "", "name": name_of(index, "items", entry.get("itemId")),
             "role": role_of(index, entry.get("itemId")), "roleLabel": ROLE_LABEL.get(role_of(index, entry.get("itemId")), ""),
-            "category": category_name(index, item), "account": (item.get("properties") or {}).get("account") or "",
+            "category": category_name(index, item), "erp": item.get("erpCode") or "",
             "share": share, "perPiece": per_piece,
         })
     inputs.sort(key=lambda entry: ({"base": 0, "additive": 1, "colorant": 2}.get(entry["role"], 3), entry["name"]))
@@ -1017,7 +1030,7 @@ def detail_order(graph, code):
     row.update({
         "kind": "order", "missing": False, "orderStatus": order.get("status") or "planned", "notes": order.get("notes") or "",
         "dueDate": order.get("dueDate") or "", "erpOrderNo": order.get("erpOrderNo") or "",
-        "uom": (index["items"].get(order.get("itemId")) or {}).get("uom") or "",
+        "uom": unit_of(index, order.get("itemId")),
         "production": run_rows(graph, runs),
         "lots": [lot_row(graph, lot) for run in runs for lot in index["lotsByRun"].get(run["id"]) or []],
         "recipes": [{"value": recipe["id"], "label": "%s · %s · %s" % (recipe["id"], name_of(index, "machines", recipe.get("machineId")),
@@ -1039,7 +1052,7 @@ def detail_run(graph, code):
         "kind": "run", "missing": False, "orderId": run.get("orderId") or "", "recipeId": run.get("recipeId") or "",
         "shiftId": run.get("shiftId") or "", "operatorId": run.get("operatorId") or "", "startedAt": run.get("startedAt") or "",
         "endedAt": run.get("endedAt") or "", "cavities": run.get("cavities"), "cycle": run.get("cycle"), "notes": run.get("notes") or "",
-        "uom": (index["items"].get(recipe.get("itemId")) or {}).get("uom") or "pcs",
+        "uom": unit_of(index, recipe.get("itemId")),
         "scrapLines": [{"index": position, "reason": name_of(index, "scrap_reasons", entry.get("reasonId")),
                         "category": (index["scrap_reasons"].get(entry.get("reasonId")) or {}).get("category") or "",
                         "quantity": entry.get("quantity")} for position, entry in enumerate(run.get("scrap") or [])],
@@ -1047,7 +1060,7 @@ def detail_run(graph, code):
                         "item": name_of(index, "items", (index["lots"].get(entry.get("lotId")) or {}).get("itemId")),
                         "itemId": (index["lots"].get(entry.get("lotId")) or {}).get("itemId") or "",
                         "quantity": entry.get("quantity"),
-                        "uom": (index["items"].get((index["lots"].get(entry.get("lotId")) or {}).get("itemId")) or {}).get("uom") or ""}
+                        "uom": unit_of(index, (index["lots"].get(entry.get("lotId")) or {}).get("itemId"))}
                        for position, entry in enumerate(run.get("inputs") or [])],
         "outputLots": [lot_row(graph, lot) for lot in index["lotsByRun"].get(code) or []],
         "stoppages": stoppage_rows(graph, index["stoppagesByRun"].get(code) or []),
@@ -1119,8 +1132,11 @@ def settings_view(graph):
         "categories": [dict(entry, typeLabel=TYPE_LABEL.get(entry.get("type"), ""), roleLabel=ROLE_LABEL.get(entry.get("role") or "", ""))
                        for entry in graph.get("item_categories") or []],
         "machineTypes": [dict(entry) for entry in graph.get("machine_types") or []],
-        "workers": [dict(entry, machines=[name_of(index, "machines", code) for code in entry.get("machineIds") or []])
-                    for entry in graph.get("workers") or []],
+        "roles": [dict(entry) for entry in graph.get("person_roles") or []],
+        "units": [dict(entry) for entry in graph.get("units") or []],
+        "personnel": [dict(entry, roleLabel=name_of(index, "person_roles", entry["roleId"]) if entry.get("roleId") else "",
+                           machines=[name_of(index, "machines", code) for code in entry.get("machineIds") or []])
+                      for entry in graph.get("personnel") or []],
     }
 
 
@@ -1152,7 +1168,7 @@ def search(graph, term, limit=16):
 
     for item in graph.get("items") or []:
         properties = item.get("properties") or {}
-        if hit(item.get("name"), item["id"], item.get("erpCode"), properties.get("labelCode"), properties.get("account")):
+        if hit(item.get("name"), item["id"], item.get("erpCode"), properties.get("labelCode")):
             push("item", item["id"], item.get("name") or item["id"])
     for mold in graph.get("molds") or []:
         if hit(mold["id"], mold.get("name")):
@@ -1182,6 +1198,8 @@ def _options(entries, label=lambda entry: entry.get("name") or entry["id"], keep
 
 def _active(entry):
     return entry.get("status", "active") != "retired"
+
+
 
 
 def choices(graph):
@@ -1219,14 +1237,17 @@ def choices(graph):
         "machineTypes": _options(graph.get("machine_types") or []),
         "types": [{"value": key, "label": label} for key, label in ITEM_TYPES],
         "roles": [{"value": key, "label": label} for key, label in ROLES],
-        "uoms": [{"value": value, "label": value} for value in UOMS],
+        "uoms": _options(graph.get("units") or [], keep=_active),
         "statuses": [{"value": value, "label": cap(value)} for value in STATUSES],
         "recipeStatuses": [{"value": value, "label": cap(value)} for value in RECIPE_STATUSES],
         "moldStatuses": [{"value": value, "label": cap(value)} for value in MOLD_STATUSES],
         "orderStatuses": [{"value": value, "label": cap(value)} for value in ORDER_STATUSES],
         "lotStatuses": [{"value": value, "label": cap(value)} for value in LOT_STATUSES],
         "fishbone": [{"value": value, "label": value} for value in FISHBONE],
-        "workers": _options(graph.get("workers") or [], keep=_active),
+        "people": _options(graph.get("personnel") or [], keep=_active),
+        "operators": _options(graph.get("personnel") or [], keep=lambda entry: _active(entry) and can_operate(index, entry)),
+        "personRoles": _options(graph.get("person_roles") or [], keep=_active),
+        "productionRoles": [entry["id"] for entry in graph.get("person_roles") or [] if entry.get("runsMachines")],
         "shifts": [{"value": entry["id"], "label": "%s %s–%s" % (entry.get("name"), entry.get("start"), entry.get("end")),
                     "start": entry.get("start") or "", "end": entry.get("end") or ""} for entry in graph.get("shifts") or [] if _active(entry)],
         "causes": _options(graph.get("stoppage_causes") or [], lambda entry: "%s · %s" % (entry.get("name"), entry.get("category")), _active),
@@ -1294,7 +1315,13 @@ def _item_fields(graph, item, payload):
     error = _number_error(payload, [("mfi", "MFI")])
     if error:
         return error
-    item.update({"name": name, "type": kind, "categoryId": category["id"], "uom": _choice(payload.get("uom") or item.get("uom"), UOMS, "pcs")})
+    unit = _get(graph, "units", payload.get("uomId") or item.get("uomId"))
+    if unit is None:
+        return "Choose the unit."
+    swatch = text(payload.get("prop::swatch"))
+    if swatch and not re.match(r"^#[0-9a-fA-F]{6}$", swatch):
+        return "The swatch must be a color like #1E3A8A."
+    item.update({"name": name, "type": kind, "categoryId": category["id"], "uomId": unit["id"]})
     for key in ("erpCode", "supplier", "notes"):
         if key in payload:
             item[key] = text(payload.get(key))
@@ -1670,8 +1697,11 @@ def _run_fields(graph, run, payload):
         return "The recipe makes %s, but the order is for %s." % (name_of(index, "items", recipe.get("itemId")), name_of(index, "items", order.get("itemId")))
     if _get(graph, "shifts", payload.get("shiftId")) is None:
         return "Choose the shift."
-    if _get(graph, "workers", payload.get("operatorId")) is None:
+    operator = _get(graph, "personnel", payload.get("operatorId"))
+    if operator is None:
         return "Choose the operator."
+    if not can_operate(index, operator) and operator["id"] != run.get("operatorId"):
+        return "%s's role (%s) does not run machines." % (operator.get("name"), name_of(index, "person_roles", operator.get("roleId")))
     error = _moment_error(payload, "startedAt", "endedAt", "start", "end")
     if error:
         return error
@@ -1888,7 +1918,7 @@ def _stoppage_fields(graph, stop, payload):
     if not cause and not text(payload.get("description")):
         return "Choose the cause or write what was seen."
     reporter = text(payload.get("reportedBy"))
-    if reporter and _get(graph, "workers", reporter) is None:
+    if reporter and _get(graph, "personnel", reporter) is None:
         return "Choose who reported it from the list."
     stop.update({"machineId": machine["id"], "runId": run["id"] if run else "", "startedAt": text(payload.get("startedAt")),
                  "endedAt": text(payload.get("endedAt")), "causeId": cause, "description": text(payload.get("description")),
@@ -1959,15 +1989,21 @@ def action_save_setting(graph, payload):
         entry.update({"start": start, "end": end})
     if table in ("stoppage_causes", "scrap_reasons"):
         entry["category"] = _choice(payload.get("category"), FISHBONE, "Machine")
+    if table == "person_roles":
+        entry["runsMachines"] = text(payload.get("runsMachines")) in ("yes", "true", "1")
     if table == "stoppage_causes":
         entry["planned"] = text(payload.get("planned")) in ("yes", "true", "1")
     if table == "item_categories":
         entry["type"] = _choice(payload.get("type"), TYPE_LABEL, "RAW")
         entry["role"] = _choice(payload.get("role") or "", [key for key, _ in ROLES], "") if entry["type"] == "RAW" else ""
-    if table == "workers":
+    if table == "personnel":
+        role = _get(graph, "person_roles", payload.get("roleId"))
+        entry["roleId"] = role["id"] if role else ""
         wanted = payload.get("machines") or []
         if isinstance(wanted, str):
             wanted = [code.strip() for code in wanted.split(",") if code.strip()]
+        if role is None or not role.get("runsMachines"):
+            wanted = []
         entry["machineIds"] = [machine["id"] for machine in graph.get("machines") or [] if machine["id"] in wanted]
     if "status" in entry and payload.get("status"):
         entry["status"] = _choice(payload.get("status"), STATUSES, "active")

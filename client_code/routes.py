@@ -110,6 +110,13 @@ class LotRoute(AppPage):
     form = "LotForm"
 
 
-class SettingsRoute(AppPage):
-    path = "/settings"
-    form = "SettingsForm"
+class ConfigureRoute(Route):
+    path = "/configure"
+
+    def before_load(self, **loader_args):
+        raise Redirect(path="/configure/shifts")
+
+
+class ConfigureSectionRoute(AppPage):
+    path = "/configure/:code"
+    form = "ConfigureForm"

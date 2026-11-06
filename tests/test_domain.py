@@ -29,7 +29,7 @@ def _fed(plant):
 
 def _running(plant):
     order = act(plant, "new-order", contextKind="item", contextId=ITEM, quantity="5000")["redirect"]["code"]
-    run = act(plant, "add-run", contextKind="order", contextId=order, recipe=RECIPE, shiftId="SHF-01", operatorId="WRK-001",
+    run = act(plant, "add-run", contextKind="order", contextId=order, recipe=RECIPE, shiftId="SHF-01", operatorId="PER-001",
               startedAt="2026-11-06T05:00:00Z")["redirect"]["code"]
     return order, run
 
@@ -63,7 +63,7 @@ def test_gaps_name_the_open_data(plant):
 
 def test_a_run_needs_its_full_data(plant):
     order = act(plant, "new-order", contextKind="item", contextId=ITEM, quantity="5000")["redirect"]["code"]
-    base = dict(contextKind="order", contextId=order, recipe=RECIPE, shiftId="SHF-01", operatorId="WRK-001", startedAt="2026-11-06T05:00:00Z")
+    base = dict(contextKind="order", contextId=order, recipe=RECIPE, shiftId="SHF-01", operatorId="PER-001", startedAt="2026-11-06T05:00:00Z")
     assert "shift" in act(plant, "add-run", **dict(base, shiftId=""))["error"]
     assert "operator" in act(plant, "add-run", **dict(base, operatorId=""))["error"]
     assert "start" in act(plant, "add-run", **dict(base, startedAt=""))["error"]
@@ -78,7 +78,7 @@ def test_a_stoppage_closes_only_with_a_cause(plant):
     result = act(plant, "add-stoppage", contextKind="run", contextId=run, startedAt="2026-11-06T07:00:00Z", endedAt="2026-11-06T08:00:00Z")
     assert "cause" in result["error"]
     assert not act(plant, "add-stoppage", contextKind="run", contextId=run, startedAt="2026-11-06T07:00:00Z", description="flash").get("error")
-    closing = dict(contextKind="run", contextId=run, shiftId="SHF-01", operatorId="WRK-001", startedAt="2026-11-06T05:00:00Z",
+    closing = dict(contextKind="run", contextId=run, shiftId="SHF-01", operatorId="PER-001", startedAt="2026-11-06T05:00:00Z",
                    endedAt="2026-11-06T13:00:00Z", good="4000")
     assert "still open" in act(plant, "edit-run", **closing)["error"]
 
@@ -87,7 +87,7 @@ def test_run_metrics_leave_out_its_stoppages(plant):
     _, run = _running(plant)
     act(plant, "add-stoppage", contextKind="run", contextId=run, startedAt="2026-11-06T07:00:00Z", endedAt="2026-11-06T09:00:00Z", cause="CAU-01")
     act(plant, "add-scrap", contextKind="run", contextId=run, reason="SCR-01", quantity="60")
-    act(plant, "edit-run", contextKind="run", contextId=run, shiftId="SHF-01", operatorId="WRK-001", startedAt="2026-11-06T05:00:00Z",
+    act(plant, "edit-run", contextKind="run", contextId=run, shiftId="SHF-01", operatorId="PER-001", startedAt="2026-11-06T05:00:00Z",
         endedAt="2026-11-06T13:00:00Z", good="5940")
     page = domain.detail(plant, "run", run)
     assert (page["hours"], page["downHours"], page["pph"], page["scrapPct"]) == (8.0, 2.0, 1000, 1.0)
@@ -131,6 +131,23 @@ def test_settings_reject_duplicates_without_adding(plant):
     assert act(plant, "save-setting", settingKind="cause", name="Mold change", category="Method")["error"]
     assert len(plant["stoppage_causes"]) == before
     assert "HH:MM" in act(plant, "save-setting", settingKind="shift", name="Late", start="25:00", end="06:00")["error"]
+
+
+def test_only_roles_that_run_machines_hold_machines_and_run_them(plant):
+    roles = {entry["name"]: entry["id"] for entry in plant["person_roles"]}
+    act(plant, "save-setting", settingKind="role", name="Line lead", runsMachines="yes")
+    lead = next(entry["id"] for entry in plant["person_roles"] if entry["name"] == "Line lead")
+    act(plant, "save-setting", settingKind="person", code="PER-002", name=plant["personnel"][1]["name"], roleId=roles["Supervisor"], machines="MCH-01,MCH-02")
+    act(plant, "save-setting", settingKind="person", code="PER-003", name=plant["personnel"][2]["name"], roleId=lead, machines="MCH-01,MCH-02")
+    people = {entry["id"]: entry for entry in plant["personnel"]}
+    assert people["PER-002"]["machineIds"] == [] and people["PER-003"]["machineIds"] == ["MCH-01", "MCH-02"]
+    choices = domain.choices(plant)
+    assert "PER-002" not in [entry["value"] for entry in choices["operators"]]
+    assert "PER-002" in [entry["value"] for entry in choices["people"]]
+    order = act(plant, "new-order", contextKind="item", contextId=ITEM, quantity="5000")["redirect"]["code"]
+    refused = act(plant, "add-run", contextKind="order", contextId=order, recipe=RECIPE, shiftId="SHF-01", operatorId="PER-002",
+                  startedAt="2026-11-06T05:00:00Z")
+    assert "does not run machines" in refused["error"]
 
 
 def test_fold_reads_greek_lookalikes_as_latin():

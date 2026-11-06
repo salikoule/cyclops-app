@@ -8,7 +8,7 @@ from craftify_library.CustomComponents.TimePicker import TimePicker
 
 from cyclops_app import Data, Format, Layout
 
-WIDE = ("area", "checks", "datetime")
+WIDE = ("area", "tags", "datetime")
 
 
 def _text(value):
@@ -47,19 +47,72 @@ class _Moment:
         self.clock.set_event_handler(name, handler)
 
 
-class _Checks:
-    def __init__(self, options, selected):
-        chosen = set(selected or [])
-        self.boxes = []
-        self.panel = Layout.flat(FlowPanel(spacing="small", align="left"))
-        for option in options:
-            box = CheckBox(text=option.get("label") or "", checked=option.get("value") in chosen)
-            box.tag.value = option.get("value")
-            self.boxes.append(box)
-            self.panel.add_component(Layout.flat(box))
+class _Tags:
+    """The chosen values as removable tags, and a dropdown of the ones not chosen yet."""
+
+    def __init__(self, options, selected, placeholder):
+        self.options = [(option.get("value"), option.get("label") or option.get("value")) for option in options]
+        allowed = set(value for value, _ in self.options)
+        self.chosen = set(value for value in selected or [] if value in allowed)
+        self.placeholder = placeholder
+        self.panel = Layout.flat(HtmlTemplate(html='<div class="cy-tags"><div class="cy-tag-list" anvil-name="list"></div><div anvil-slot="pick"></div></div>'))
+        self.pick = Layout.flat(DropDown())
+        self.pick.set_event_handler("change", self._add)
+        self.panel.add_component(self.pick, slot="pick")
+        self.panel.dom_nodes["list"].addEventListener("click", self._remove)
+        self._draw()
+
+    def _draw(self):
+        tags = ['<button type="button" class="cy-tag" data-value="%s">%s<span aria-label="Remove">×</span></button>' % (Layout.esc(value), Layout.esc(label))
+                for value, label in self.options if value in self.chosen]
+        self.panel.dom_nodes["list"].innerHTML = "".join(tags) or '<span class="cy-muted">None yet</span>'
+        rest = [(label, value) for value, label in self.options if value not in self.chosen]
+        self.pick.items = [(self.placeholder if rest else "All added", "")] + rest
+        self.pick.selected_value = ""
+        self.pick.enabled = bool(rest)
+
+    def _add(self, **event_args):
+        if self.pick.selected_value:
+            self.chosen.add(self.pick.selected_value)
+            self._draw()
+
+    def _remove(self, event):
+        node = Layout.closest(getattr(event, "target", None), "[data-value]")
+        if node is not None:
+            self.chosen.discard(Layout.attr(node, "data-value"))
+            self._draw()
 
     def value(self):
-        return ",".join(box.tag.value for box in self.boxes if box.checked)
+        return ",".join(value for value, _ in self.options if value in self.chosen)
+
+
+class _Swatch:
+    """A color picker that can also be left unset."""
+
+    def __init__(self, value):
+        self.hex = value or ""
+        self.panel = Layout.flat(HtmlTemplate(html='<div class="cy-swatch-field"><input type="color" anvil-name="pick">'
+                                                    '<span anvil-name="code"></span><a href="javascript:void(0)" anvil-name="clear">Clear</a></div>'))
+        self.panel.dom_nodes["pick"].addEventListener("input", self._picked)
+        self.panel.dom_nodes["clear"].addEventListener("click", self._clear)
+        self._draw()
+
+    def _draw(self):
+        nodes = self.panel.dom_nodes
+        nodes["pick"].value = self.hex or "#ffffff"
+        nodes["code"].textContent = self.hex.upper() if self.hex else "Not set"
+        nodes["clear"].style.display = "" if self.hex else "none"
+
+    def _picked(self, event):
+        self.hex = self.panel.dom_nodes["pick"].value
+        self._draw()
+
+    def _clear(self, event):
+        self.hex = ""
+        self._draw()
+
+    def value(self):
+        return self.hex
 
 
 def _widget(field):
@@ -74,9 +127,12 @@ def _widget(field):
         elif allowed:
             widget.selected_value = allowed[0]
         return widget, widget
-    if kind == "checks":
-        checks = _Checks(field.get("options") or [], field.get("value"))
-        return checks, checks.panel
+    if kind == "swatch":
+        swatch = _Swatch(field.get("value"))
+        return swatch, swatch.panel
+    if kind == "tags":
+        tags = _Tags(field.get("options") or [], field.get("value"), field.get("placeholder") or "Add…")
+        return tags, tags.panel
     if kind == "area":
         widget = TextArea(text=_text(field.get("value")), height=field.get("height") or 88)
         return widget, widget
@@ -93,7 +149,7 @@ def _widget(field):
 
 
 def _read(widget):
-    if isinstance(widget, (_Checks, _Moment)):
+    if isinstance(widget, (_Tags, _Moment, _Swatch)):
         return widget.value()
     if isinstance(widget, DropDown):
         return widget.selected_value or ""
@@ -138,6 +194,15 @@ def _follow(parent, child, groups, empty, keep):
     refill()
 
 
+def _show_for(control, box, values):
+    """Show ``box`` only while the ``control`` dropdown holds one of ``values``."""
+    def sync(**event_args):
+        box.visible = control.selected_value in values
+
+    control.add_event_handler("change", sync)
+    sync()
+
+
 _OPEN = {"drawer": None}
 
 
@@ -147,6 +212,7 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
         if not _OPEN["drawer"].close(force=False):
             return _OPEN["drawer"]
     widgets = {}
+    boxes = {}
     moments = {}
     rows = []
     short = []
@@ -163,6 +229,7 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
         widget, view = _widget(field)
         widgets[field["name"]] = widget
         box = Layout.field(field["label"], view, hint=field.get("hint") or "")
+        boxes[field["name"]] = box
         if field.get("type") == "datetime":
             moments[field["name"]] = (field, box)
         if (field.get("type") or "text") in WIDE or field.get("wide"):
@@ -175,6 +242,10 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
         if field.get("follows") in widgets:
             _follow(widgets[field["follows"]], widgets[field["name"]], field.get("groups") or {}, field.get("empty") or "",
                     {"value": field.get("value")})
+    for field in fields:
+        rule = field.get("shown_for")
+        if rule and rule[0] in widgets and field["name"] in boxes:
+            _show_for(widgets[rule[0]], boxes[field["name"]], rule[1])
     error = Layout.html('<p class="bc-note bc-note-warn cy-form-error" anvil-name="msg"></p>')
     content = Layout.stack(error, *rows)
     for name, (field, box) in moments.items():
@@ -251,6 +322,10 @@ def open_editor(screen, action, extra=None):
     return True
 
 
+def _unit_named(choices, name):
+    return next((opt["value"] for opt in choices.get("uoms") or [] if opt.get("label") == name), "")
+
+
 def _blank(label):
     return {"value": "", "label": label}
 
@@ -285,7 +360,7 @@ def _run_fields(run, choices, order_field=None, recipes=None):
                 hint="Leave empty while the job is still running. Closing it needs the good pieces."),
         {"name": "shiftId", "label": "Shift", "type": "select", "options": [_blank("Choose the shift")] + (choices.get("shifts") or []),
          "value": run.get("shiftId") if run else _shift_now(choices)},
-        {"name": "operatorId", "label": "Operator", "type": "select", "options": [_blank("Choose the operator")] + _sorted(choices.get("workers")),
+        {"name": "operatorId", "label": "Operator", "type": "select", "options": [_blank("Choose the operator")] + _sorted(choices.get("operators")),
          "value": run.get("operatorId") or ""},
         {"name": "good", "label": "Good pieces", "type": "number", "value": run.get("good")},
         {"name": "cycle", "label": "Actual cycle (s)", "type": "number", "value": run.get("cycle"), "placeholder": "from the press display"},
@@ -307,7 +382,7 @@ def _stoppage_fields(stop, choices, machine=None, run=None):
                 hint="Leave empty while the machine is still down. Closing it needs the cause."),
         {"name": "cause", "label": "Cause", "type": "select", "options": [_blank("Not known yet")] + (choices.get("causes") or []),
          "value": stop.get("causeId") or "", "wide": True},
-        {"name": "reportedBy", "label": "Reported by", "type": "select", "options": [_blank("Not recorded")] + _sorted(choices.get("workers")),
+        {"name": "reportedBy", "label": "Reported by", "type": "select", "options": [_blank("Not recorded")] + _sorted(choices.get("people")),
          "value": stop.get("reportedById") or ""},
         {"name": "description", "label": "What was seen", "type": "area", "value": stop.get("description")},
         {"name": "fix", "label": "What was done", "type": "area", "value": stop.get("fix")},
@@ -333,15 +408,17 @@ def _item_fields(data, choices, item_type):
         {"name": "name", "label": "Name", "value": data.get("name"), "wide": True},
         {"name": "type", "label": "Type", "type": "select", "options": choices.get("types") or [], "value": item_type},
         {"name": "categoryId", "label": "Category", "type": "select", "options": [], "follows": "type",
-         "groups": choices.get("categoriesByType") or {}, "empty": "Add a category for this type in Settings", "value": data.get("categoryId")},
-        {"name": "uom", "label": "Unit", "type": "select", "options": choices.get("uoms") or [], "value": data.get("uom") or ("kg" if item_type == "RAW" else "pcs")},
+         "groups": choices.get("categoriesByType") or {}, "empty": "Add a category for this type in Configure", "value": data.get("categoryId")},
+        {"name": "uomId", "label": "Unit", "type": "select", "options": choices.get("uoms") or [], "value": data.get("uomId") or _unit_named(choices, "kg" if item_type == "RAW" else "pcs")},
         {"name": "erpCode", "label": "ERP code", "value": data.get("erpCode"), "placeholder": "from the ERP"},
         {"name": "supplier", "label": "Supplier", "value": data.get("supplier")},
     ]
     if data.get("id"):
         fields.append({"name": "status", "label": "Status", "type": "select", "options": choices.get("statuses") or [], "value": data.get("itemStatus")})
     for entry in properties:
-        fields.append({"name": "prop::" + entry["key"], "label": entry["label"], "value": entry.get("value")})
+        fields.append({"name": "prop::" + entry["key"], "label": entry["label"], "value": entry.get("value"),
+                       "type": "swatch" if entry["key"] == "swatch" else "text",
+                       "hint": "For the screen only. The real match is the standard or the supplier's reference." if entry["key"] == "swatch" else ""})
     if data.get("id"):
         fields.append({"name": "notes", "label": "Notes", "type": "area", "value": data.get("notes"), "height": 64})
     return fields
@@ -405,13 +482,20 @@ def _setting_spec(kind, entry, choices):
         fields += [{"name": "type", "label": "Item type", "type": "select", "options": choices.get("types") or [], "value": entry.get("type") or "RAW"},
                    {"name": "role", "label": "Role in a recipe", "type": "select", "options": choices.get("roles") or [], "value": entry.get("role") or "",
                     "hint": "Raw materials only. A recipe needs at least one base input; colorants make its color."}]
-    if kind == "worker":
-        fields.append({"name": "machines", "label": "Qualified on", "type": "checks", "options": choices.get("presses") or [],
-                       "value": entry.get("machineIds") or []})
-    if "status" in entry or kind in ("shift", "cause", "reason", "worker"):
+    if kind == "person":
+        fields += [{"name": "roleId", "label": "Role", "type": "select", "value": entry.get("roleId") or "",
+                    "options": [_blank("Not set yet")] + (choices.get("personRoles") or []),
+                    "hint": "Roles that run machines can be named on a run. Roles are edited on the Roles tab."},
+                   {"name": "machines", "label": "Qualified on", "type": "tags", "options": choices.get("presses") or [],
+                    "value": entry.get("machineIds") or [], "placeholder": "Add a machine…",
+                    "shown_for": ("roleId", choices.get("productionRoles") or [])}]
+    if kind == "role":
+        fields.append({"name": "runsMachines", "label": "Runs machines", "type": "select", "value": "yes" if entry.get("runsMachines") else "no",
+                       "options": [{"value": "no", "label": "No"}, {"value": "yes", "label": "Yes: can be named on a run, holds machine qualifications"}]})
+    if "status" in entry or kind in ("shift", "cause", "reason", "person", "role", "unit"):
         fields.append({"name": "status", "label": "Status", "type": "select", "options": choices.get("statuses") or [], "value": entry.get("status") or "active"})
     titles = {"shift": "shift", "cause": "stoppage cause", "reason": "scrap reason", "category": "item category",
-              "machineType": "machine type", "worker": "worker"}
+              "machineType": "machine type", "person": "person", "role": "role", "unit": "unit"}
     title = ("Edit %s" if entry.get("id") else "New %s") % titles.get(kind, "setting")
     return (title, fields, "Retire a value instead of deleting it, so the records that use it keep it.")
 
@@ -426,7 +510,8 @@ def _spec(screen, action, extra):
         return ("Edit item", _item_fields(data, choices, data.get("type")), "The ERP code is what lets orders and stock meet this record.")
     if action == "set-approved":
         return ("Approved machines", [
-            {"name": "machines", "label": "This item may run on", "type": "checks", "options": choices.get("presses") or [], "value": data.get("approvedMachineIds") or []},
+            {"name": "machines", "label": "This item may run on", "type": "tags", "options": choices.get("presses") or [], "value": data.get("approvedMachineIds") or [],
+             "placeholder": "Add a machine…"},
         ], "A machine that is approved but has no recipe shows up as a gap for the planner.")
     if action == "new-mold":
         return ("New mold", _mold_fields({}, choices), "", "Create mold")

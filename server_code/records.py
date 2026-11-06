@@ -35,6 +35,8 @@ def links(table):
 TABLES = (
     ("item_categories", [("name", "name", TEXT), ("item_type", "type", TEXT), ("role", "role", TEXT)]),
     ("machine_types", [("name", "name", TEXT)]),
+    ("units", [("name", "name", TEXT), ("status", "status", TEXT)]),
+    ("person_roles", [("name", "name", TEXT), ("runs_machines", "runsMachines", BOOL), ("status", "status", TEXT)]),
     ("shifts", [("name", "name", TEXT), ("start_time", "start", TEXT), ("end_time", "end", TEXT), ("status", "status", TEXT)]),
     ("stoppage_causes", [("name", "name", TEXT), ("category", "category", TEXT), ("planned", "planned", BOOL), ("status", "status", TEXT)]),
     ("scrap_reasons", [("name", "name", TEXT), ("category", "category", TEXT), ("status", "status", TEXT)]),
@@ -42,9 +44,9 @@ TABLES = (
                   ("attached_to", "attachedToId", link("machines")), ("floor_number", "floor", NUM), ("serial", "serial", TEXT),
                   ("euromap", "euromap", TEXT), ("year", "year", TEXT), ("changeover_min", "changeoverMin", NUM),
                   ("location", "location", TEXT), ("status", "status", TEXT), ("notes", "notes", TEXT)]),
-    ("workers", [("name", "name", TEXT), ("status", "status", TEXT), ("qualified_machines", "machineIds", links("machines"))]),
+    ("personnel", [("name", "name", TEXT), ("role", "roleId", link("person_roles")), ("status", "status", TEXT), ("qualified_machines", "machineIds", links("machines"))]),
     ("items", [("name", "name", TEXT), ("item_type", "type", TEXT), ("category", "categoryId", link("item_categories")),
-               ("uom", "uom", TEXT), ("erp_code", "erpCode", TEXT), ("approved_machines", "approvedMachineIds", links("machines")),
+               ("unit", "uomId", link("units")), ("erp_code", "erpCode", TEXT), ("approved_machines", "approvedMachineIds", links("machines")),
                ("supplier", "supplier", TEXT), ("properties", "properties", JSON), ("status", "status", TEXT), ("notes", "notes", TEXT)]),
     ("molds", [("name", "name", TEXT), ("cavities", "cavities", NUM), ("shot_weight_g", "shotWeight", NUM),
                ("location", "location", TEXT), ("status", "status", TEXT), ("notes", "notes", TEXT)]),
@@ -54,7 +56,7 @@ TABLES = (
     ("production_orders", [("item", "itemId", link("items")), ("quantity", "quantity", NUM), ("due_date", "dueDate", DATE),
                            ("status", "status", TEXT), ("erp_order_no", "erpOrderNo", TEXT), ("notes", "notes", TEXT)]),
     ("production_runs", [("order", "orderId", link("production_orders")), ("recipe", "recipeId", link("recipes")),
-                         ("shift", "shiftId", link("shifts")), ("operator", "operatorId", link("workers")),
+                         ("shift", "shiftId", link("shifts")), ("operator", "operatorId", link("personnel")),
                          ("started_at", "startedAt", MOMENT), ("ended_at", "endedAt", MOMENT), ("good_qty", "good", NUM),
                          ("cavities_running", "cavities", NUM), ("cycle_s", "cycle", NUM), ("status", "status", TEXT),
                          ("notes", "notes", TEXT)]),
@@ -63,7 +65,7 @@ TABLES = (
               ("quantity", "quantity", NUM), ("status", "status", TEXT), ("notes", "notes", TEXT)]),
     ("stoppages", [("machine", "machineId", link("machines")), ("run", "runId", link("production_runs")),
                    ("started_at", "startedAt", MOMENT), ("ended_at", "endedAt", MOMENT), ("cause", "causeId", link("stoppage_causes")),
-                   ("description", "description", TEXT), ("fix", "fix", TEXT), ("reported_by", "reportedById", link("workers"))]),
+                   ("description", "description", TEXT), ("fix", "fix", TEXT), ("reported_by", "reportedById", link("personnel"))]),
 )
 COLUMNS = dict(TABLES)
 ORDER = tuple(name for name, _ in TABLES)

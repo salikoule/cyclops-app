@@ -11,7 +11,7 @@ SLUG = {
     "run": "production",
     "stoppage": "stoppages",
     "lot": "lots",
-    "settings": "settings",
+    "configure": "configure",
 }
 KIND = {slug: kind for kind, slug in SLUG.items()}
 LABEL = {
@@ -25,7 +25,7 @@ LABEL = {
     "run": "Production run",
     "stoppage": "Stoppage",
     "lot": "Lot",
-    "settings": "Settings",
+    "configure": "Configure",
 }
 COUNT_KEY = {
     "item": "items",

@@ -59,12 +59,14 @@ CREATE = {
     "lot": ("Receive a lot", "receive-lot"),
 }
 SETTING_SECTIONS = (
-    ("shift", "shifts", "Shifts", "Each run is logged on a shift."),
-    ("cause", "causes", "Stoppage causes", "Grouped by the 6M of the fishbone diagram. Planned stops are kept apart from breakdowns."),
-    ("reason", "reasons", "Scrap reasons", "Each scrap line on a run has a reason."),
-    ("category", "categories", "Item categories", "The role of a raw-material category decides what a recipe needs: a base input, and colorants for its color."),
-    ("machineType", "machineTypes", "Machine types", ""),
-    ("worker", "workers", "Workers", "Operators and the people who report stoppages."),
+    ("shift", "shifts", "shifts", "Shifts", "Each run is logged on a shift."),
+    ("cause", "causes", "causes", "Stoppage causes", "Grouped by the 6M of the fishbone diagram. Planned stops are kept apart from breakdowns."),
+    ("reason", "reasons", "scrap-reasons", "Scrap reasons", "Each scrap line on a run has a reason."),
+    ("category", "categories", "categories", "Item categories", "The role of a raw-material category decides what a recipe needs: a base input, and colorants for its color."),
+    ("machineType", "machineTypes", "machine-types", "Machine types", "Presses, robots, and the other equipment kinds a machine can be."),
+    ("person", "personnel", "personnel", "Personnel", "Everyone who runs machines or reports stoppages. Only roles that run machines have machine qualifications."),
+    ("role", "roles", "roles", "Roles", "The jobs people hold. A role that runs machines can be named on a run and holds machine qualifications."),
+    ("unit", "units", "units", "Units", "How items are counted and weighed."),
 )
 
 
@@ -89,8 +91,8 @@ class Screen:
             self._overview()
         elif self.kind == "structure":
             self._structure()
-        elif self.kind == "settings":
-            self._settings_page()
+        elif self.kind == "configure":
+            self._configure_page()
         elif self.code:
             self._detail()
         else:
@@ -115,16 +117,11 @@ class Screen:
             "route": Layout.attr(node, "data-route"),
             "index": Layout.attr(node, "data-index"),
             "item": Layout.attr(node, "data-item"),
-            "settingKind": Layout.attr(node, "data-kind"),
-            "code": Layout.attr(node, "data-code"),
         })
 
     def handle(self, action, dataset):
         if action == "open-gap":
             Nav.go(dataset.get("route"), query={"gap": dataset.get("gap") or ""})
-            return
-        if action == "edit-setting":
-            self._edit_setting(dataset.get("settingKind"), dataset.get("code"))
             return
         if action == "edit-input-row":
             entry = next((entry for entry in (self.data or {}).get("inputs") or [] if entry.get("id") == dataset.get("item")), None)
@@ -321,7 +318,7 @@ class Screen:
         cards = (
             ("Engineer / setter", "Opens the recipe for the job: mold, machine, temperatures, injection profile, inputs and shares. Marks the standard recipe when several exist. Logs stoppages with their cause."),
             ("Planner", "Opens the item to see where it runs and at what cycle, and the machine for what it can run and what is running. Writes orders and logs runs against them."),
-            ("Manager", "Uses the overview: the machines, the counts, and the gap list. Owns ERP codes on items and accounting codes on materials, and traces lots."),
+            ("Manager", "Uses the overview: the machines, the counts, and the gap list. Owns the ERP codes on items and materials, and traces lots."),
         )
         built = [Layout.html('<div class="cy-card"><h3>%s</h3><p>%s</p></div>' % (Layout.esc(title), Layout.esc(text))) for title, text in cards]
         card = Layout.section("Who uses what, every day")
@@ -474,7 +471,9 @@ class Screen:
             ("Supplier", Format.text(data.get("supplier")), False) if data.get("supplier") else None,
         ]
         for entry in data.get("properties") or []:
-            if entry.get("value"):
+            if entry.get("key") == "swatch" and entry.get("value"):
+                facts.append((entry["label"], '<span class="cy-swatch" style="background:%s"></span> %s' % (Layout.esc(entry["value"]), Layout.esc(entry["value"].upper())), False))
+            elif entry.get("value"):
                 facts.append((entry["label"], Format.text(entry["value"]), False))
         if data.get("link"):
             facts.append(("Link", '<a href="%s" target="_blank" rel="noopener">Open</a>' % Layout.esc(data.get("link")), False))
@@ -658,7 +657,7 @@ class Screen:
         for entry in data.get("inputs") or []:
             share = ("%s%%" % Format.trim(entry.get("share"))) if entry.get("share") is not None else "share ?"
             per_piece = (" · %s g per piece" % Format.trim(entry.get("perPiece"))) if entry.get("perPiece") is not None else ""
-            account = ("acc. " + entry["account"]) if entry.get("account") else "no accounting code"
+            account = ("ERP " + entry["erp"]) if entry.get("erp") else "no ERP code"
             rows.append(
                 '<div class="cy-row"><span class="cy-flag cy-role-%s">%s</span><div class="cy-grow">%s<div class="cy-sub">%s · %s%s</div></div><b>%s</b>'
                 '<button type="button" class="cy-mini" data-action="edit-input-row" data-item="%s">Share</button>'
@@ -829,38 +828,45 @@ class Screen:
         Layout.body(card, self.block(body))
         return card
 
-    # Settings ---------------------------------------------------------------------------------
+    # Configure --------------------------------------------------------------------------------
 
-    def _settings_page(self):
+    def _configure_page(self):
+        section = next((entry for entry in SETTING_SECTIONS if entry[2] == self.code), None)
+        if section is None:
+            Nav.go("configure", SETTING_SECTIONS[0][2])
+            return
         data = _call("cyclops_detail", "settings", "")
         if not data:
-            self.show(Layout.empty_state("The settings could not be loaded."))
+            self.show(Layout.empty_state("The lists could not be loaded."))
             return
         self.data = data
-        parts = [Layout.page_header("Settings", description="The lists the records choose from. Retire a value instead of deleting it, so older records keep it.")]
-        for kind, key, title, subtitle in SETTING_SECTIONS:
-            rows = []
-            for entry in data.get(key) or []:
-                rows.append('<a class="cy-row" href="javascript:void(0)" data-action="edit-setting" data-kind="%s" data-code="%s">%s<div class="cy-grow"><b>%s</b><div class="cy-sub">%s</div></div>%s</a>'
-                            % (kind, Layout.esc(entry.get("id")), Format.id_tag("setting", entry.get("id")), Layout.esc(entry.get("name")),
-                               Layout.esc(self._setting_note(kind, entry)), Format.status("Retired", "muted") if entry.get("status") == "retired" else ""))
-            card = Layout.section(title, subtitle, actions=(Layout.button("Add", lambda kind=kind, **e: self._edit_setting(kind, "")),))
-            Layout.body(card, self.block('<div class="cy-list cy-settings">%s</div>' % "".join(rows) if rows else '<p class="cy-muted">Nothing yet.</p>'))
-            parts.append(card)
-        self.show(*parts)
+        kind, key, slug, title, subtitle = section
+        tabs = "".join('<a class="cy-tab%s" href="javascript:void(0)" data-nav="%s">%s <span>%s</span></a>' % (
+            " is-active" if entry[2] == slug else "", Layout.esc(Nav.path("configure", entry[2])), Layout.esc(entry[3]), len(data.get(entry[1]) or []))
+            for entry in SETTING_SECTIONS)
+        rows = [self._setting_row(kind, entry) for entry in data.get(key) or []]
+        card = Layout.section(title, subtitle, padded=False, actions=(Layout.button("Add", lambda **e: self._edit_setting(kind, "")),))
+        Layout.body(card, Tables.mount(rows, kind, Tables.columns_for(kind), height="640px" if len(rows) > 12 else None,
+                                       on_edit=lambda row: self._edit_setting(kind, row.get("id")), edit_on_click=True))
+        self.show(
+            Layout.page_header("Configure", description="The lists the records choose from. Retire a value instead of deleting it, so older records keep it."),
+            self.block('<nav class="cy-tabs">%s</nav>' % tabs),
+            card,
+        )
 
-    def _setting_note(self, kind, entry):
-        if kind == "shift":
-            return "%s–%s" % (entry.get("start"), entry.get("end"))
+    def _setting_row(self, kind, entry):
+        retired = entry.get("status") == "retired"
+        row = dict(entry, status="Retired" if retired else "Active", tone="muted" if retired else "ok")
         if kind == "cause":
-            return entry.get("category") + (" · planned" if entry.get("planned") else "")
-        if kind == "reason":
-            return entry.get("category") or ""
+            row["planned"] = "Yes" if entry.get("planned") else "No"
+        if kind == "role":
+            row["runsMachines"] = "Yes" if entry.get("runsMachines") else "No"
         if kind == "category":
-            return entry.get("typeLabel") + ((" · " + entry["roleLabel"]) if entry.get("roleLabel") else "")
-        if kind == "worker":
-            return ", ".join(entry.get("machines") or [])
-        return ""
+            row["roleLabel"] = entry.get("roleLabel") or "—"
+        if kind == "person":
+            row["roleLabel"] = entry.get("roleLabel") or "Not set"
+            row["machines"] = ", ".join(entry.get("machines") or [])
+        return row
 
     def _edit_setting(self, kind, code):
         key = next(section[1] for section in SETTING_SECTIONS if section[0] == kind)
@@ -876,8 +882,8 @@ def mount_structure(form, ctx):
     Screen(form, "structure", None, ctx).render()
 
 
-def mount_settings(form, ctx):
-    Screen(form, "settings", None, ctx).render()
+def mount_configure(form, ctx):
+    Screen(form, "configure", Nav.params(ctx).get("code"), ctx).render()
 
 
 def mount_list(form, kind, ctx):

@@ -127,6 +127,18 @@ def _machine_col(field="machine"):
             "header_filter_params": dict(_NO_AUTOFILL)}
 
 
+SETTING_COLUMNS = {
+    "shift": lambda: [_col("Starts", "start", width=90, formatter=_text), _col("Ends", "end", width=90, formatter=_text)],
+    "cause": lambda: [_list_col("6M", "category", 130), _list_col("Planned", "planned", 110)],
+    "reason": lambda: [_list_col("6M", "category", 130)],
+    "category": lambda: [_list_col("Item type", "typeLabel", 150), _list_col("Recipe role", "roleLabel", 140)],
+    "machineType": lambda: [],
+    "role": lambda: [_list_col("Runs machines", "runsMachines", 140)],
+    "unit": lambda: [],
+    "person": lambda: [_list_col("Role", "roleLabel", 150), _col("Qualified on", "machines", min_width=220, formatter=_clip)],
+}
+
+
 def columns_for(kind, hide=()):
     if kind == "item":
         columns = [
@@ -141,7 +153,6 @@ def columns_for(kind, hide=()):
             _num_col("Trial", "trial", 70),
             _num_col("Used in", "usedIn", 84),
             {"title": "Colors", "field": "colors", "min_width": 140, "formatter": _pills("colorant")},
-            _col("Accounting", "account", width=120, formatter=_text),
         ]
     elif kind == "mold":
         columns = [
@@ -233,6 +244,11 @@ def columns_for(kind, hide=()):
             _col("Reported by", "reportedBy", width=110, formatter=_clip),
             _status_col(118),
         ]
+    elif kind in SETTING_COLUMNS:
+        columns = [_col("ID", "id", width=100, formatter=_id("setting")), _col("Name", "name", min_width=220, formatter=_text)]
+        columns += SETTING_COLUMNS[kind]()
+        if kind != "machineType":
+            columns.append(_status_col(120))
     else:
         columns = [
             _col("ID", "id", width=118, formatter=_id("lot")),

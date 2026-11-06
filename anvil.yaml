@@ -16,7 +16,7 @@ db_schema:
     - {name: name, type: string}
     - {name: item_type, type: string}
     - {name: category, target: item_categories, type: link_single}
-    - {name: uom, type: string}
+    - {name: unit, target: units, type: link_single}
     - {name: erp_code, type: string}
     - {name: approved_machines, target: machines, type: link_multiple}
     - {name: supplier, type: string}
@@ -77,6 +77,25 @@ db_schema:
     - {name: notes, type: string}
     server: full
     title: Molds
+  person_roles:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: name, type: string}
+    - {name: runs_machines, type: bool}
+    - {name: status, type: string}
+    server: full
+    title: Person roles
+  personnel:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: name, type: string}
+    - {name: role, target: person_roles, type: link_single}
+    - {name: status, type: string}
+    - {name: qualified_machines, target: machines, type: link_multiple}
+    server: full
+    title: Personnel
   production_orders:
     client: none
     columns:
@@ -96,7 +115,7 @@ db_schema:
     - {name: order, target: production_orders, type: link_single}
     - {name: recipe, target: recipes, type: link_single}
     - {name: shift, target: shifts, type: link_single}
-    - {name: operator, target: workers, type: link_single}
+    - {name: operator, target: personnel, type: link_single}
     - {name: started_at, type: datetime}
     - {name: ended_at, type: datetime}
     - {name: good_qty, type: number}
@@ -187,9 +206,17 @@ db_schema:
     - {name: cause, target: stoppage_causes, type: link_single}
     - {name: description, type: string}
     - {name: fix, type: string}
-    - {name: reported_by, target: workers, type: link_single}
+    - {name: reported_by, target: personnel, type: link_single}
     server: full
     title: Stoppages
+  units:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: name, type: string}
+    - {name: status, type: string}
+    server: full
+    title: Units
   users:
     client: none
     columns:
@@ -228,15 +255,6 @@ db_schema:
     indexes: []
     server: full
     title: Users
-  workers:
-    client: none
-    columns:
-    - {name: code, type: string}
-    - {name: name, type: string}
-    - {name: status, type: string}
-    - {name: qualified_machines, target: machines, type: link_multiple}
-    server: full
-    title: Workers
 dependencies:
 - dep_id: dep_wkevhfjmozeq0f
   resolution_hints: {app_id: ST3GINETRT4QJYDC, name: craftify-library, package_name: craftify_library}

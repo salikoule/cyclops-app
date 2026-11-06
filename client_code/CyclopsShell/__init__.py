@@ -21,7 +21,7 @@ NAV = (
     ("Stoppages", "stoppage", "fa:wrench", False),
     ("Lots", "lot", "fa:barcode", False),
     None,
-    ("Settings", "settings", "fa:gear", False),
+    ("Configure", "configure", "fa:list-check", False),
 )
 
 BRAND = (
@@ -50,7 +50,7 @@ def _plant_section():
     )
     facts = "".join('<div><dt>%s</dt><dd>%s</dd></div>' % (Layout.esc(label), Layout.esc(value)) for label, value in pairs)
     return Layout.stack(
-        Layout.html('<div><h3>Plant data</h3><p class="cs-lead">Cyclops is the plant record: items, molds, machines, recipes, and the production log with its lots. Shifts, causes, and categories are on the Settings page.</p></div>'),
+        Layout.html('<div><h3>Plant data</h3><p class="cs-lead">Cyclops is the plant record: items, molds, machines, recipes, and the production log with its lots. Shifts, causes, and categories are on the Configure page.</p></div>'),
         Layout.html('<dl class="bc-dl cy-dl">%s</dl>' % facts),
         Layout.note("Every page reads the data tables directly, so rows edited in the Anvil Data Tables view show on the next page load. To load the workbook again, run scripts/import_workbook.py with the server Uplink key. It replaces every record."),
     )

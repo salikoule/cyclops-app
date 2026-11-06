@@ -18,8 +18,8 @@ import records
 
 _BATCH = 200
 _SEEDED = False
-_REFERENCE = ("machines", "machine_types", "item_categories")
-_PEOPLE = ("workers", "shifts")
+_REFERENCE = ("machines", "machine_types", "item_categories", "units", "person_roles")
+_PEOPLE = ("personnel", "shifts")
 _REASONS = ("stoppage_causes", "scrap_reasons")
 _SETTINGS = _REFERENCE + _PEOPLE + _REASONS
 
@@ -99,7 +99,7 @@ def _item_scope(plant, code):
         plant.find("production_runs", recipe=q.any_of(*made))
     plant.by_codes("production_runs", _consumers(plant.find("lots", item=row)))
     plant.find("production_orders", item=row)
-    plant.all("workers", "shifts")
+    plant.all("personnel", "shifts")
     return _run_context(plant)
 
 
@@ -121,7 +121,7 @@ def _machine_scope(plant, code):
         plant.find("production_runs", recipe=q.any_of(*on_machine))
     plant.find("stoppages", machine=row)
     plant.follow("stoppages", "run")
-    plant.all("workers", "shifts", "stoppage_causes")
+    plant.all("personnel", "shifts", "stoppage_causes")
     return _run_context(plant)
 
 
@@ -132,7 +132,7 @@ def _recipe_scope(plant, code):
     if row["item"] is not None:
         plant.find("recipes", item=row["item"])
     plant.find("production_runs", recipe=row)
-    plant.all("workers", "shifts", "stoppage_causes")
+    plant.all("personnel", "shifts", "stoppage_causes")
     return _run_context(plant)
 
 
@@ -141,7 +141,7 @@ def _order_scope(plant, code):
     if row is not None:
         plant.find("production_runs", order=row)
         _every_recipe_of(plant, [row["item"]])
-    plant.all("workers", "shifts")
+    plant.all("personnel", "shifts")
     return _run_context(plant)
 
 
@@ -157,7 +157,7 @@ def _run_scope(plant, code):
     row = plant.get("production_runs", code)
     if row is None:
         return plant
-    plant.all("workers", "shifts", "stoppage_causes", "scrap_reasons")
+    plant.all("personnel", "shifts", "stoppage_causes", "scrap_reasons")
     _run_context(plant)
     plant.by_codes("production_runs", _consumers(plant.find("lots", run=row)))
     if row["recipe"] is not None:
@@ -182,7 +182,7 @@ def _lot_scope(plant, code):
         forward = plant.find("lots", run=q.any_of(*users)) if users else []
         if not back and not forward:
             break
-    plant.all("workers", "shifts")
+    plant.all("personnel", "shifts")
     return _run_context(plant)
 
 
@@ -202,8 +202,8 @@ _LISTS = {
     "machine": lambda: _run_context(_plant("recipes", "items", "molds", "production_runs", "stoppages")),
     "recipe": lambda: _recipe_context(_plant("recipes", "items", "molds")),
     "order": lambda: _run_context(_plant("production_orders", "production_runs", "items")),
-    "run": lambda: _run_context(_plant("production_runs", "production_orders", "recipes", "items", "workers", "shifts", "scrap_reasons")),
-    "stoppage": lambda: _run_context(_plant("stoppages", "production_runs", "recipes", "items", "workers", "stoppage_causes")),
+    "run": lambda: _run_context(_plant("production_runs", "production_orders", "recipes", "items", "personnel", "shifts", "scrap_reasons")),
+    "stoppage": lambda: _run_context(_plant("stoppages", "production_runs", "recipes", "items", "personnel", "stoppage_causes")),
     "lot": lambda: _run_context(_plant("lots", "items", "production_runs", "recipes")),
 }
 

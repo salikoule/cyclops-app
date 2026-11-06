@@ -338,7 +338,7 @@ def parse(path):
 
     graph = {
         "products": products, "molds": molds, "presses": presses, "materials": materials,
-        "colors": colors, "recipes": recipes, "links": links, "workers": workers,
+        "colors": colors, "recipes": recipes, "links": links, "personnel": workers,
         "meta": {"source": Path(path).name, "imported": datetime.date.today().isoformat()},
     }
     counted = OrderedDict((key, len(graph[key])) for key in ("products", "molds", "presses", "recipes", "materials", "colors", "links"))
@@ -354,6 +354,9 @@ CATEGORIES = (
     ("PAK", "Packaging", ""), ("FG", "Finished good", ""), ("TRD", "Trading good", ""),
 )
 MACHINE_TYPES = ("Injection press", "Robot")
+UNITS = ("pcs", "kg", "g", "m", "l")
+PERSON_ROLES = (("Operator", True), ("Setter", True), ("Supervisor", False), ("Maintenance", False), ("Quality", False),
+                ("Warehouse", False), ("Management", False), ("Other", False))
 SHIFTS = (("Morning", "06:00", "14:00"), ("Afternoon", "14:00", "22:00"), ("Night", "22:00", "06:00"))
 CAUSES = (
     ("Machine breakdown", "Machine", False), ("Mold fault", "Machine", False), ("Robot fault", "Machine", False),
@@ -410,6 +413,10 @@ def to_plant(graph):
     category = {(item["type"], item["name"]): item["id"] for item in plant["item_categories"]}
     plant["machine_types"] = [{"id": _code("MTY", n, 2), "name": name} for n, name in enumerate(MACHINE_TYPES, start=1)]
     press_type, robot_type = plant["machine_types"][0]["id"], plant["machine_types"][1]["id"]
+    plant["units"] = [{"id": _code("UNT", n, 2), "name": name, "status": "active"} for n, name in enumerate(UNITS, start=1)]
+    unit = {entry["name"]: entry["id"] for entry in plant["units"]}
+    plant["person_roles"] = [{"id": _code("ROL", n, 2), "name": name, "runsMachines": runs, "status": "active"}
+                             for n, (name, runs) in enumerate(PERSON_ROLES, start=1)]
     plant["shifts"] = [{"id": _code("SHF", n, 2), "name": name, "start": start, "end": end, "status": "active"}
                        for n, (name, start, end) in enumerate(SHIFTS, start=1)]
     plant["stoppage_causes"] = [{"id": _code("CAU", n, 2), "name": name, "category": group, "planned": planned, "status": "active"}
@@ -425,12 +432,12 @@ def to_plant(graph):
         if not name:
             return ""
         if name not in worker_by_name:
-            entry = {"id": _code("WRK", len(workers) + 1, 3), "name": name, "status": "active", "machineIds": []}
+            entry = {"id": _code("PER", len(workers) + 1, 3), "name": name, "roleId": "", "status": "active", "machineIds": []}
             workers.append(entry)
             worker_by_name[name] = entry["id"]
         return worker_by_name[name]
 
-    for name in graph.get("workers") or []:
+    for name in graph.get("personnel") or []:
         worker(name)
 
     machines, machine_of = [], {}
@@ -466,25 +473,25 @@ def to_plant(graph):
     for product in graph["products"]:
         lid = re.match(r"^ΚΑΠΑΚΙ", product.get("name") or "", re.IGNORECASE)
         add_item(product["id"], {
-            "name": product["name"], "type": "SFG", "categoryId": category[("SFG", "Lid" if lid else "Part")], "uom": "pcs",
+            "name": product["name"], "type": "SFG", "categoryId": category[("SFG", "Lid" if lid else "Part")], "uomId": unit["pcs"],
             "erpCode": product.get("erpCode") or "", "approvedMachineIds": [machine_of[p] for p in product.get("approvedPressIds") or []],
             "supplier": "", "properties": {}, "status": "active", "notes": "",
         })
     for material in graph["materials"]:
-        properties = {key: material.get(key) or "" for key in ("mfi", "family", "account", "invoiceCode", "description", "link", "notes")}
+        properties = {key: material.get(key) or "" for key in ("mfi", "family", "description", "link", "notes")}
         properties["catalog"] = bool(material.get("catalog"))
         add_item(material["id"], {
-            "name": material["text"], "type": "RAW", "categoryId": category[("RAW", material_category(material))], "uom": "kg",
-            "erpCode": "", "approvedMachineIds": [], "supplier": material.get("supplier") or "",
+            "name": material["text"], "type": "RAW", "categoryId": category[("RAW", material_category(material))], "uomId": unit["kg"],
+            "erpCode": material.get("account") or "", "approvedMachineIds": [], "supplier": material.get("supplier") or "",
             "properties": {key: value for key, value in properties.items() if value != ""}, "status": "active", "notes": "",
         })
     for color in graph["colors"]:
         properties = {"labelCode": color.get("code") or "", "colorName": color.get("name") or "", "label": color.get("label") or "",
-                      "account": color.get("account") or "", "shade": color.get("shade") or "", "link": color.get("link") or "",
+                      "shade": color.get("shade") or "", "link": color.get("link") or "",
                       "notes": color.get("notes") or "", "catalog": bool(color.get("catalog"))}
         add_item(color["id"], {
             "name": " ".join(part for part in (color.get("name"), color.get("code")) if part) or color["id"], "type": "RAW",
-            "categoryId": category[("RAW", "Masterbatch")], "uom": "kg", "erpCode": "", "approvedMachineIds": [], "supplier": "",
+            "categoryId": category[("RAW", "Masterbatch")], "uomId": unit["kg"], "erpCode": color.get("account") or "", "approvedMachineIds": [], "supplier": "",
             "properties": {key: value for key, value in properties.items() if value != ""}, "status": "active", "notes": "",
         })
     plant["items"] = items
@@ -549,11 +556,11 @@ def to_plant(graph):
     stoppages.sort(key=lambda entry: entry.pop("sort"))
     for number, entry in enumerate(stoppages, start=1):
         entry["id"] = _code("STP", number, 5)
-    plant.update({"recipes": recipes, "stoppages": stoppages, "lots": lots, "workers": workers,
+    plant.update({"recipes": recipes, "stoppages": stoppages, "lots": lots, "personnel": workers,
                   "production_orders": [], "production_runs": []})
     plant["meta"] = graph["meta"]
     counted = OrderedDict((key, len(plant[key])) for key in (
-        "items", "molds", "machines", "recipes", "stoppages", "lots", "workers", "item_categories", "stoppage_causes", "scrap_reasons"))
+        "items", "molds", "machines", "recipes", "stoppages", "lots", "personnel", "person_roles", "units", "item_categories", "stoppage_causes", "scrap_reasons"))
     counted["recipe inputs"] = sum(len(recipe["inputs"]) for recipe in recipes)
     counted["stoppages without a usable stop time"] = sum(1 for entry in stoppages if not entry["startedAt"])
     counted["stoppages without a restart time"] = sum(1 for entry in stoppages if not entry["endedAt"])

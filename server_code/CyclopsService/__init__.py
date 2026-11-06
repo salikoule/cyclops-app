@@ -8,6 +8,7 @@ import anvil.server
 from anvil.tables import app_tables
 from craftify_library.CraftifyAuth import craftify_require_user
 
+import listing
 import seed_data
 import store
 
@@ -67,10 +68,24 @@ def cyclops_structure():
     return _timed("structure", store.structure)
 
 
+@anvil.server.http_endpoint("/list/:kind", methods=["POST"])
+def cyclops_list_page(kind, **_query):
+    """One page of a list for Tabulator's remote mode. Only the signed-in browser's own requests share its session."""
+    try:
+        _guard()
+    except Exception as error:
+        return anvil.server.HttpResponse(401, str(error))
+    asked = anvil.server.request.body_json or {}
+    sorters = [{"field": entry.get("field"), "dir": entry.get("dir")} for entry in asked.get("sort") or []]
+    filters = [{"field": entry.get("field"), "value": entry.get("value")} for entry in asked.get("filter") or []]
+    return _timed("list page %s %s" % (kind, asked.get("page")), listing.page, kind, int(asked.get("page") or 1),
+                  int(asked.get("size") or 25), sorters, filters, asked.get("gap") or None)
+
+
 @anvil.server.callable
-def cyclops_list(kind, gap=None):
+def cyclops_list_fields():
     _guard()
-    return _timed("list %s%s" % (kind, (" " + gap) if gap else ""), store.list_view, kind, gap or None)
+    return listing.capabilities()
 
 
 @anvil.server.callable

@@ -198,18 +198,6 @@ _SCOPES = {
     "lot": _lot_scope,
 }
 
-_LISTS = {
-    "item": lambda: _recipe_context(_plant("items", "recipes")),
-    "mold": lambda: _recipe_context(_plant("molds", "recipes", "items")),
-    "machine": lambda: _run_context(_plant("recipes", "items", "molds", "production_runs", "stoppages")),
-    "recipe": lambda: _recipe_context(_plant("recipes", "items", "molds")),
-    "order": lambda: _run_context(_plant("production_orders", "production_runs", "items")),
-    "run": lambda: _run_context(_plant("production_runs", "production_orders", "recipes", "items", "personnel", "shifts", "scrap_reasons")),
-    "stoppage": lambda: _run_context(_plant("stoppages", "production_runs", "recipes", "items", "personnel", "stoppage_causes")),
-    "lot": lambda: _run_context(_plant("lots", "items", "production_runs", "recipes")),
-}
-
-
 def detail(kind, code):
     if kind == "settings":
         return domain.settings_view(_plant(*_PEOPLE + _REASONS).graph())
@@ -219,16 +207,18 @@ def detail(kind, code):
     return domain.detail(scope(_plant(), code).graph(), kind, code)
 
 
-def list_view(kind, gap=None):
-    build = _LISTS.get(kind)
-    if build is None:
-        return {"error": "Unknown list."}
-    return domain.list_view(build().graph(), kind, gap)
+def _without_runs():
+    """Every record except the runs, plus the runs still open and those the stoppages name. Counts and gaps
+    read nothing else; the run count is a query."""
+    plant = _plant("items", "molds", "recipes", "production_orders", "stoppages", "lots", *(_PEOPLE + _REASONS))
+    plant.find("production_runs", ended_at=None, started_at=q.not_(None))
+    plant.follow("stoppages", "run")
+    return _recipe_context(plant).graph()
 
 
-def _whole():
-    plant = _plant("items", "molds", "recipes", "production_orders", "production_runs", "stoppages", "lots", *(_PEOPLE + _REASONS))
-    return _run_context(plant).graph()
+def _counted(counted):
+    counted["runs"] = len(app_tables.production_runs.search())
+    return counted
 
 
 _PERFORMANCE_FIELDS = {
@@ -274,17 +264,21 @@ def performance(year=None, month=0, machine=""):
 
 
 def overview(who="all"):
-    return domain.overview(_whole(), who)
+    result = domain.overview(_without_runs(), who)
+    _counted(result["counts"])
+    return result
 
 
 def structure():
-    return domain.counts(_whole())
+    return _counted(domain.counts(_without_runs()))
 
 
 def search(term):
     if len(domain.fold(term).strip()) < 2:
         return []
-    plant = _plant("items", "molds", "recipes", "production_orders", "production_runs", "lots")
+    plant = _plant("items", "molds", "recipes", "production_orders", "lots")
+    runs = app_tables.production_runs.search(q.fetch_only("code"), code=q.ilike("%" + term.strip().replace("%", "") + "%"))
+    plant.by_codes("production_runs", [row["code"] for row in runs[:16]])
     return domain.search(plant.graph(), term)
 
 

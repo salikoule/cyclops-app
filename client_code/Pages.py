@@ -78,6 +78,16 @@ def _call(name, *args):
         return None
 
 
+_FIELDS = {}
+
+
+def _list_fields():
+    """What each list can filter and sort; fixed by the server code, so read once per session."""
+    if not _FIELDS:
+        _FIELDS.update(_call("cyclops_list_fields") or {})
+    return _FIELDS
+
+
 class Screen:
     def __init__(self, form, kind, code, ctx):
         self.form = form
@@ -347,27 +357,26 @@ class Screen:
 
     def _list(self):
         gap = self.query.get("gap") or None
-        data = _call("cyclops_list", self.kind, gap)
-        if not data or data.get("error"):
-            self.show(Layout.empty_state((data or {}).get("error") or "The list could not be loaded."))
+        fields = _list_fields().get(self.kind)
+        if not fields:
+            self.show(Layout.empty_state("The list could not be loaded."))
             return
-        self.data = data
         create = CREATE.get(self.kind)
         actions = (Layout.button(create[0], self.act(create[1]), primary=True),) if create else ()
-        banner = None
-        info = data.get("banner")
-        if info:
-            banner = self.block(
-                '<div class="cy-banner"><strong>%s</strong> %s. <span class="cy-muted">%s</span><a href="javascript:void(0)" data-nav="%s">Show all</a></div>'
-                % (info.get("count") or 0, Layout.esc((info.get("title") or "").lower()), Layout.esc(info.get("benefit")), Layout.esc(Nav.path(self.kind)))
-            )
-        rows = data.get("rows") or []
-        card = Layout.section(TITLES.get(self.kind) or "Records", "%s rows" % len(rows), padded=False)
-        if self.kind == "stoppage":
-            table = Tables.mount(rows, "stoppage", Tables.columns_for("stoppage"), on_edit=self._edit_stoppage, edit_on_click=True)
-        else:
-            table = Tables.mount(rows, self.kind, Tables.columns_for(self.kind))
-        Layout.body(card, table)
+        banner = Layout.flat(ColumnPanel())
+        card = Layout.section(TITLES.get(self.kind) or "Records", "Loading…", padded=False)
+        shown = {"banner": False}
+
+        def on_reply(total, info):
+            card.dom_nodes["subtitle"].textContent = "%s row%s" % ("{:,}".format(total), "" if total == 1 else "s")
+            if info and not shown["banner"]:
+                shown["banner"] = True
+                banner.add_component(self.block(
+                    '<div class="cy-banner"><strong>%s</strong> %s. <span class="cy-muted">%s</span><a href="javascript:void(0)" data-nav="%s">Show all</a></div>'
+                    % (info.get("count") or 0, Layout.esc((info.get("title") or "").lower()), Layout.esc(info.get("benefit")), Layout.esc(Nav.path(self.kind)))))
+
+        editing = {"on_edit": self._edit_stoppage, "edit_on_click": True} if self.kind == "stoppage" else {}
+        Layout.body(card, Tables.mount_remote(self.kind, Tables.columns_for(self.kind), fields, gap, on_reply, **editing))
         self.show(Layout.page_header(TITLES.get(self.kind) or "Records", description=LEADS.get(self.kind) or "", actions=actions), banner, card)
 
     def _edit_stoppage(self, row):

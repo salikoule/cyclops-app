@@ -1,9 +1,12 @@
 """Tabulator lists. A row click opens the record."""
 
+import anvil.server
 from anvil import *
 from tabulator.Tabulator import Tabulator
 
 from cyclops_app import Format, Layout, Nav
+
+Tabulator.modules = set(Tabulator.modules) | {"Ajax"}
 
 
 def _value(cell):
@@ -307,11 +310,88 @@ def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False
         "index": "id",
         "placeholder": "No rows match.",
     }
-    if on_edit is not None:
-        columns = list(columns) + [{"title": "", "field": "edit", "width": 62, "hoz_align": "center",
-                                    "header_sort": False, "formatter": _edit, "css_class": "cy-col-edit"}]
-    table.columns = columns
+    table.columns = _with_edit(columns, on_edit)
     table.data = rows or []
+    _open_rows(table, kind, on_edit, edit_on_click)
+    return Layout.flat(table)
+
+
+def _with_edit(columns, on_edit):
+    if on_edit is None:
+        return columns
+    return list(columns) + [{"title": "", "field": "edit", "width": 62, "hoz_align": "center",
+                             "header_sort": False, "formatter": _edit, "css_class": "cy-col-edit"}]
+
+
+def _remote_column(column, fields):
+    """A column as the server can page it: header filters and sorting only where the tables can answer them."""
+    column = dict(column)
+    field = column.get("field")
+    for key in ("header_filter_func", "header_filter_params"):
+        column.pop(key, None)
+    column["header_sort"] = field in fields["sort"]
+    if field in (fields.get("choices") or {}):
+        column["header_filter"] = "list"
+        column["header_filter_params"] = dict(_NO_AUTOFILL, values=fields["choices"][field], clearable=True)
+    elif field in fields["filter"]:
+        column["header_filter"] = "input"
+        column["header_filter_params"] = dict(_NO_AUTOFILL)
+        if column.get("formatter") in (_when, _day):
+            column["header_filter_placeholder"] = "15 Mar 2025, Mar 2025, 2025"
+    else:
+        column["header_filter"] = False
+    return column
+
+
+def _reply_value(response, key):
+    try:
+        return response[key]
+    except Exception:
+        return None
+
+
+def mount_remote(kind, columns, fields, gap=None, on_reply=None, height="640px", on_edit=None, edit_on_click=False):
+    """A list read a page at a time from the ``/list/<kind>`` endpoint; ``on_reply(total, banner)`` sees each page."""
+    table = Tabulator()
+    if height:
+        table.height = height
+
+    def received(url, params, response):
+        if on_reply is not None:
+            banner = _reply_value(response, "banner")
+            if banner:
+                banner = {key: _reply_value(banner, key) for key in ("count", "title", "benefit")}
+            on_reply(_reply_value(response, "last_row") or 0, banner)
+        return response
+
+    def failed(*error):
+        Notification("The list could not be loaded. Sign in again if this keeps happening.", style="danger", timeout=5).show()
+
+    table.options = {
+        "pagination": True,
+        "pagination_mode": "remote",
+        "pagination_size": 25,
+        "pagination_size_selector": [25, 50, 100],
+        "pagination_counter": "rows",
+        "sort_mode": "remote",
+        "filter_mode": "remote",
+        "ajaxURL": anvil.server.get_api_origin() + "/list/" + kind,
+        "ajax_config": "POST",
+        "ajax_content_type": "json",
+        "ajax_params": {"gap": gap} if gap else {},
+        "ajax_response": received,
+        "header_filter_live_filter_delay": 500,
+        "layout": "fitColumns" if kind in _LOGS else "fitDataFill",
+        "index": "id",
+        "placeholder": "No rows match.",
+    }
+    table.columns = _with_edit([_remote_column(column, fields) for column in columns], on_edit)
+    _open_rows(table, kind, on_edit, edit_on_click)
+    table.on("dataLoadError", failed)
+    return Layout.flat(table)
+
+
+def _open_rows(table, kind, on_edit, edit_on_click):
     target = "item" if kind == "summary" else kind
 
     def on_row(sender, **event_args):
@@ -335,4 +415,3 @@ def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False
             Nav.go(target, data["id"])
 
     table.set_event_handler("row_click", on_row)
-    return Layout.flat(table)

@@ -84,6 +84,12 @@ def local_day(moment):
     return shown.date() - datetime.timedelta(days=1) if shown.hour < 6 else shown.date()
 
 
+def local_bounds(start, end):
+    """The UTC moments at the plant's midnight starting ``start`` and ``end`` (dates)."""
+    zone = _zone()
+    return tuple(datetime.datetime(day.year, day.month, day.day, tzinfo=zone).astimezone(datetime.timezone.utc) for day in (start, end))
+
+
 def period(year, month=0):
     """The UTC moments to read runs and stoppages between for ``year`` (and ``month``), a day wider each side for night shifts."""
     month = int(month or 0)

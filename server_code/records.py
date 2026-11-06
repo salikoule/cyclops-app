@@ -178,6 +178,9 @@ def _read(kind, value, code_of):
     return [code for code in (code_of(kind[1], linked) for linked in value or []) if code]
 
 
+read_value = _read
+
+
 def to_row(table, item, ref, skip=()):
     """The columns of ``table`` for ``item``; ``ref(table, code)`` resolves links, and columns in ``skip`` are left out."""
     columns = {"code": item["id"]}

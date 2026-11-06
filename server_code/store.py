@@ -7,6 +7,7 @@ module works on.
 """
 
 import copy
+import datetime
 
 import anvil.tables
 import anvil.tables.query as q
@@ -230,10 +231,40 @@ def _whole():
     return _run_context(plant).graph()
 
 
+_PERFORMANCE_FIELDS = {
+    "machines": ("name", "attachedToId"),
+    "items": ("name",),
+    "recipes": ("itemId", "machineId"),
+    "production_runs": ("recipeId", "shiftId", "startedAt", "endedAt", "good", "cavities", "cycle"),
+    "stoppages": ("machineId", "runId", "startedAt", "endedAt", "causeId"),
+    "stoppage_causes": ("name", "category", "planned"),
+    "shifts": ("name", "start", "end"),
+}
+
+
+def _run_years():
+    """The plant years from the first run to the last, newest first."""
+    ends = []
+    for ascending in (True, False):
+        found = app_tables.production_runs.search(q.fetch_only("started_at"), anvil.tables.order_by("started_at", ascending=ascending),
+                                                  started_at=q.not_(None))
+        row = next(iter(found), None)
+        if row is not None:
+            ends.append(performance_view.local_year(row["started_at"]))
+    return list(range(max(ends), min(ends) - 1, -1)) if ends else []
+
+
 def performance(year=None, month=0, machine=""):
-    plant = _plant("recipes", "items", "production_runs", "stoppages", "shifts", "stoppage_causes")
-    plant.lines("run_scrap")
-    return performance_view.view(plant.graph(), year, month, machine)
+    years = _run_years()
+    year = int(year) if year else (years[0] if years else datetime.date.today().year)
+    begin, end = performance_view.period(year, month)
+    within = {"started_at": q.between(begin, end)}
+    graph = {table: loader.narrow(table, keys, **(within if table in ("production_runs", "stoppages") else {}))
+             for table, keys in _PERFORMANCE_FIELDS.items()}
+    scrap = loader.narrow_lines("run_scrap", ("quantity",))
+    for run in graph["production_runs"]:
+        run["scrap"] = scrap.get(run["id"], [])
+    return performance_view.view(graph, year, month, machine, years)
 
 
 def overview(who="all"):

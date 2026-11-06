@@ -78,7 +78,21 @@ def _round(buckets):
     return {key: round(value, 1) for key, value in buckets.items()}
 
 
-def view(graph, year=None, month=0, machine=""):
+def local_year(moment):
+    return moment.astimezone(_zone()).year
+
+
+def period(year, month=0):
+    """The UTC moments to read runs and stoppages between for ``year`` (and ``month``), a day wider each side for night shifts."""
+    month = int(month or 0)
+    start = datetime.date(int(year), month or 1, 1)
+    end = datetime.date(int(year) + (month == 12), month % 12 + 1, 1) if month else datetime.date(int(year) + 1, 1, 1)
+    zone = _zone()
+    edges = [datetime.datetime(day.year, day.month, day.day, tzinfo=zone).astimezone(datetime.timezone.utc) for day in (start, end)]
+    return edges[0] - datetime.timedelta(days=1), edges[1] + datetime.timedelta(days=1)
+
+
+def view(graph, year=None, month=0, machine="", years=None):
     index = domain.reindex(graph)
     zone = _zone()
     machines = [entry for entry in graph["machines"] if not entry.get("attachedToId")]
@@ -103,7 +117,7 @@ def view(graph, year=None, month=0, machine=""):
             day = day - datetime.timedelta(days=1)
         runs.append({"run": run, "begin": begin, "finish": finish, "day": day, "machine": recipe.get("machineId") or "",
                      "item": recipe.get("itemId") or "", "shift": run.get("shiftId") or "", "shiftHours": _shift_hours(shift)})
-    years = sorted({entry["day"].year for entry in runs}, reverse=True)
+    years = years or sorted({entry["day"].year for entry in runs}, reverse=True)
     year = int(year) if year else (years[0] if years else datetime.date.today().year)
     month = int(month or 0)
 
@@ -203,11 +217,21 @@ def view(graph, year=None, month=0, machine=""):
     possible = sum(row["possible"] for row in capacity)
     used = sum(row["used"] for row in capacity)
 
+    calendar_machines = [code for code in shown_machines if code in used_slots or machine]
+    machine_row = {code: number for number, code in enumerate(calendar_machines)}
+    calendar_items, item_number = [], {}
     calendar = []
     for (code, day), cell in cells.items():
+        if code not in machine_row or not first <= day <= last:
+            continue
         share = min(100.0, round(100.0 * cell["good"] / 24.0, 1)) if cell["rated"] else None
-        calendar.append([day.isoformat(), machine_names.get(code, code), share, len(cell["shifts"]), int(cell["pieces"]),
-                         ", ".join(sorted(domain.name_of(index, "items", item) for item in cell["items"]))[:48]])
+        numbers = []
+        for item in sorted(cell["items"]):
+            if item not in item_number:
+                item_number[item] = len(calendar_items)
+                calendar_items.append(domain.name_of(index, "items", item))
+            numbers.append(item_number[item])
+        calendar.append([(day - first).days, machine_row[code], share, len(cell["shifts"]), int(cell["pieces"]), numbers])
 
     causes_out = {}
     for entry in stops:
@@ -252,7 +276,7 @@ def view(graph, year=None, month=0, machine=""):
         "byMachine": sorted(({"machine": machine_names.get(code, code), "id": code, **_round(bucket),
                               "oee": round(100.0 * bucket["good"] / sum(bucket.values()), 1) if sum(bucket.values()) else None}
                              for code, bucket in by_machine.items() if sum(bucket.values()) >= 24), key=lambda row: row["oee"] or 0),
-        "calendar": calendar, "calendarMachines": [machine_names[code] for code in shown_machines if code in used_slots or machine],
+        "calendar": calendar, "calendarMachines": [machine_names[code] for code in calendar_machines], "calendarItems": calendar_items,
         "calendarRange": [first.isoformat(), last.isoformat()],
         "capacity": capacity, "causes": cause_rows,
         "changeovers": {"byMonth": {"labels": [MONTHS[number - 1] for number in sorted(change_by_month)],

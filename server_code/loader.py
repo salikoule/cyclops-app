@@ -35,6 +35,37 @@ _TARGET = {(table, column): kind[1] for table, columns in records.TABLES for col
 _TARGET.update({(child, column): kind[1] for child, _, _, _, columns in records.CHILDREN for column, _, kind in columns if isinstance(kind, tuple)})
 
 
+def _code_of(table, linked):
+    return linked["code"]
+
+
+def _narrow_item(row, spec, first):
+    item = {first: row["code"]} if first else {}
+    for column, key, kind in spec:
+        item[key] = records.read_value(kind, row[column], _code_of)
+    return item
+
+
+def narrow(table, keys, **filters):
+    """The rows of ``table`` matching ``filters``, with only the record fields in ``keys``, sorted by code. For read-only views."""
+    spec = [entry for entry in records.COLUMNS[table] if entry[1] in keys]
+    found = [_narrow_item(row, spec, "id") for row in _table(table).search(_fetch(spec, ("code",)), **filters)]
+    found.sort(key=lambda item: item["id"])
+    return found
+
+
+def narrow_lines(child, keys):
+    """Parent code -> the ``child`` lines of every parent, with only the fields in ``keys``."""
+    _, parent, parent_column, _, columns = _CHILD[child]
+    spec = [entry for entry in columns if entry[1] in keys]
+    by_parent = {}
+    for row in _table(child).search(_fetch(spec + [(parent_column, "", records.link(parent))])):
+        owner = row[parent_column]
+        if owner is not None:
+            by_parent.setdefault(owner["code"], []).append(_narrow_item(row, spec, None))
+    return by_parent
+
+
 def _linked(value):
     if value is None:
         return []

@@ -38,12 +38,16 @@ def test_filters_narrow_the_view(seed, year):
     one = performance.view(seed, year["year"], 0, machine)
     assert month["kpis"]["runs"] < year["kpis"]["runs"]
     assert one["kpis"]["runs"] < year["kpis"]["runs"]
-    assert {cell[1] for cell in one["calendar"]} <= {entry["label"] for entry in year["machines"] if entry["value"] == machine}
+    label = next(entry["label"] for entry in year["machines"] if entry["value"] == machine)
+    assert one["calendarMachines"] == [label]
+    assert {cell[1] for cell in one["calendar"]} <= {0}
 
 
 def test_calendar_marks_days_without_a_rated_speed(year):
     shares = [cell[2] for cell in year["calendar"]]
-    assert all(share is None or 0 <= share <= 100 for share in shares)
+    assert None in shares and all(share is None or 0 <= share <= 100 for share in shares)
+    assert all(0 <= cell[0] <= 365 and cell[1] < len(year["calendarMachines"]) for cell in year["calendar"])
+    assert all(number < len(year["calendarItems"]) for cell in year["calendar"] for number in cell[5])
 
 
 def test_capacity_and_scrap_shares_are_percentages(year):

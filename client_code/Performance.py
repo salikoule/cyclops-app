@@ -160,24 +160,21 @@ class PerformancePage:
         machines = data.get("calendarMachines") or []
         if not cells or not machines:
             return None
-        days = sorted({cell[0] for cell in cells})
-        first, last = data.get("calendarRange") or [days[0], days[-1]]
+        first, last = data["calendarRange"]
         every_day = _days_between(first, last)
-        x_of = {day: index for index, day in enumerate(every_day)}
-        y_of = {name: index for index, name in enumerate(machines)}
+        names = data.get("calendarItems") or []
         points, unknown = [], []
-        for day, machine, value, shifts, pieces, items in cells:
-            if day not in x_of or machine not in y_of:
-                continue
+        for day, row, value, shifts, pieces, items in cells:
             share = "speed unknown" if value is None else "%s%% of the day productive" % Format.trim(value)
-            point = {"value": [x_of[day], y_of[machine], value if value is not None else 0],
+            made = Format.clip(", ".join(names[number] for number in items), 60)
+            point = {"value": [day, row, value if value is not None else 0],
                      "name": "%s · %s<br>%s shift%s · %s pcs · %s<br>%s" % (
-                         Format.day(day), machine, shifts, "" if shifts == 1 else "s", _n(pieces), share, Layout.esc(items))}
+                         Format.day(every_day[day]), machines[row], shifts, "" if shifts == 1 else "s", _n(pieces), share, Layout.esc(made))}
             (unknown if value is None else points).append(point)
         labels = [Format.day(day)[:6] for day in every_day]
         return _chart("Plant calendar", "Each square is a machine-day: the share of 24 hours spent making good pieces. "
                       "Blank means nobody ran it; grey means it ran but its runs have no rated speed.", {
-            "tooltip": {"formatter": "{b}"},
+            "tooltip": {"formatter": lambda params, *rest: params["name"]},
             "grid": {"left": 104, "right": 16, "top": 8, "bottom": 70},
             "xAxis": {"type": "category", "data": labels, "splitArea": {"show": False}, "axisLabel": {"interval": max(0, len(labels) // 12 - 1)}},
             "yAxis": {"type": "category", "data": machines, "inverse": True},

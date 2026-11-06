@@ -4,11 +4,10 @@ from datetime import datetime
 
 from anvil import *
 from craftify_library.CraftifyUtils import dialogs, drawer
-from craftify_library.CustomComponents.TimePicker import TimePicker
 
 from cyclops_app import Data, Format, Layout
 
-WIDE = ("area", "tags", "datetime")
+WIDE = ("area", "tags")
 
 
 def _text(value):
@@ -25,26 +24,24 @@ def _as_date(value):
 
 
 class _Moment:
-    """A day picker and a time box side by side, in local time."""
+    """One date-and-time picker in local time; the value is an ISO UTC moment."""
 
     def __init__(self, moment, default_now=False):
         shown = Format.local(moment)
         if shown is None and default_now:
-            shown = datetime.now()
+            shown = Format.now()
             shown = shown.replace(minute=shown.minute - shown.minute % 5)
-        self.day = DatePicker(format="%d %b %Y", date=shown.date() if shown else None, pick_time=False, placeholder="Not set")
-        self.clock = TimePicker(time=shown.strftime("%H:%M") if shown else "", placeholder="HH:MM")
-        self.panel = Layout.grid("minmax(0, 1fr) 120px", self.day, self.clock)
-
-    def parts(self):
-        return (self.day.date.isoformat() if self.day.date else ""), (self.clock.time or "")
+        self.picker = DatePicker(format="%d %b %Y, %H:%M", date=shown, pick_time=True, placeholder="Not set")
+        self.panel = self.picker
 
     def value(self):
-        return Format.utc(self.day.date, self.clock.time or "")
+        picked = self.picker.date
+        if not picked:
+            return ""
+        return Format.utc(picked.date(), "%02d:%02d" % (picked.hour, picked.minute))
 
     def set_event_handler(self, name, handler):
-        self.day.set_event_handler(name, handler)
-        self.clock.set_event_handler(name, handler)
+        self.picker.set_event_handler(name, handler)
 
 
 class _Tags:
@@ -473,7 +470,7 @@ def _setting_spec(kind, entry, choices):
         fields += [{"name": "start", "label": "Starts", "value": entry.get("start"), "placeholder": "06:00"},
                    {"name": "end", "label": "Ends", "value": entry.get("end"), "placeholder": "14:00"}]
     if kind in ("cause", "reason"):
-        fields.append({"name": "category", "label": "6M category", "type": "select", "options": choices.get("fishbone") or [],
+        fields.append({"name": "category", "label": "Category", "type": "select", "options": choices.get("fishbone") or [], "hint": "The six fishbone groups: Man, Machine, Method, Material, Measurement, Environment.",
                        "value": entry.get("category") or "Machine"})
     if kind == "cause":
         fields.append({"name": "planned", "label": "Planned stop", "type": "select", "value": "yes" if entry.get("planned") else "no",

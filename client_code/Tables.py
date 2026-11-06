@@ -59,17 +59,43 @@ def _clip(cell, **params):
     return '<span class="cy-clip" title="%s">%s</span>' % (text, text)
 
 
+_SHOWN = {}
+
+
+def _shown(value, with_time):
+    """The text a date cell shows, remembered so filtering a long list stays quick."""
+    key = (value, with_time)
+    if key not in _SHOWN:
+        _SHOWN[key] = (Format.when(value, "") if with_time else Format.day(value, "")) if value else ""
+    return _SHOWN[key]
+
+
 def _when(cell, **params):
     value = _value(cell)
-    if not value:
-        return _empty()
-    shown = Format.when(value, "")
-    return Layout.esc(shown) if shown else _clip(cell)
+    shown = _shown(value, True)
+    if not shown:
+        return _clip(cell) if value else _empty()
+    day, clock = shown.split(", ")
+    return '<span class="cy-date">%s</span><span class="cy-time">%s</span>' % (Layout.esc(day), Layout.esc(clock))
 
 
 def _day(cell, **params):
-    value = _value(cell)
-    return Layout.esc(Format.day(value)) if value else _empty()
+    shown = _shown(_value(cell), False)
+    return '<span class="cy-date">%s</span>' % Layout.esc(shown) if shown else _empty()
+
+
+def _matches_shown(with_time):
+    def match(header, value, row, **params):
+        return str(header or "").strip().lower() in _shown(value, with_time).lower()
+    return match
+
+
+def _when_col(title, field, width=150):
+    return _col(title, field, width=width, formatter=_when, header_filter_func=_matches_shown(True))
+
+
+def _day_col(title, field, width=120):
+    return _col(title, field, width=width, formatter=_day, header_filter_func=_matches_shown(False))
 
 
 def _suffix(unit):
@@ -129,8 +155,8 @@ def _machine_col(field="machine"):
 
 SETTING_COLUMNS = {
     "shift": lambda: [_col("Starts", "start", width=90, formatter=_text), _col("Ends", "end", width=90, formatter=_text)],
-    "cause": lambda: [_list_col("6M", "category", 130), _list_col("Planned", "planned", 110)],
-    "reason": lambda: [_list_col("6M", "category", 130)],
+    "cause": lambda: [_list_col("Category", "category", 130), _list_col("Planned", "planned", 110)],
+    "reason": lambda: [_list_col("Category", "category", 130)],
     "category": lambda: [_list_col("Item type", "typeLabel", 150), _list_col("Recipe role", "roleLabel", 140)],
     "machineType": lambda: [],
     "role": lambda: [_list_col("Runs machines", "runsMachines", 140)],
@@ -211,14 +237,14 @@ def columns_for(kind, hide=()):
             _num_col("Quantity", "quantity", 100),
             _num_col("Made", "made", 90),
             dict(_num_col("Done", "progress", 80), formatter=_suffix("%")),
-            _col("Due", "due", width=110, formatter=_day),
+            _day_col("Due", "due"),
             _col("ERP order", "erp", width=110, formatter=_text),
             _num_col("Runs", "runs", 70),
         ]
     elif kind == "run":
         columns = [
             _col("ID", "id", width=108, formatter=_id("run")),
-            _col("Started", "start", width=120, formatter=_when),
+            _when_col("Started", "start"),
             dict(_num_col("Hours", "hours", 82), formatter=_suffix(" h")),
             _machine_col(),
             _col("Item", "item", min_width=140, width_grow=3, formatter=_clip),
@@ -232,13 +258,13 @@ def columns_for(kind, hide=()):
         ]
     elif kind == "stoppage":
         columns = [
-            _col("Stopped", "start", width=120, formatter=_when),
-            _col("Restarted", "end", width=120, formatter=_when),
+            _when_col("Stopped", "start"),
+            _when_col("Restarted", "end"),
             dict(_num_col("Downtime", "hours", 104), formatter=_suffix(" h")),
             _machine_col(),
             _col("Item", "item", min_width=110, width_grow=1, formatter=_clip),
             _col("Cause", "cause", min_width=110, width_grow=1, formatter=_clip),
-            _list_col("6M", "category", 110),
+            _list_col("Category", "category", 110),
             _col("What was seen", "description", min_width=120, width_grow=3, formatter=_clip),
             _col("Fix", "fix", min_width=100, width_grow=2, formatter=_clip),
             _col("Reported by", "reportedBy", width=110, formatter=_clip),
@@ -257,7 +283,7 @@ def columns_for(kind, hide=()):
             _list_col("Origin", "origin", 110),
             _num_col("Quantity", "quantity", 100),
             _col("Unit", "uom", width=70, formatter=_text, header_filter=False),
-            _col("Received", "received", width=120, formatter=_when),
+            _when_col("Received", "received"),
             _col("Run", "run", width=110, formatter=_text),
             _num_col("Used by", "used", 84),
             _status_col(120),

@@ -60,7 +60,7 @@ CREATE = {
 }
 SETTING_SECTIONS = (
     ("shift", "shifts", "shifts", "Shifts", "Each run is logged on a shift."),
-    ("cause", "causes", "causes", "Stoppage causes", "Grouped by the 6M of the fishbone diagram. Planned stops are kept apart from breakdowns."),
+    ("cause", "causes", "causes", "Stoppage causes", "Each cause sits in one of the six fishbone groups (Man, Machine, Method, Material, Measurement, Environment). Planned stops are kept apart from breakdowns."),
     ("reason", "reasons", "scrap-reasons", "Scrap reasons", "Each scrap line on a run has a reason."),
     ("category", "categories", "categories", "Item categories", "The role of a raw-material category decides what a recipe needs: a base input, and colorants for its color."),
     ("machineType", "machineTypes", "machine-types", "Machine types", "Presses, robots, and the other equipment kinds a machine can be."),

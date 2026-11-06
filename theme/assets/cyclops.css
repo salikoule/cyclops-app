@@ -419,3 +419,6 @@ html.ipac-dark .anvil-role-login-divider::after { background: #334155; }
 .cy-swatch-field input[type="color"] { width: 40px; height: 30px; padding: 2px; border: 1px solid var(--cy-line); border-radius: 6px; background: var(--cy-surface); cursor: pointer; }
 .cy-swatch-field span { font-size: 13px; color: var(--cy-muted); font-variant-numeric: tabular-nums; }
 .cy-swatch-field a { font-size: 12px; }
+
+.cy-date { white-space: nowrap; }
+.cy-time { margin-left: 6px; color: var(--cy-muted); font-variant-numeric: tabular-nums; }

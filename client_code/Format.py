@@ -2,18 +2,34 @@
 
 from datetime import datetime
 
-import anvil.tz
+import anvil.js
+from anvil.js import window
 
 from cyclops_app import Layout, Nav
 
 
+def _naive(js_date):
+    return datetime(js_date.getFullYear(), js_date.getMonth() + 1, js_date.getDate(), js_date.getHours(), js_date.getMinutes())
+
+
 def local(moment):
-    """An ISO UTC moment from the server as a local datetime, or None."""
+    """An ISO UTC moment from the server as a naive local datetime, or None.
+
+    Converted by the browser's Date, which applies the offset of that date; anvil.tz.tzlocal() applies today's offset to every date.
+    """
+    text = str(moment or "")
+    if len(text) < 19 or text[10] != "T":
+        return None
     try:
-        parsed = datetime.strptime(str(moment or "")[:19], "%Y-%m-%dT%H:%M:%S")
+        stamp = window.Date.UTC(int(text[0:4]), int(text[5:7]) - 1, int(text[8:10]), int(text[11:13]), int(text[14:16]), int(text[17:19]))
     except (TypeError, ValueError):
         return None
-    return parsed.replace(tzinfo=anvil.tz.tzutc()).astimezone(anvil.tz.tzlocal())
+    return _naive(anvil.js.new(window.Date, stamp))
+
+
+def now():
+    """The current local minute as a naive datetime."""
+    return _naive(anvil.js.new(window.Date))
 
 
 def utc(day, clock):
@@ -24,22 +40,32 @@ def utc(day, clock):
         return day.isoformat()
     try:
         hour, minute = [int(part) for part in str(clock).replace(".", ":").split(":")[:2]]
-        moment = datetime(day.year, day.month, day.day, hour, minute, tzinfo=anvil.tz.tzlocal())
     except (TypeError, ValueError):
         return day.isoformat()
-    return moment.astimezone(anvil.tz.tzutc()).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return anvil.js.new(window.Date, day.year, day.month - 1, day.day, hour, minute).toISOString()[:19] + "Z"
+
+
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _date_text(year, month, day_of_month):
+    """Built by hand, without strptime or strftime month names: they can block in the browser, and table formatters must not."""
+    return "%02d %s %d" % (day_of_month, _MONTHS[month - 1], year)
 
 
 def when(moment, fallback="—"):
     shown = local(moment)
-    return shown.strftime("%d/%m/%y %H:%M") if shown else fallback
+    if shown is None:
+        return fallback
+    return "%s, %02d:%02d" % (_date_text(shown.year, shown.month, shown.day), shown.hour, shown.minute)
 
 
 def day(value, fallback="—"):
     text = str(value or "")
-    if len(text) < 10:
+    try:
+        return _date_text(int(text[0:4]), int(text[5:7]), int(text[8:10]))
+    except (TypeError, ValueError, IndexError):
         return fallback
-    return "%s/%s/%s" % (text[8:10], text[5:7], text[0:4])
 
 
 def trim(value):

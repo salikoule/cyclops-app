@@ -56,74 +56,80 @@ html[data-theme="dark"] {
 }
 html.ipac-dark .cy-block, html.ipac-dark .cy-tree-wrap { color: var(--cy-ink); }
 
-html:not(.designer) .structure > .app-bar {
+.cy-find {
   display: flex !important;
   align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  padding: 8px 18px !important;
+  gap: 10px;
+  margin: 0 12px 10px !important;
+  padding: 7px 10px !important;
+  border: 1px solid var(--cy-line);
+  border-radius: 8px;
   background: var(--cy-surface);
-  border-bottom: 1px solid var(--cy-line);
-  line-height: normal;
+  color: var(--cy-muted) !important;
+  font-size: 13px;
+  text-decoration: none !important;
+  cursor: pointer;
 }
-html:not(.designer) .app-bar > .sidebar-toggle { display: none !important; }
-.app-bar > .title {
-  float: none !important;
-  flex: 1 1 auto;
-  width: 100%;
-  min-width: 0;
+.cy-find:hover { color: var(--cy-ink) !important; border-color: var(--cy-muted); }
+.cy-find kbd {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--cy-line);
+  border-radius: 5px;
+  background: var(--cy-chip);
+  color: var(--cy-chip-ink);
+  font: 600 11px/1.4 inherit;
 }
-.app-bar .title .anvil-component { margin: 0; min-height: 0; }
-.app-bar { position: relative; z-index: 40; }
-.app-bar .title .anvil-panel-col { overflow: visible !important; }
+.structure.nav-collapsed .cy-find { margin: 0 8px 8px !important; border-color: transparent; background: transparent; }
+.structure.nav-collapsed .cy-find kbd { display: none; }
 
-.app-bar .cy-search input.anvil-component::placeholder, .cy-search input::placeholder { color: var(--cy-muted); opacity: 1; }
-.cy-search { position: relative; width: min(480px, 100%); margin-left: auto; }
+.cy-palette {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  padding: 12vh 16px 16px;
+  background: rgba(8, 15, 28, 0.6);
+}
+.cy-palette.open { display: block; }
+.cy-search {
+  width: min(600px, 100%);
+  margin: 0 auto;
+  background: var(--cy-surface);
+  border: 1px solid var(--cy-line);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(8, 15, 28, 0.35);
+  overflow: hidden;
+}
+.cy-search .anvil-component { margin: 0; }
 .cy-search-box input, .cy-search .anvil-component input {
   width: 100% !important;
   font: inherit;
-  border: 1px solid var(--cy-line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: var(--cy-surface);
-  line-height: 1.3;
+  font-size: 15px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--cy-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 14px 16px !important;
+  background: transparent !important;
+  color: var(--cy-ink);
 }
-.cy-hits {
-  display: none;
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 30;
-  background: var(--cy-surface);
-  border: 1px solid var(--cy-line);
-  border-radius: 10px;
-  max-height: 360px;
-  overflow: auto;
-  box-shadow: 0 10px 30px rgba(20, 32, 51, 0.08);
-}
+.cy-search input::placeholder { color: var(--cy-muted); opacity: 1; }
+.cy-hits { display: none; max-height: 50vh; overflow: auto; }
 .cy-hits.open { display: block; }
 .cy-hits a, .cy-hit {
   display: flex;
   gap: 10px;
   align-items: baseline;
-  padding: 8px 12px;
+  padding: 9px 16px;
   font-size: 14px;
   line-height: 1.35;
   text-decoration: none;
   color: var(--cy-ink);
-  border-bottom: 1px solid var(--cy-line);
 }
-.app-bar .cy-hits a {
-  margin: 0;
-  min-height: 0;
-  min-width: 0;
-  border-radius: 0;
-  line-height: 1.35;
-}
-.cy-hits a:last-child { border-bottom: 0; }
-.cy-hits a:hover, .app-bar .cy-hits a:hover, .app-bar .cy-hits a:active { background: var(--cy-hover); color: var(--cy-ink); }
+.cy-hits a:hover, .cy-hits a.is-active { background: var(--cy-hover); color: var(--cy-ink); text-decoration: none; }
 .cy-hits .cy-kind { margin-left: auto; color: var(--cy-muted); font-size: 12px; }
+.cy-palette-keys { padding: 8px 16px; border-top: 1px solid var(--cy-line); color: var(--cy-muted); font-size: 12px; }
 
 .cy-nav-sep { height: 1px; background: var(--cy-line); margin: 8px 12px; }
 .cy-muted { color: var(--cy-muted); }
@@ -382,7 +388,6 @@ html.ipac-dark .anvil-role-login-divider::after { background: #334155; }
 
 @media (max-width: 900px) {
   .cy-temps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cy-search { width: 100%; }
   .cy-when { width: 96px; }
 }
 

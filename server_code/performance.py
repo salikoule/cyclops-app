@@ -78,8 +78,10 @@ def _round(buckets):
     return {key: round(value, 1) for key, value in buckets.items()}
 
 
-def local_year(moment):
-    return moment.astimezone(_zone()).year
+def local_day(moment):
+    """The plant day a run starting at ``moment`` belongs to: a night shift after midnight counts for the day before."""
+    shown = moment.astimezone(_zone())
+    return shown.date() - datetime.timedelta(days=1) if shown.hour < 6 else shown.date()
 
 
 def period(year, month=0):
@@ -92,7 +94,8 @@ def period(year, month=0):
     return edges[0] - datetime.timedelta(days=1), edges[1] + datetime.timedelta(days=1)
 
 
-def view(graph, year=None, month=0, machine="", years=None):
+def view(graph, year=None, month=0, machine="", years=None, through=None):
+    """``through`` is the plant's last run day; without it the last run read counts."""
     index = domain.reindex(graph)
     zone = _zone()
     machines = [entry for entry in graph["machines"] if not entry.get("attachedToId")]
@@ -195,8 +198,8 @@ def view(graph, year=None, month=0, machine="", years=None):
     days = sorted({entry["day"] for entry in runs if wanted_day(entry["day"])})
     first = datetime.date(year, month or 1, 1)
     last = (datetime.date(year + (month == 12), (month % 12) + 1, 1) - datetime.timedelta(days=1)) if month else datetime.date(year, 12, 31)
-    if days:
-        last = min(last, max(days))
+    if through or days:
+        last = min(last, through or max(days))
     calendar_days = (last - first).days + 1 if last >= first else 0
 
     used_slots = {}
@@ -257,7 +260,7 @@ def view(graph, year=None, month=0, machine="", years=None):
         change_by_month[entry["day"].month] = change_by_month.get(entry["day"].month, 0) + 1
 
     scrap_items, scrap_machines = _scrap(chosen, index, machine_names)
-    fit = _fit(every_machine_runs, stops_by_run, index, machine_names)
+    fit = _fit(every_machine_runs, stops_by_run, index, machine_names, machine)
     months = sorted(by_month)
     unplanned = sum(entry["hours"] for entry in stops if not entry["planned"])
     return {
@@ -344,7 +347,7 @@ def _scrap(chosen, index, machine_names):
     return item_rows, machine_rows
 
 
-def _fit(runs, stops_by_run, index, machine_names):
+def _fit(runs, stops_by_run, index, machine_names, machine=""):
     """Items made on more than one machine: the rated and the actual pieces per hour on each."""
     seen = {}
     for entry in runs:
@@ -363,9 +366,9 @@ def _fit(runs, stops_by_run, index, machine_names):
     rows = []
     for item, by_machine in seen.items():
         usable = {code: data for code, data in by_machine.items() if data["actual"] and data["shifts"] >= 3}
-        if len(usable) < 2:
+        if len(usable) < 2 or (machine and machine not in usable):
             continue
-        options = sorted(({"machine": machine_names.get(code, code), "rated": round(statistics.median(data["rated"])),
+        options = sorted(({"machine": machine_names.get(code, code), "id": code, "rated": round(statistics.median(data["rated"])),
                            "actual": round(statistics.median(data["actual"])), "shifts": data["shifts"]} for code, data in usable.items()),
                          key=lambda option: -option["actual"])
         best, worst = options[0]["actual"], options[-1]["actual"] or 1

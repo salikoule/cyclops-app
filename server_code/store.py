@@ -242,29 +242,35 @@ _PERFORMANCE_FIELDS = {
 }
 
 
-def _run_years():
-    """The plant years from the first run to the last, newest first."""
+def _run_span():
+    """The plant's first and last run days, or None when nothing ran."""
     ends = []
     for ascending in (True, False):
         found = app_tables.production_runs.search(q.fetch_only("started_at"), anvil.tables.order_by("started_at", ascending=ascending),
                                                   started_at=q.not_(None))
         row = next(iter(found), None)
         if row is not None:
-            ends.append(performance_view.local_year(row["started_at"]))
-    return list(range(max(ends), min(ends) - 1, -1)) if ends else []
+            ends.append(performance_view.local_day(row["started_at"]))
+    return ends or None
 
 
 def performance(year=None, month=0, machine=""):
-    years = _run_years()
+    span = _run_span()
+    years = list(range(span[1].year, span[0].year - 1, -1)) if span else []
     year = int(year) if year else (years[0] if years else datetime.date.today().year)
     begin, end = performance_view.period(year, month)
-    within = {"started_at": q.between(begin, end)}
-    graph = {table: loader.narrow(table, keys, **(within if table in ("production_runs", "stoppages") else {}))
-             for table, keys in _PERFORMANCE_FIELDS.items()}
+    within = {"production_runs": {"started_at": q.between(begin, end)}, "stoppages": {"started_at": q.between(begin, end)}}
+    chosen = app_tables.machines.get(q.fetch_only("code"), code=machine) if machine else None
+    if chosen is not None:
+        made_here = {row["item"] for row in app_tables.recipes.search(q.fetch_only(item=q.fetch_only("code")), machine=chosen) if row["item"]}
+        recipes = list(app_tables.recipes.search(q.fetch_only("code"), item=q.any_of(*made_here))) if made_here else []
+        within["production_runs"]["recipe"] = q.any_of(*recipes)
+        within["stoppages"]["machine"] = chosen
+    graph = {table: loader.narrow(table, keys, **within.get(table, {})) for table, keys in _PERFORMANCE_FIELDS.items()}
     scrap = loader.narrow_lines("run_scrap", ("quantity",))
     for run in graph["production_runs"]:
         run["scrap"] = scrap.get(run["id"], [])
-    return performance_view.view(graph, year, month, machine, years)
+    return performance_view.view(graph, year, month, machine, years, span[1] if span else None)
 
 
 def overview(who="all"):

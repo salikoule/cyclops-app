@@ -35,34 +35,60 @@ _TARGET = {(table, column): kind[1] for table, columns in records.TABLES for col
 _TARGET.update({(child, column): kind[1] for child, _, _, _, columns in records.CHILDREN for column, _, kind in columns if isinstance(kind, tuple)})
 
 
-def _code_of(table, linked):
-    return linked["code"]
+class Codes:
+    """Row id -> code for the rows a view has read, so links can be read without fetching any column of the linked row."""
+
+    def __init__(self):
+        self.known = {}
+
+    def remember(self, table, rows):
+        self.known.setdefault(table, {}).update((row.get_id(), row["code"]) for row in rows)
+
+    def code_of(self, table, linked):
+        known = self.known.setdefault(table, {})
+        if linked.get_id() not in known:
+            known[linked.get_id()] = linked["code"]
+        return known[linked.get_id()]
 
 
-def _narrow_item(row, spec, first):
+def _bare_fetch(columns, extra=(), coded=()):
+    plain, nested = list(extra), {}
+    for column, key, kind in columns:
+        if isinstance(kind, tuple):
+            nested[column] = q.fetch_only("code") if key in coded else q.fetch_only()
+        else:
+            plain.append(column)
+    return q.fetch_only(*plain, **nested)
+
+
+def _narrow_item(row, spec, first, codes):
     item = {first: row["code"]} if first else {}
     for column, key, kind in spec:
-        item[key] = records.read_value(kind, row[column], _code_of)
+        item[key] = records.read_value(kind, row[column], codes.code_of)
     return item
 
 
-def narrow(table, keys, **filters):
-    """The rows of ``table`` matching ``filters``, with only the record fields in ``keys``, sorted by code. For read-only views."""
+def narrow(table, keys, codes, coded=(), **filters):
+    """The rows of ``table`` matching ``filters``, with only the record fields in ``keys``, sorted by code. For read-only
+    views; read linked tables first so ``codes`` knows their rows, or name the link keys in ``coded`` to fetch their code."""
     spec = [entry for entry in records.COLUMNS[table] if entry[1] in keys]
-    found = [_narrow_item(row, spec, "id") for row in _table(table).search(_fetch(spec, ("code",)), **filters)]
+    rows = list(_table(table).search(_bare_fetch(spec, ("code",), coded), **filters))
+    codes.remember(table, rows)
+    found = [_narrow_item(row, spec, "id", codes) for row in rows]
     found.sort(key=lambda item: item["id"])
     return found
 
 
-def narrow_lines(child, keys):
-    """Parent code -> the ``child`` lines of every parent, with only the fields in ``keys``."""
+def narrow_lines(child, keys, codes):
+    """Parent code -> the ``child`` lines of the parents ``codes`` has read, with only the fields in ``keys``."""
     _, parent, parent_column, _, columns = _CHILD[child]
     spec = [entry for entry in columns if entry[1] in keys]
+    parents = codes.known.get(parent) or {}
     by_parent = {}
-    for row in _table(child).search(_fetch(spec + [(parent_column, "", records.link(parent))])):
+    for row in _table(child).search(_bare_fetch(spec + [(parent_column, "", records.link(parent))])):
         owner = row[parent_column]
-        if owner is not None:
-            by_parent.setdefault(owner["code"], []).append(_narrow_item(row, spec, None))
+        if owner is not None and owner.get_id() in parents:
+            by_parent.setdefault(parents[owner.get_id()], []).append(_narrow_item(row, spec, None, codes))
     return by_parent
 
 

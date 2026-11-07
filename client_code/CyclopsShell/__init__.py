@@ -109,15 +109,7 @@ class CyclopsShell(CyclopsShellTemplate):
     def _on_search_select(self, hit, **event_args):
         Nav.open_path(hit.get("path"))
 
-    def refresh_counts(self):
-        self._build_nav()
-
     def _build_nav(self):
-        counts = {}
-        try:
-            counts = anvil.server.call("cyclops_nav") or {}
-        except Exception:
-            counts = {}
         self.menu_panel.clear()
         self.menu_panel.add_component(Layout.html(BRAND), full_width_row=True)
         self.menu_panel.add_component(self._search.trigger(), full_width_row=True)
@@ -126,10 +118,8 @@ class CyclopsShell(CyclopsShellTemplate):
                 self.menu_panel.add_component(Layout.html('<div class="cy-nav-sep"></div>'), full_width_row=True)
                 continue
             text, kind, icon, exact = item
-            count = counts.get(Nav.COUNT_KEY.get(kind) or "")
-            label = text if count is None else "%s · %s" % (text, count)
             self.menu_panel.add_component(NavLink(
-                text=label,
+                text=text,
                 path=Nav.path(kind),
                 icon=icon,
                 exact_path=exact,

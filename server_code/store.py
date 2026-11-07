@@ -207,13 +207,36 @@ def detail(kind, code):
     return domain.detail(scope(_plant(), code).graph(), kind, code)
 
 
+_OVERVIEW_FIELDS = {
+    "item_categories": ("role",),
+    "stoppage_causes": ("name", "category", "planned"),
+    "personnel": ("name",),
+    "machines": ("name", "status", "location", "euromap", "changeoverMin", "attachedToId"),
+    "items": ("name", "type", "status", "categoryId", "erpCode", "approvedMachineIds"),
+    "molds": ("cavities", "shotWeight"),
+    "recipes": ("itemId", "machineId", "moldId", "status", "standard", "cycle"),
+    "production_orders": ("itemId", "status"),
+    "lots": ("itemId", "origin", "runId"),
+    "stoppages": ("machineId", "runId", "causeId", "startedAt", "endedAt", "description", "fix", "reportedById"),
+}
+_OVERVIEW_RUN = ("orderId", "recipeId", "startedAt", "endedAt")
+
+
 def _without_runs():
-    """Every record except the runs, plus the runs still open and those the stoppages name. Counts and gaps
-    read nothing else; the run count is a query."""
-    plant = _plant("items", "molds", "recipes", "production_orders", "stoppages", "lots", *(_PEOPLE + _REASONS))
-    plant.find("production_runs", ended_at=None, started_at=q.not_(None))
-    plant.follow("stoppages", "run")
-    return _recipe_context(plant).graph()
+    """What counts and gaps read: the fields they use of every record except the runs, plus the runs still open
+    and those the stoppages name. The run count is a query."""
+    codes = loader.Codes()
+    graph = {table: loader.narrow(table, keys, codes, coded=("runId",)) for table, keys in _OVERVIEW_FIELDS.items()}
+    named = sorted({stop["runId"] for stop in graph["stoppages"] if stop.get("runId")})
+    runs = loader.narrow("production_runs", _OVERVIEW_RUN, codes, ended_at=None, started_at=q.not_(None))
+    if named:
+        runs += loader.narrow("production_runs", _OVERVIEW_RUN, codes, code=q.any_of(*named))
+    graph["production_runs"] = sorted({run["id"]: run for run in runs}.values(), key=lambda run: run["id"])
+    for table, child, keys in (("recipes", "recipe_inputs", ("itemId", "share")), ("production_runs", "run_inputs", ("lotId", "quantity"))):
+        lines = loader.narrow_lines(child, keys, codes)
+        for entry in graph[table]:
+            entry["inputs"] = lines.get(entry["id"], [])
+    return graph
 
 
 def _counted(counted):
@@ -222,13 +245,13 @@ def _counted(counted):
 
 
 _PERFORMANCE_FIELDS = {
+    "shifts": ("name", "start", "end"),
+    "stoppage_causes": ("name", "category", "planned"),
     "machines": ("name", "attachedToId"),
     "items": ("name",),
     "recipes": ("itemId", "machineId"),
     "production_runs": ("recipeId", "shiftId", "startedAt", "endedAt", "good", "cavities", "cycle"),
     "stoppages": ("machineId", "runId", "startedAt", "endedAt", "causeId"),
-    "stoppage_causes": ("name", "category", "planned"),
-    "shifts": ("name", "start", "end"),
 }
 
 
@@ -256,8 +279,9 @@ def performance(year=None, month=0, machine=""):
         recipes = list(app_tables.recipes.search(q.fetch_only("code"), item=q.any_of(*made_here))) if made_here else []
         within["production_runs"]["recipe"] = q.any_of(*recipes)
         within["stoppages"]["machine"] = chosen
-    graph = {table: loader.narrow(table, keys, **within.get(table, {})) for table, keys in _PERFORMANCE_FIELDS.items()}
-    scrap = loader.narrow_lines("run_scrap", ("quantity",))
+    codes = loader.Codes()
+    graph = {table: loader.narrow(table, keys, codes, **within.get(table, {})) for table, keys in _PERFORMANCE_FIELDS.items()}
+    scrap = loader.narrow_lines("run_scrap", ("quantity",), codes)
     for run in graph["production_runs"]:
         run["scrap"] = scrap.get(run["id"], [])
     return performance_view.view(graph, year, month, machine, years, span[1] if span else None)

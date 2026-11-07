@@ -71,12 +71,15 @@ def page_header(title, eyebrow="", description="", actions=()):
     return head
 
 
-def section(title, subtitle="", padded=True, actions=()):
+def section(title, subtitle="", padded=True, actions=(), lead=False):
+    """A card. ``lead`` makes it the page itself (title, description, page actions) when it is the page's only card."""
     card = flat(HtmlTemplate(html="@theme:table-section.html"))
     card.dom_nodes["title"].textContent = title or ""
     card.dom_nodes["subtitle"].textContent = subtitle or ""
     if padded:
         card.dom_nodes["body"].classList.add("is-padded")
+    if lead:
+        card.dom_nodes["card"].classList.add("is-lead")
     for action in actions:
         card.add_component(flat(action), slot="actions")
     return card

@@ -2,6 +2,7 @@
 
 import anvil.server
 from anvil import *
+from anvil.js import window
 from craftify_library.CraftifyUtils import dialogs
 from craftify_library.CustomComponents.ChartCard import ChartCard
 from craftify_library.CustomComponents.EChart import EChart
@@ -10,7 +11,7 @@ from craftify_library.CraftifyUtils.echarts_theme import apply_craftify_echarts_
 from cyclops_app import Data, Editor, Format, Layout, Nav, Tables, Tree
 
 LEADS = {
-    "item": "Every product, part, and material is an item: raw materials, packaging, semi-finished parts, finished and trading goods. Filter Type and Status.",
+    "item": "Every product, part, and material is an item: raw materials, packaging, semi-finished parts, finished and trading goods.",
     "mold": "One record per mold. Enter cavities and pieces per hour appears on every recipe that uses the mold.",
     "machine": "Presses, and the robots and dryers attached to them. Running now comes from the production log.",
     "recipe": "One row per setup: an item, a mold, a machine, the inputs and their shares, and the settings sheet. Sheet rows 2–16 are the trial block.",
@@ -94,6 +95,7 @@ class Screen:
         self.kind = kind
         self.code = code
         self.query = Nav.query(ctx)
+        self.tab = self.query.get("tab") or ""
         self.data = None
 
     def render(self):
@@ -112,6 +114,45 @@ class Screen:
         self.form.clear()
         kept = [child for child in children if child is not None]
         self.form.add_component(Layout.stack(*kept), full_width_row=True)
+
+    def show_tabbed(self, top, tabs):
+        """``top`` stays above the tab bar; ``tabs`` are (key, label, count or None, build), and only the open tab is built.
+        The open tab is kept in the address (?tab=) so a refresh or a shared link opens it again."""
+        tabs = [tab for tab in tabs if tab]
+        if not tabs:
+            self.show(*top)
+            return
+        if self.tab not in [tab[0] for tab in tabs]:
+            self.tab = tabs[0][0]
+        holder = Layout.stack()
+
+        def fill():
+            holder.clear()
+            build = next(tab[3] for tab in tabs if tab[0] == self.tab)
+            parts = [part for part in build() if part is not None]
+            if len(parts) == 1 and "card" in getattr(parts[0], "dom_nodes", {}):
+                parts[0].dom_nodes["title"].style.display = "none"
+            for part in parts:
+                Layout.add(holder, part)
+
+        def on_tab(mode, node):
+            key = Layout.attr(node, "data-item")
+            if not key or key == self.tab:
+                return
+            self.tab = key
+            for link in node.parentElement.querySelectorAll(".cy-tab"):
+                link.classList.toggle("is-active", Layout.attr(link, "data-item") == key)
+            url = window.URL(window.location.href)
+            url.searchParams.set("tab", key)
+            window.history.replaceState(window.history.state, "", url.toString())
+            fill()
+
+        bar = '<nav class="cy-tabs">%s</nav>' % "".join(
+            '<a class="cy-tab%s" href="javascript:void(0)" data-action="tab" data-item="%s">%s%s</a>'
+            % (" is-active" if key == self.tab else "", key, Layout.esc(label), "" if count is None else " <span>%s</span>" % count)
+            for key, label, count, _ in tabs)
+        fill()
+        self.show(*(list(top) + [Layout.interactive(bar, on_tab), holder]))
 
     def act(self, action, **extra):
         def handler(**event_args):
@@ -164,9 +205,6 @@ class Screen:
         if close is not None:
             close()
         Data.invalidate()
-        shell = get_open_form()
-        if hasattr(shell, "refresh_counts"):
-            shell.refresh_counts()
         redirect = result.get("redirect") or {}
         if redirect.get("kind"):
             Nav.go(redirect["kind"], redirect.get("code"))
@@ -185,13 +223,14 @@ class Screen:
             self.show(Layout.empty_state("The overview could not be loaded."))
             return
         self.data = data
-        self.show(
-            Layout.page_header("Plant overview", description="What runs on each machine now, from the production log, and the gaps between this record and a planner's answer."),
-            self._kpis(data.get("counts") or {}),
-            self._chart(data.get("chart") or {}),
-            self._board(data.get("machines") or []),
-            self._latest_stoppages(data.get("stoppages") or []),
-            self._gaps(data),
+        machines = data.get("machines") or []
+        self.show_tabbed(
+            (Layout.page_header("Plant overview", description="What runs on each machine now, from the production log, and the gaps between this record and a planner's answer."),
+             self._kpis(data.get("counts") or {})),
+            (("machines", "Machines", None, lambda: [self._board(machines)]),
+             ("gaps", "Data gaps", len(data.get("gaps") or []), lambda: [self._gaps(data)]),
+             ("stoppages", "Latest stoppages", None, lambda: [self._latest_stoppages(data.get("stoppages") or [])]),
+             ("chart", "Recipes and downtime", None, lambda: [self._chart(data.get("chart") or {})])),
         )
 
     def _latest_stoppages(self, rows):
@@ -289,7 +328,7 @@ class Screen:
         current = data.get("who") or "all"
         buttons = []
         for who, label in (("all", "All"), ("engineer", "Engineer"), ("planner", "Planner"), ("manager", "Manager")):
-            buttons.append(Layout.button(label, lambda who=who, **e: Nav.go("overview", query={} if who == "all" else {"who": who}), primary=who == current))
+            buttons.append(Layout.button(label, lambda who=who, **e: Nav.go("overview", query=dict({"tab": "gaps"}, **({} if who == "all" else {"who": who}))), primary=who == current))
         bits = []
         for gap in data.get("gaps") or []:
             bits.append(
@@ -315,13 +354,13 @@ class Screen:
             self.show(Layout.empty_state("The structure page could not be loaded."))
             return
         self.data = data
-        self.show(
-            Layout.page_header("How the records fit together", description=(
+        self.show_tabbed(
+            (Layout.page_header("How the records fit together", description=(
                 "Every product and material is an item. A semi-finished item is made by a recipe: a mold on a machine, fed with input items in shares, "
                 "with the machine's settings. A production order asks for a quantity of an item; each run of a recipe against it records pieces, "
-                "scrap, stoppages, the lots it consumed, and the lots it produced.")),
-            self._roles(),
-            self._glossary(data),
+                "scrap, stoppages, the lots it consumed, and the lots it produced.")),),
+            (("records", "Records", None, lambda: [self._glossary(data)]),
+             ("roles", "Who uses what", None, lambda: [self._roles()])),
         )
 
     def _roles(self):
@@ -363,21 +402,20 @@ class Screen:
             return
         create = CREATE.get(self.kind)
         actions = (Layout.button(create[0], self.act(create[1]), primary=True),) if create else ()
-        banner = Layout.flat(ColumnPanel())
-        card = Layout.section(TITLES.get(self.kind) or "Records", "Loading…", padded=False)
+        banner = Layout.stack()
+        card = Layout.section(TITLES.get(self.kind) or "Records", LEADS.get(self.kind) or "", padded=False, actions=actions, lead=True)
         shown = {"banner": False}
 
         def on_reply(total, info):
-            card.dom_nodes["subtitle"].textContent = "%s row%s" % ("{:,}".format(total), "" if total == 1 else "s")
             if info and not shown["banner"]:
                 shown["banner"] = True
-                banner.add_component(self.block(
+                Layout.add(banner, self.block(
                     '<div class="cy-banner"><strong>%s</strong> %s. <span class="cy-muted">%s</span><a href="javascript:void(0)" data-nav="%s">Show all</a></div>'
-                    % (info.get("count") or 0, Layout.esc((info.get("title") or "").lower()), Layout.esc(info.get("benefit")), Layout.esc(Nav.path(self.kind)))))
+                    % (info.get("count") or 0, Layout.esc((info.get("title") or "")[:1].lower() + (info.get("title") or "")[1:]), Layout.esc(info.get("benefit")), Layout.esc(Nav.path(self.kind)))))
 
         editing = {"on_edit": self._edit_stoppage, "edit_on_click": True} if self.kind == "stoppage" else {}
-        Layout.body(card, Tables.mount_remote(self.kind, Tables.columns_for(self.kind), fields, gap, on_reply, **editing))
-        self.show(Layout.page_header(TITLES.get(self.kind) or "Records", description=LEADS.get(self.kind) or "", actions=actions), banner, card)
+        Layout.body(card, banner, Tables.mount_remote(self.kind, Tables.columns_for(self.kind), fields, gap, on_reply, **editing))
+        self.show(card)
 
     def _edit_stoppage(self, row):
         Editor.open_editor(self, "edit-stoppage", {"row": row})
@@ -401,35 +439,6 @@ class Screen:
 
     def _run_section(self, rows, hide=(), actions=(), subtitle="Each job: pieces, scrap, and pieces per hour against the cycle and cavities."):
         return self._table_section("Production runs", subtitle, rows, "run", hide, actions, empty="No runs logged.")
-
-    def _tabs(self, title, tabs):
-        bar = FlowPanel(spacing="small", align="left")
-        panels, buttons, tables = [], [], []
-        for index, (label, kind, rows, hide) in enumerate(tabs):
-            button = Layout.button("%s · %s" % (label, len(rows)), lambda index=index, **e: _select(index), primary=index == 0)
-            buttons.append(button)
-            bar.add_component(button)
-            panel = ColumnPanel(spacing_above="none", spacing_below="none", visible=index == 0)
-            table = Tables.mount(rows, kind, Tables.columns_for(kind, hide), height="480px")
-            panel.add_component(table, full_width_row=True)
-            panels.append(panel)
-            tables.append(table)
-
-        def _select(index):
-            for position, panel in enumerate(panels):
-                panel.visible = position == index
-            for position, button in enumerate(buttons):
-                button.role = "primary-color" if position == index else None
-            try:
-                tables[index].redraw(True)
-            except Exception:
-                pass
-
-        holder = Layout.html('<div class="cy-tabbar" anvil-slot="default"></div>')
-        holder.add_component(bar)
-        card = Layout.section(title, padded=False)
-        Layout.body(card, holder, *panels)
-        return card
 
     # Details ----------------------------------------------------------------------------------
 
@@ -487,29 +496,36 @@ class Screen:
         if data.get("link"):
             facts.append(("Link", '<a href="%s" target="_blank" rel="noopener">Open</a>' % Layout.esc(data.get("link")), False))
         hint = "" if data.get("catalog", True) else "Written on recipes but not in the workbook's catalog sheet."
-        parts = [
-            Layout.page_header(data.get("name") or "", eyebrow=data.get("id") or "", description=hint, actions=tuple(actions)),
-            self._meta(data, Format.flag(data.get("typeLabel") or "")),
-            self._facts(facts),
-        ]
+        top = (Layout.page_header(data.get("name") or "", eyebrow=data.get("id") or "", description=hint, actions=tuple(actions)),
+               self._meta(data, Format.flag(data.get("typeLabel") or "")), self._facts(facts), self._notes(data.get("notes")))
+        tabs = []
         if data.get("type") == "SFG":
-            parts += [self._flow_section(data), self._machine_cards(data), self._approved(data), self._missing(data),
-                      self._table_section("All recipes", "Including trial rows.", data.get("recipes") or [], "recipe", ("item",), height="480px", empty="No recipe yet.")]
-        else:
-            parts.append(self._missing(data))
+            tabs += [
+                ("flow", "Production flow", None, lambda: [self._flow_section(data)]),
+                ("colors", "Colors on the machine", None, lambda: [self._machine_cards(data)]),
+                ("machines", "Machines", None, lambda: [self._approved(data)]),
+                ("recipes", "Recipes", len(data.get("recipes") or []), lambda: [self._table_section(
+                    "All recipes", "Including trial rows.", data.get("recipes") or [], "recipe", ("item",), height="480px", empty="No recipe yet.")]),
+            ]
         if made:
-            parts.append(self._table_section("Production orders", "", data.get("orders") or [], "order", ("item",),
-                                             actions=(Layout.button("New order", self.act("new-order")),), empty="No orders."))
-            parts.append(self._run_section(data.get("production") or [], ("item",)))
+            tabs += [
+                ("orders", "Orders", len(data.get("orders") or []), lambda: [self._table_section(
+                    "Production orders", "", data.get("orders") or [], "order", ("item",), actions=(Layout.button("New order", self.act("new-order")),), empty="No orders.")]),
+                ("production", "Production", len(data.get("production") or []), lambda: [self._run_section(data.get("production") or [], ("item",))]),
+            ]
         if data.get("usedIn"):
-            parts.append(self._tabs("Where it is used", (
-                ("Items", "summary", data.get("madeFrom") or [], ()),
-                ("Recipes", "recipe", data.get("usedIn") or [], ()),
-            )))
+            tabs += [
+                ("used-in", "Used in recipes", len(data.get("usedIn") or []), lambda: [self._table_section(
+                    "Recipes using it", "", data.get("usedIn") or [], "recipe", height="480px")]),
+                ("made-into", "Items made from it", len(data.get("madeFrom") or []), lambda: [self._table_section(
+                    "Items made from it", "", data.get("madeFrom") or [], "summary", height="480px")]),
+            ]
         lot_actions = () if made else (Layout.button("Receive a lot", self.act("receive-lot")),)
-        parts.append(self._table_section("Lots", "", data.get("lots") or [], "lot", ("item",), actions=lot_actions, empty="No lots recorded."))
-        parts.append(self._notes(data.get("notes")))
-        self.show(*parts)
+        tabs.append(("lots", "Lots", len(data.get("lots") or []), lambda: [self._table_section(
+            "Lots", "", data.get("lots") or [], "lot", ("item",), actions=lot_actions, empty="No lots recorded.")]))
+        if data.get("missingBits"):
+            tabs.append(("missing", "Missing", len(data.get("missingBits")), lambda: [self._missing(data)]))
+        self.show_tabbed(top, tabs)
 
     def _flow_section(self, data):
         card = Layout.section("Production flow", "Mold, machine, recipe, and inputs for this item.")
@@ -581,17 +597,19 @@ class Screen:
         return card
 
     def _mold(self, data):
-        self.show(
-            Layout.page_header(data.get("name") or "", eyebrow=data.get("id") or "", actions=(Layout.button("Edit", self.act("edit-mold")),)),
-            self._meta(data),
-            self._facts((
-                ("Cavities", Format.text(data.get("cavities"), "add → pcs/h"), not data.get("cavities")),
-                ("Shot weight (g)", Format.text(data.get("shotWeight"), "add → g per piece"), not data.get("shotWeight")),
-                ("Location", Format.text(data.get("location"), "add → where it is"), not data.get("location")),
-            )),
-            self._table_section("Items made with this mold", "", data.get("items") or [], "summary", ("molds",), empty="No recipe uses this mold."),
-            self._table_section("Recipes with this mold", "The item and the machine are on each row.", data.get("recipes") or [], "recipe", ("mold",)),
-            self._notes(data.get("notes")),
+        self.show_tabbed(
+            (Layout.page_header(data.get("name") or "", eyebrow=data.get("id") or "", actions=(Layout.button("Edit", self.act("edit-mold")),)),
+             self._meta(data),
+             self._facts((
+                 ("Cavities", Format.text(data.get("cavities"), "add → pcs/h"), not data.get("cavities")),
+                 ("Shot weight (g)", Format.text(data.get("shotWeight"), "add → g per piece"), not data.get("shotWeight")),
+                 ("Location", Format.text(data.get("location"), "add → where it is"), not data.get("location")),
+             )),
+             self._notes(data.get("notes"))),
+            (("items", "Items", len(data.get("items") or []), lambda: [self._table_section(
+                "Items made with this mold", "", data.get("items") or [], "summary", ("molds",), empty="No recipe uses this mold.")]),
+             ("recipes", "Recipes", len(data.get("recipes") or []), lambda: [self._table_section(
+                 "Recipes with this mold", "The item and the machine are on each row.", data.get("recipes") or [], "recipe", ("mold",))])),
         )
 
     def _machine(self, data):
@@ -601,9 +619,9 @@ class Screen:
             running = "%s <small>· %s · since %s</small>" % (Format.link("run", current.get("id"), current.get("item")), Layout.esc(current.get("order")),
                                                            Layout.esc(Format.when(current.get("start"))))
         attached = " · ".join(Format.link("machine", entry.get("id"), entry.get("name")) for entry in data.get("attached") or [])
-        self.show(
-            Layout.page_header(data.get("name") or "", eyebrow=data.get("id") or "", description=data.get("alias") or "",
-                               actions=(Layout.button("Edit", self.act("edit-machine")), Layout.button("Log a stoppage", self.act("add-stoppage")))),
+        self.show_tabbed(
+            (Layout.page_header(data.get("name") or "", eyebrow=data.get("id") or "", description=data.get("alias") or "",
+                                actions=(Layout.button("Edit", self.act("edit-machine")), Layout.button("Log a stoppage", self.act("add-stoppage")))),
             self._meta(data, Format.flag(data.get("type") or "")),
             self._facts((
                 ("Running now", running, False),
@@ -615,14 +633,16 @@ class Screen:
                 ("Changeover (min)", Format.text(data.get("changeoverMin"), "add → sequencing"), not data.get("changeoverMin") and not data.get("attachedToId")),
                 ("Location", Format.text(data.get("location")), False) if data.get("location") else None,
             )),
-            self._tabs("On this machine", (
-                ("Items", "summary", data.get("items") or [], ("machines",)),
-                ("Approved items", "item", data.get("approved") or [], ("machines",)),
-                ("Recipes", "recipe", data.get("recipes") or [], ("machine",)),
-                ("Production", "run", data.get("production") or [], ("machine",)),
-            )),
-            self._stoppage_section(data.get("stoppages") or [], ("machine",), (Layout.button("Log a stoppage", self.act("add-stoppage")),)),
-            self._notes(data.get("notes")),
+            self._notes(data.get("notes"))),
+            (("items", "Items", len(data.get("items") or []), lambda: [self._table_section(
+                "Items", "Items with a recipe on this machine.", data.get("items") or [], "summary", ("machines",), height="480px", empty="No item runs here yet.")]),
+             ("approved", "Approved items", len(data.get("approved") or []), lambda: [self._table_section(
+                 "Approved items", "Items a planner may book on this machine.", data.get("approved") or [], "item", ("machines",), height="480px", empty="No item approved here.")]),
+             ("recipes", "Recipes", len(data.get("recipes") or []), lambda: [self._table_section(
+                 "Recipes", "", data.get("recipes") or [], "recipe", ("machine",), height="480px", empty="No recipe on this machine.")]),
+             ("production", "Production", len(data.get("production") or []), lambda: [self._run_section(data.get("production") or [], ("machine",))]),
+             ("stoppages", "Stoppages", len(data.get("stoppages") or []), lambda: [self._stoppage_section(
+                 data.get("stoppages") or [], ("machine",), (Layout.button("Log a stoppage", self.act("add-stoppage")),))])),
         )
 
     def _recipe(self, data):
@@ -635,8 +655,8 @@ class Screen:
         pph = data.get("pph")
         zones = "".join('<div class="cy-zone"><div class="k">%s</div><div class="v">%s</div></div>' % (Layout.esc(zone.get("label")), Format.text(zone.get("value")))
                         for zone in data.get("zones") or [])
-        self.show(
-            Layout.page_header("%s on %s" % (data.get("itemName") or "", data.get("machineName") or ""), eyebrow=data.get("id") or "", actions=tuple(actions)),
+        self.show_tabbed(
+            (Layout.page_header("%s on %s" % (data.get("itemName") or "", data.get("machineName") or ""), eyebrow=data.get("id") or "", actions=tuple(actions)),
             self._meta(data, Format.flag("trial row") if data.get("recipeStatus") == "trial" else ""),
             self._facts((
                 ("Item", Format.link("item", data.get("itemId"), data.get("itemName")), False),
@@ -647,12 +667,11 @@ class Screen:
                 ("Screw", "%s <small>rpm</small>" % Format.text(data.get("screwRpm")), False),
                 ("Pieces / hour", Format.text(pph) if pph else Format.text(data.get("pphHint"), "unknown"), not pph),
                 ("Same color", siblings, False) if siblings else None,
-            )),
-            self._zones(data, zones),
-            self._inputs(data),
-            self._settings(data),
-            self._run_section(data.get("production") or [], ("machine", "item"), (Layout.button("Log a run", self.act("add-run")),)),
-            self._stoppage_section(data.get("stoppages") or [], ("machine", "item")),
+            ))),
+            (("sheet", "Setting sheet", None, lambda: [self._zones(data, zones), self._inputs(data), self._settings(data)]),
+             ("production", "Production", len(data.get("production") or []), lambda: [self._run_section(
+                 data.get("production") or [], ("machine", "item"), (Layout.button("Log a run", self.act("add-run")),))]),
+             ("stoppages", "Stoppages", len(data.get("stoppages") or []), lambda: [self._stoppage_section(data.get("stoppages") or [], ("machine", "item"))])),
         )
 
     def _zones(self, data, zones):
@@ -698,8 +717,8 @@ class Screen:
 
     def _order(self, data):
         progress = ("%s%%" % data.get("progress")) if data.get("progress") is not None else "—"
-        self.show(
-            Layout.page_header(data.get("item") or "", eyebrow=data.get("id") or "", description="Production order",
+        self.show_tabbed(
+            (Layout.page_header(data.get("item") or "", eyebrow=data.get("id") or "", description="Production order",
                                actions=(Layout.button("Log a run", self.act("add-run"), primary=True), Layout.button("Edit", self.act("edit-order")),
                                         Layout.button("Delete", self.act("delete-order"), danger=True))),
             self._meta(data),
@@ -710,17 +729,19 @@ class Screen:
                 ("Due", Layout.esc(Format.day(data.get("dueDate"))), False),
                 ("ERP order", Format.text(data.get("erpOrderNo")), False),
             )),
-            self._run_section(data.get("production") or [], ("order", "item"), (Layout.button("Log a run", self.act("add-run")),)),
-            self._table_section("Lots produced", "", data.get("lots") or [], "lot", ("item",), empty="No lots yet."),
-            self._notes(data.get("notes")),
+            self._notes(data.get("notes"))),
+            (("production", "Production", len(data.get("production") or []), lambda: [self._run_section(
+                data.get("production") or [], ("order", "item"), (Layout.button("Log a run", self.act("add-run")),))]),
+             ("lots", "Lots produced", len(data.get("lots") or []), lambda: [self._table_section(
+                 "Lots produced", "", data.get("lots") or [], "lot", ("item",), empty="No lots yet.")])),
         )
 
     def _run(self, data):
         def metric(value, unit=""):
             return Format.text(None) if value is None else "%s%s" % (Layout.esc(Format.trim(value)), unit)
 
-        self.show(
-            Layout.page_header("%s on %s" % (data.get("item") or "", data.get("machine") or ""), eyebrow=data.get("id") or "",
+        self.show_tabbed(
+            (Layout.page_header("%s on %s" % (data.get("item") or "", data.get("machine") or ""), eyebrow=data.get("id") or "",
                                actions=(Layout.button("Edit", self.act("edit-run"), primary=data.get("state") == "running"),
                                         Layout.button("Log a stoppage", self.act("add-stoppage")))),
             self._meta(data),
@@ -738,11 +759,14 @@ class Screen:
                 ("Vs target", metric(data.get("performance"), "%"), False),
                 ("Scrap", metric(data.get("scrap")) + (" <small>· %s%%</small>" % Format.trim(data.get("scrapPct")) if data.get("scrapPct") is not None else ""), False),
             )),
-            Layout.grid("repeat(auto-fit, minmax(320px, 1fr))", self._scrap_lines(data), self._input_lines(data)),
-            self._table_section("Lots produced", "The lots printed on the boxes of this run.", data.get("outputLots") or [], "lot", ("item", "run"),
-                                actions=(Layout.button("Add", self.act("add-output-lot")),), empty="No output lot yet."),
-            self._stoppage_section(data.get("stoppages") or [], ("machine", "item"), (Layout.button("Log a stoppage", self.act("add-stoppage")),)),
-            self._notes(data.get("notes")),
+            self._notes(data.get("notes"))),
+            (("scrap", "Scrap", len(data.get("scrapLines") or []), lambda: [self._scrap_lines(data)]),
+             ("consumed", "Lots consumed", len(data.get("inputLines") or []), lambda: [self._input_lines(data)]),
+             ("produced", "Lots produced", len(data.get("outputLots") or []), lambda: [self._table_section(
+                 "Lots produced", "The lots printed on the boxes of this run.", data.get("outputLots") or [], "lot", ("item", "run"),
+                 actions=(Layout.button("Add", self.act("add-output-lot")),), empty="No output lot yet.")]),
+             ("stoppages", "Stoppages", len(data.get("stoppages") or []), lambda: [self._stoppage_section(
+                 data.get("stoppages") or [], ("machine", "item"), (Layout.button("Log a stoppage", self.act("add-stoppage")),))])),
         )
 
     def _line_list(self, rows, empty):
@@ -776,13 +800,12 @@ class Screen:
             ("Supplier batch", Format.text(data.get("supplierLot")), False) if data.get("supplierLot") else None,
             ("Quantity", "%s <small>%s</small>" % (Format.text(Format.trim(data.get("quantity"))), Layout.esc(data.get("uom"))), data.get("quantity") is None),
         )
-        self.show(
-            Layout.page_header("Lot %s" % (data.get("number") or ""), eyebrow=data.get("id") or "", description=data.get("item") or "",
-                               actions=(Layout.button("Edit", self.act("edit-lot")),)),
-            self._meta(data),
-            self._facts(facts),
-            Layout.grid("repeat(auto-fit, minmax(360px, 1fr))", self._trace_back(data), self._trace_forward(data)),
-            self._notes(data.get("notes")),
+        self.show_tabbed(
+            (Layout.page_header("Lot %s" % (data.get("number") or ""), eyebrow=data.get("id") or "", description=data.get("item") or "",
+                                actions=(Layout.button("Edit", self.act("edit-lot")),)),
+             self._meta(data), self._facts(facts), self._notes(data.get("notes"))),
+            (("back", "Trace back", None, lambda: [self._trace_back(data)]),
+             ("forward", "Trace forward", len((data.get("forward") or {}).get("runs") or []), lambda: [self._trace_forward(data)])),
         )
 
     def _lot_label(self, lot):

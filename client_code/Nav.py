@@ -29,16 +29,6 @@ LABEL = {
     "lot": "Lot",
     "configure": "Configure",
 }
-COUNT_KEY = {
-    "item": "items",
-    "mold": "molds",
-    "machine": "machines",
-    "recipe": "recipes",
-    "order": "production_orders",
-    "run": "production_runs",
-    "stoppage": "stoppages",
-    "lot": "lots",
-}
 
 
 def path(kind, code=None):

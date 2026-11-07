@@ -51,12 +51,6 @@ def cyclops_enable_new_user(email):
 
 
 @anvil.server.callable
-def cyclops_nav():
-    _guard()
-    return _timed("nav", store.counts)
-
-
-@anvil.server.callable
 def cyclops_overview(who="all"):
     _guard()
     return _timed("overview", store.overview, who or "all")

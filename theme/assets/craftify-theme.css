@@ -354,22 +354,9 @@ html.ipac-dark .nav-collapse:hover {
   border-color: #3b4d68 !important;
 }
 
-html.ipac-dark .left-nav a,
-html.ipac-dark .left-nav a .link-text,
-html.ipac-dark .left-nav .anvil-component-icon,
-html.ipac-dark .left-nav i.fa {
+html.ipac-dark .left-nav-footer a,
+html.ipac-dark .left-nav-footer .anvil-component-icon {
   color: #dbe4f0 !important;
-}
-
-html.ipac-dark .left-nav a.anvil-role-selected,
-html.ipac-dark .left-nav a.anvil-role-selected .link-text,
-html.ipac-dark .left-nav a.anvil-role-selected .anvil-component-icon {
-  background: #1e3a5f !important;
-  color: #e7eef7 !important;
-}
-
-html.ipac-dark .left-nav a:hover {
-  background: #1a2740 !important;
 }
 
 html.ipac-dark .nav-brand-text strong,

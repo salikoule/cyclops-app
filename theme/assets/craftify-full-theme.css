@@ -1218,15 +1218,89 @@ html:not(.designer) .sidebar-toggle {
   padding-bottom: 0;
 }
 
-.left-nav a, .left-nav .anvil-label.left_edge-icon, .left-nav .anvil-label.right_edge-icon {
-  color: #1e3a5f;
-  margin: 1px 0;
-  padding: 8px 10px;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: -0.01em;
+/* ---------- Sidebar links: compact rows, line icons, grouped ---------- */
+:root {
+  --cf-nav-bg: #f8fafc;
+  --cf-nav-ink: #475569;
+  --cf-nav-icon: #7b8798;
+  --cf-nav-strong: #0f172a;
+  --cf-nav-accent: #1e3a8a;
+  --cf-nav-hover: rgba(15, 23, 42, 0.045);
+  --cf-nav-active: #ffffff;
+  --cf-nav-ring: 0 0 0 1px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.08);
+  --cf-nav-group: #94a3b8;
+  --cf-nav-line: #e2e8f0;
 }
+html.ipac-dark, html.craftify-theme-dark, html[data-theme="dark"] {
+  --cf-nav-bg: #111a2e;
+  --cf-nav-ink: #a8b4c6;
+  --cf-nav-icon: #7f8ca0;
+  --cf-nav-strong: #f1f5f9;
+  --cf-nav-accent: #93c5fd;
+  --cf-nav-hover: rgba(255, 255, 255, 0.05);
+  --cf-nav-active: rgba(255, 255, 255, 0.08);
+  --cf-nav-ring: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --cf-nav-group: #64748b;
+  --cf-nav-line: #2a3a52;
+}
+html body .nav-holder .left-nav,
+html body .left-nav-footer { background: var(--cf-nav-bg) !important; }
+
+.left-nav a, .left-nav .anvil-label.left_edge-icon, .left-nav .anvil-label.right_edge-icon {
+  color: var(--cf-nav-ink);
+  margin: 1px 0;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+}
+html body .left-nav-main a.anvil-component {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  margin: 1px 10px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  color: var(--cf-nav-ink) !important;
+  background: transparent !important;
+  font-size: 13px !important;
+  font-weight: 500;
+  transition: background-color 0.12s, color 0.12s;
+}
+html body .left-nav-main a.anvil-component .anvil-link-text { padding: 0; line-height: 20px; background: transparent !important; color: inherit !important; }
+html body .left-nav-main a.anvil-component > i.anvil-left {
+  flex: 0 0 16px;
+  width: 16px;
+  margin: 0;
+  color: var(--cf-nav-icon) !important;
+  transition: color 0.12s;
+}
+html body .left-nav-main a.anvil-component > i.anvil-right { display: none; }
+html body .left-nav-main a.anvil-component:hover {
+  background: var(--cf-nav-hover) !important;
+  color: var(--cf-nav-strong) !important;
+}
+html body .left-nav-main a.anvil-component:hover > i.anvil-left { color: var(--cf-nav-strong) !important; }
+html body .left-nav-main a.anvil-component.anvil-role-selected {
+  background: var(--cf-nav-active) !important;
+  color: var(--cf-nav-strong) !important;
+  font-weight: 600;
+  box-shadow: var(--cf-nav-ring);
+}
+html body .left-nav-main a.anvil-component.anvil-role-selected > i.anvil-left { color: var(--cf-nav-accent) !important; }
+html body .structure.nav-collapsed .left-nav-main a.anvil-component { justify-content: center; padding: 8px !important; }
+
+/* Group label between links: Layout.html('<div class="cf-nav-group">Records</div>') */
+.cf-nav-group {
+  padding: 16px 20px 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cf-nav-group);
+}
+.structure.nav-collapsed .cf-nav-group { height: 1px; padding: 0; margin: 10px 12px; background: var(--cf-nav-line); font-size: 0; }
 
 .left-nav a.anvil-role-nav-sub-link {
   padding: 6px 10px 6px 36px;
@@ -1280,9 +1354,112 @@ html:not(.designer) .sidebar-toggle {
 }
 
 .left-nav a:hover, .left-nav .anvil-role-selected {
-  color: #1e3a5f;
-  background-color: #f0f6fc;
+  color: var(--cf-nav-strong);
+  background-color: var(--cf-nav-hover);
 }
+
+/* Line icons (Lucide, ISC) for the fa: names passed to NavLink; other fa names keep the Font Awesome glyph. */
+.left-nav-main i.anvil-left.fa-table-cells::before,
+.left-nav-main i.anvil-left.fa-gauge::before,
+.left-nav-main i.anvil-left.fa-house::before,
+.left-nav-main i.anvil-left.fa-border-all::before,
+.left-nav-main i.anvil-left.fa-chart-line::before,
+.left-nav-main i.anvil-left.fa-chart-simple::before,
+.left-nav-main i.anvil-left.fa-chart-bar::before,
+.left-nav-main i.anvil-left.fa-chart-pie::before,
+.left-nav-main i.anvil-left.fa-chart-area::before,
+.left-nav-main i.anvil-left.fa-box::before,
+.left-nav-main i.anvil-left.fa-cubes::before,
+.left-nav-main i.anvil-left.fa-layer-group::before,
+.left-nav-main i.anvil-left.fa-industry::before,
+.left-nav-main i.anvil-left.fa-warehouse::before,
+.left-nav-main i.anvil-left.fa-truck::before,
+.left-nav-main i.anvil-left.fa-cart-shopping::before,
+.left-nav-main i.anvil-left.fa-tag::before,
+.left-nav-main i.anvil-left.fa-barcode::before,
+.left-nav-main i.anvil-left.fa-sliders::before,
+.left-nav-main i.anvil-left.fa-list-check::before,
+.left-nav-main i.anvil-left.fa-gear::before,
+.left-nav-main i.anvil-left.fa-gears::before,
+.left-nav-main i.anvil-left.fa-clipboard-list::before,
+.left-nav-main i.anvil-left.fa-clipboard-check::before,
+.left-nav-main i.anvil-left.fa-list::before,
+.left-nav-main i.anvil-left.fa-table-list::before,
+.left-nav-main i.anvil-left.fa-table::before,
+.left-nav-main i.anvil-left.fa-inbox::before,
+.left-nav-main i.anvil-left.fa-file-lines::before,
+.left-nav-main i.anvil-left.fa-folder::before,
+.left-nav-main i.anvil-left.fa-play::before,
+.left-nav-main i.anvil-left.fa-wrench::before,
+.left-nav-main i.anvil-left.fa-arrow-right-arrow-left::before,
+.left-nav-main i.anvil-left.fa-x-ray::before,
+.left-nav-main i.anvil-left.fa-users::before,
+.left-nav-main i.anvil-left.fa-user::before,
+.left-nav-main i.anvil-left.fa-calendar::before,
+.left-nav-main i.anvil-left.fa-calendar-days::before,
+.left-nav-main i.anvil-left.fa-clock::before,
+.left-nav-main i.anvil-left.fa-bell::before,
+.left-nav-main i.anvil-left.fa-envelope::before,
+.left-nav-main i.anvil-left.fa-magnifying-glass::before,
+.left-nav-main i.anvil-left.fa-circle-question::before,
+.left-nav-main i.anvil-left.fa-robot::before,
+.left-nav-main i.anvil-left.fa-wand-magic-sparkles::before,
+.left-nav-main i.anvil-left.fa-dollar-sign::before,
+.left-nav-main i.anvil-left.fa-building::before,
+.left-nav-main i.anvil-left.fa-shield-halved::before,
+.left-nav-main i.anvil-left.fa-key::before {
+  content: "" !important; display: block; width: 16px; height: 16px; background-color: currentColor;
+  -webkit-mask: var(--cf-ico) center / 16px 16px no-repeat; mask: var(--cf-ico) center / 16px 16px no-repeat;
+}
+.left-nav i.fa-table-cells { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Crect width=%227%22 height=%229%22 x=%223%22 y=%223%22 rx=%221%22 /%3E%3Crect width=%227%22 height=%225%22 x=%2214%22 y=%223%22 rx=%221%22 /%3E%3Crect width=%227%22 height=%229%22 x=%2214%22 y=%2212%22 rx=%221%22 /%3E%3Crect width=%227%22 height=%225%22 x=%223%22 y=%2216%22 rx=%221%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-gauge { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22m12 14 4-4%22 /%3E%3Cpath d=%22M3.34 19a10 10 0 1 1 17.32 0%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-house { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8%22 /%3E%3Cpath d=%22M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-border-all { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Crect width=%227%22 height=%227%22 x=%223%22 y=%223%22 rx=%221%22 /%3E%3Crect width=%227%22 height=%227%22 x=%2214%22 y=%223%22 rx=%221%22 /%3E%3Crect width=%227%22 height=%227%22 x=%2214%22 y=%2214%22 rx=%221%22 /%3E%3Crect width=%227%22 height=%227%22 x=%223%22 y=%2214%22 rx=%221%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-chart-line { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cline x1=%2218%22 x2=%2218%22 y1=%2220%22 y2=%2210%22 /%3E%3Cline x1=%2212%22 x2=%2212%22 y1=%2220%22 y2=%224%22 /%3E%3Cline x1=%226%22 x2=%226%22 y1=%2220%22 y2=%2214%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-chart-simple { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cline x1=%2218%22 x2=%2218%22 y1=%2220%22 y2=%2210%22 /%3E%3Cline x1=%2212%22 x2=%2212%22 y1=%2220%22 y2=%224%22 /%3E%3Cline x1=%226%22 x2=%226%22 y1=%2220%22 y2=%2214%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-chart-bar { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M3 3v16a2 2 0 0 0 2 2h16%22 /%3E%3Cpath d=%22M18 17V9%22 /%3E%3Cpath d=%22M13 17V5%22 /%3E%3Cpath d=%22M8 17v-3%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-chart-pie { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z%22 /%3E%3Cpath d=%22M21.21 15.89A10 10 0 1 1 8 2.83%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-chart-area { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M12 16v5%22 /%3E%3Cpath d=%22M16 14v7%22 /%3E%3Cpath d=%22M20 10v11%22 /%3E%3Cpath d=%22m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.354 8.354a.5.5 0 0 0-.707 0L2 15%22 /%3E%3Cpath d=%22M4 18v3%22 /%3E%3Cpath d=%22M8 14v7%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-box { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z%22 /%3E%3Cpath d=%22M12 22V12%22 /%3E%3Cpath d=%22m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7%22 /%3E%3Cpath d=%22m7.5 4.27 9 5.15%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-cubes { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z%22 /%3E%3Cpath d=%22m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65%22 /%3E%3Cpath d=%22m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-layer-group { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z%22 /%3E%3Cpath d=%22m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65%22 /%3E%3Cpath d=%22m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-industry { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z%22 /%3E%3Cpath d=%22M17 18h1%22 /%3E%3Cpath d=%22M12 18h1%22 /%3E%3Cpath d=%22M7 18h1%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-warehouse { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z%22 /%3E%3Cpath d=%22M6 18h12%22 /%3E%3Cpath d=%22M6 14h12%22 /%3E%3Crect width=%2212%22 height=%2212%22 x=%226%22 y=%2210%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-truck { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2%22 /%3E%3Cpath d=%22M15 18H9%22 /%3E%3Cpath d=%22M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14%22 /%3E%3Ccircle cx=%2217%22 cy=%2218%22 r=%222%22 /%3E%3Ccircle cx=%227%22 cy=%2218%22 r=%222%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-cart-shopping { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Ccircle cx=%228%22 cy=%2221%22 r=%221%22 /%3E%3Ccircle cx=%2219%22 cy=%2221%22 r=%221%22 /%3E%3Cpath d=%22M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-tag { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z%22 /%3E%3Ccircle cx=%227.5%22 cy=%227.5%22 r=%22.5%22 fill=%22currentColor%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-barcode { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M3 7V5a2 2 0 0 1 2-2h2%22 /%3E%3Cpath d=%22M17 3h2a2 2 0 0 1 2 2v2%22 /%3E%3Cpath d=%22M21 17v2a2 2 0 0 1-2 2h-2%22 /%3E%3Cpath d=%22M7 21H5a2 2 0 0 1-2-2v-2%22 /%3E%3Cpath d=%22M8 7v10%22 /%3E%3Cpath d=%22M12 7v10%22 /%3E%3Cpath d=%22M17 7v10%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-sliders { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cline x1=%2221%22 x2=%2214%22 y1=%224%22 y2=%224%22 /%3E%3Cline x1=%2210%22 x2=%223%22 y1=%224%22 y2=%224%22 /%3E%3Cline x1=%2221%22 x2=%2212%22 y1=%2212%22 y2=%2212%22 /%3E%3Cline x1=%228%22 x2=%223%22 y1=%2212%22 y2=%2212%22 /%3E%3Cline x1=%2221%22 x2=%2216%22 y1=%2220%22 y2=%2220%22 /%3E%3Cline x1=%2212%22 x2=%223%22 y1=%2220%22 y2=%2220%22 /%3E%3Cline x1=%2214%22 x2=%2214%22 y1=%222%22 y2=%226%22 /%3E%3Cline x1=%228%22 x2=%228%22 y1=%2210%22 y2=%2214%22 /%3E%3Cline x1=%2216%22 x2=%2216%22 y1=%2218%22 y2=%2222%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-list-check { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M20 7h-9%22 /%3E%3Cpath d=%22M14 17H5%22 /%3E%3Ccircle cx=%2217%22 cy=%2217%22 r=%223%22 /%3E%3Ccircle cx=%227%22 cy=%227%22 r=%223%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-gear { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z%22 /%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%223%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-gears { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z%22 /%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%223%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-clipboard-list { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Crect width=%228%22 height=%224%22 x=%228%22 y=%222%22 rx=%221%22 ry=%221%22 /%3E%3Cpath d=%22M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2%22 /%3E%3Cpath d=%22M12 11h4%22 /%3E%3Cpath d=%22M12 16h4%22 /%3E%3Cpath d=%22M8 11h.01%22 /%3E%3Cpath d=%22M8 16h.01%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-clipboard-check { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Crect width=%228%22 height=%224%22 x=%228%22 y=%222%22 rx=%221%22 ry=%221%22 /%3E%3Cpath d=%22M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2%22 /%3E%3Cpath d=%22m9 14 2 2 4-4%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-list { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M3 12h.01%22 /%3E%3Cpath d=%22M3 18h.01%22 /%3E%3Cpath d=%22M3 6h.01%22 /%3E%3Cpath d=%22M8 12h13%22 /%3E%3Cpath d=%22M8 18h13%22 /%3E%3Cpath d=%22M8 6h13%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-table-list { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M15 3v18%22 /%3E%3Crect width=%2218%22 height=%2218%22 x=%223%22 y=%223%22 rx=%222%22 /%3E%3Cpath d=%22M21 9H3%22 /%3E%3Cpath d=%22M21 15H3%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-table { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M12 3v18%22 /%3E%3Crect width=%2218%22 height=%2218%22 x=%223%22 y=%223%22 rx=%222%22 /%3E%3Cpath d=%22M3 9h18%22 /%3E%3Cpath d=%22M3 15h18%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-inbox { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpolyline points=%2222 12 16 12 14 15 10 15 8 12 2 12%22 /%3E%3Cpath d=%22M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-file-lines { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z%22 /%3E%3Cpath d=%22M14 2v4a2 2 0 0 0 2 2h4%22 /%3E%3Cpath d=%22M10 9H8%22 /%3E%3Cpath d=%22M16 13H8%22 /%3E%3Cpath d=%22M16 17H8%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-folder { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-play { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%2210%22 /%3E%3Cpolygon points=%2210 8 16 12 10 16 10 8%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-wrench { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M10 15V9%22 /%3E%3Cpath d=%22M14 15V9%22 /%3E%3Cpath d=%22M2.586 16.726A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2h6.624a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586z%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-arrow-right-arrow-left { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M8 3 4 7l4 4%22 /%3E%3Cpath d=%22M4 7h16%22 /%3E%3Cpath d=%22m16 21 4-4-4-4%22 /%3E%3Cpath d=%22M20 17H4%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-x-ray { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M3 7V5a2 2 0 0 1 2-2h2%22 /%3E%3Cpath d=%22M17 3h2a2 2 0 0 1 2 2v2%22 /%3E%3Cpath d=%22M21 17v2a2 2 0 0 1-2 2h-2%22 /%3E%3Cpath d=%22M7 21H5a2 2 0 0 1-2-2v-2%22 /%3E%3Cpath d=%22M7 12h10%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-users { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2%22 /%3E%3Ccircle cx=%229%22 cy=%227%22 r=%224%22 /%3E%3Cpath d=%22M22 21v-2a4 4 0 0 0-3-3.87%22 /%3E%3Cpath d=%22M16 3.13a4 4 0 0 1 0 7.75%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-user { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2%22 /%3E%3Ccircle cx=%2212%22 cy=%227%22 r=%224%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-calendar { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M8 2v4%22 /%3E%3Cpath d=%22M16 2v4%22 /%3E%3Crect width=%2218%22 height=%2218%22 x=%223%22 y=%224%22 rx=%222%22 /%3E%3Cpath d=%22M3 10h18%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-calendar-days { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M8 2v4%22 /%3E%3Cpath d=%22M16 2v4%22 /%3E%3Crect width=%2218%22 height=%2218%22 x=%223%22 y=%224%22 rx=%222%22 /%3E%3Cpath d=%22M3 10h18%22 /%3E%3Cpath d=%22M8 14h.01%22 /%3E%3Cpath d=%22M12 14h.01%22 /%3E%3Cpath d=%22M16 14h.01%22 /%3E%3Cpath d=%22M8 18h.01%22 /%3E%3Cpath d=%22M12 18h.01%22 /%3E%3Cpath d=%22M16 18h.01%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-clock { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%2210%22 /%3E%3Cpolyline points=%2212 6 12 12 16 14%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-bell { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9%22 /%3E%3Cpath d=%22M10.3 21a1.94 1.94 0 0 0 3.4 0%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-envelope { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Crect width=%2220%22 height=%2216%22 x=%222%22 y=%224%22 rx=%222%22 /%3E%3Cpath d=%22m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-magnifying-glass { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Ccircle cx=%2211%22 cy=%2211%22 r=%228%22 /%3E%3Cpath d=%22m21 21-4.3-4.3%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-circle-question { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%2210%22 /%3E%3Cpath d=%22M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3%22 /%3E%3Cpath d=%22M12 17h.01%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-robot { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M12 8V4H8%22 /%3E%3Crect width=%2216%22 height=%2212%22 x=%224%22 y=%228%22 rx=%222%22 /%3E%3Cpath d=%22M2 14h2%22 /%3E%3Cpath d=%22M20 14h2%22 /%3E%3Cpath d=%22M15 13v2%22 /%3E%3Cpath d=%22M9 13v2%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-wand-magic-sparkles { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z%22 /%3E%3Cpath d=%22M20 3v4%22 /%3E%3Cpath d=%22M22 5h-4%22 /%3E%3Cpath d=%22M4 17v2%22 /%3E%3Cpath d=%22M5 18H3%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-dollar-sign { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cline x1=%2212%22 x2=%2212%22 y1=%222%22 y2=%2222%22 /%3E%3Cpath d=%22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-building { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z%22 /%3E%3Cpath d=%22M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2%22 /%3E%3Cpath d=%22M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2%22 /%3E%3Cpath d=%22M10 6h4%22 /%3E%3Cpath d=%22M10 10h4%22 /%3E%3Cpath d=%22M10 14h4%22 /%3E%3Cpath d=%22M10 18h4%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-shield-halved { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z%22 /%3E%3C/svg%3E"); }
+.left-nav i.fa-key { --cf-ico: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 %3E%3Cpath d=%22M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z%22 /%3E%3Ccircle cx=%2216.5%22 cy=%227.5%22 r=%22.5%22 fill=%22currentColor%22 /%3E%3C/svg%3E"); }
 
 .structure.nav-collapsed .left-nav .anvil-component-icon.left-icon {
   width: auto;

@@ -116,7 +116,7 @@ class CyclopsShell(CyclopsShellTemplate):
         self.menu_panel.add_component(self._search.trigger(), full_width_row=True)
         for item in NAV:
             if isinstance(item, str):
-                self.menu_panel.add_component(Layout.html('<div class="cy-nav-group">%s</div>' % Layout.esc(item)), full_width_row=True)
+                self.menu_panel.add_component(Layout.html('<div class="cf-nav-group">%s</div>' % Layout.esc(item)), full_width_row=True)
                 continue
             text, kind, icon, exact = item
             self.menu_panel.add_component(NavLink(

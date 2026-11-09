@@ -19,6 +19,8 @@ LEADS = {
     "run": "One row per job on a machine: pieces, scrap, consumed lots, and stoppages. Pieces per hour leaves out the stoppages logged on the run; target is what the recipe's cycle and cavities promise.",
     "stoppage": "Every stop, with its machine, the run it interrupted, and a cause from the list. Click a row to edit it.",
     "lot": "Received lots of materials and packaging, and lots produced by runs. Open a lot for its trace back to the supplier and forward to what it went into.",
+    "changeover": "Every time a machine went from one item to another. When no stop was logged, the time is derived from the output the shifts around "
+                  "the change did not make; the last column says how. Click a row for the run that followed.",
 }
 TITLES = {
     "item": "Items",
@@ -28,6 +30,7 @@ TITLES = {
     "order": "Production orders",
     "run": "Production log",
     "stoppage": "Stoppages",
+    "changeover": "Changeovers",
     "lot": "Lots",
 }
 CONFIRM = {
@@ -61,7 +64,7 @@ CREATE = {
 }
 SETTING_SECTIONS = (
     ("shift", "shifts", "shifts", "Shifts", "Each run is logged on a shift."),
-    ("cause", "causes", "causes", "Stoppage causes", "Each cause sits in one of the six fishbone groups (Man, Machine, Method, Material, Measurement, Environment). Planned stops are kept apart from breakdowns."),
+    ("cause", "causes", "causes", "Stoppage causes", "Each cause sits in one of the six fishbone groups (Man, Machine, Method, Material, Measurement, Environment). Planned stops are kept apart from breakdowns. A changeover cause marks the stop as a change from one item to the next, so it gives that change its times."),
     ("reason", "reasons", "scrap-reasons", "Scrap reasons", "Each scrap line on a run has a reason."),
     ("category", "categories", "categories", "Item categories", "The role of a raw-material category decides what a recipe needs: a base input, and colorants for its color."),
     ("machineType", "machineTypes", "machine-types", "Machine types", "Presses, robots, and the other equipment kinds a machine can be."),
@@ -402,6 +405,8 @@ class Screen:
             return
         create = CREATE.get(self.kind)
         actions = (Layout.button(create[0], self.act(create[1]), primary=True),) if create else ()
+        if self.kind == "changeover":
+            actions = (Layout.button("Derive again", self._derive_changeovers),)
         banner = Layout.stack()
         card = Layout.section(TITLES.get(self.kind) or "Records", LEADS.get(self.kind) or "", padded=False, actions=actions, lead=True)
         shown = {"banner": False}
@@ -419,6 +424,20 @@ class Screen:
 
     def _edit_stoppage(self, row):
         Editor.open_editor(self, "edit-stoppage", {"row": row})
+
+    def _derive_changeovers(self, **event_args):
+        if not dialogs.confirm("Every changeover not entered by hand is worked out again from the runs and stoppages as they are now.",
+                               title="Derive the changeovers again?", confirm_text="Derive again"):
+            return
+        counted = _call("cyclops_derive_changeovers")
+        if counted:
+            Notification("%s changeovers, %s h lost." % (counted.get("found"), Format.trim(counted.get("hours lost"))), style="success", timeout=4).show()
+            self.render()
+
+    def _changeover_section(self, rows, hide=()):
+        lost = sum(row.get("hours") or 0 for row in rows)
+        return self._table_section("Changeovers", "%s changes · %s h of production lost · newest first. Click a row for the run that followed."
+                                   % (len(rows), Format.trim(round(lost, 1))), rows, "changeover", hide, empty="No changeover found.")
 
     def _table_section(self, title, subtitle, rows, kind, hide=(), actions=(), height="420px", empty="Nothing yet."):
         card = Layout.section(title, subtitle, padded=not rows, actions=actions)
@@ -642,7 +661,9 @@ class Screen:
                  "Recipes", "", data.get("recipes") or [], "recipe", ("machine",), height="480px", empty="No recipe on this machine.")]),
              ("production", "Production", len(data.get("production") or []), lambda: [self._run_section(data.get("production") or [], ("machine",))]),
              ("stoppages", "Stoppages", len(data.get("stoppages") or []), lambda: [self._stoppage_section(
-                 data.get("stoppages") or [], ("machine",), (Layout.button("Log a stoppage", self.act("add-stoppage")),))])),
+                 data.get("stoppages") or [], ("machine",), (Layout.button("Log a stoppage", self.act("add-stoppage")),))]),
+             ("changeovers", "Changeovers", len(data.get("changeovers") or []), lambda: [self._changeover_section(
+                 data.get("changeovers") or [], ("machine",))])),
         )
 
     def _recipe(self, data):
@@ -766,7 +787,9 @@ class Screen:
                  "Lots produced", "The lots printed on the boxes of this run.", data.get("outputLots") or [], "lot", ("item", "run"),
                  actions=(Layout.button("Add", self.act("add-output-lot")),), empty="No output lot yet.")]),
              ("stoppages", "Stoppages", len(data.get("stoppages") or []), lambda: [self._stoppage_section(
-                 data.get("stoppages") or [], ("machine", "item"), (Layout.button("Log a stoppage", self.act("add-stoppage")),))])),
+                 data.get("stoppages") or [], ("machine", "item"), (Layout.button("Log a stoppage", self.act("add-stoppage")),))]),
+             ("changeovers", "Changeovers", len(data.get("changeovers") or []), lambda: [self._changeover_section(
+                 data.get("changeovers") or [], ("machine",))])),
         )
 
     def _line_list(self, rows, empty):
@@ -891,6 +914,7 @@ class Screen:
         row = dict(entry, status="Retired" if retired else "Active", tone="muted" if retired else "ok")
         if kind == "cause":
             row["planned"] = "Yes" if entry.get("planned") else "No"
+            row["changeover"] = "Yes" if entry.get("changeover") else "No"
         if kind == "role":
             row["runsMachines"] = "Yes" if entry.get("runsMachines") else "No"
         if kind == "category":

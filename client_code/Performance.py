@@ -11,7 +11,8 @@ TABS = (
     ("time", "Time"), ("stoppages", "Stoppages"), ("changeovers", "Changeovers"), ("scrap", "Scrap"),
     ("capacity", "Capacity and fit"), ("data", "Data checks"),
 )
-COLORS = {"good": "#22c55e", "scrap": "#a855f7", "slow": "#f59e0b", "planned": "#3b82f6", "unplanned": "#ef4444", "idle": "#94a3b8"}
+COLORS = {"good": "#22c55e", "scrap": "#a855f7", "slow": "#f59e0b", "changeover": "#14b8a6", "planned": "#3b82f6", "unplanned": "#ef4444",
+          "idle": "#94a3b8"}
 MONTHS = ("All months", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
 
 
@@ -112,7 +113,7 @@ class PerformancePage:
             ("Hours lost", _n(kpis.get("lostHours")), "slow, stopped, idle and scrap", "hourglass_bottom", "#dc2626"),
             ("Capacity used", _pct(kpis.get("capacityPct")), "of every machine-shift", "event_available", "#0f766e"),
             ("Scrap", _pct(kpis.get("scrapPct")), "as recorded", "delete", "#7c3aed"),
-            ("Changeovers", _n(kpis.get("changeovers")), "product changes on a machine", "swap_horiz", "#d97706"),
+            ("Changeovers", _n(kpis.get("changeovers")), "%s h of production lost" % _n(kpis.get("changeoverHours")), "swap_horiz", "#0d9488"),
         )
         return Layout.grid("repeat(auto-fit, minmax(170px, 1fr))", *[
             KpiCard(title=title, value=value, subtitle=subtitle, icon=icon, icon_color=color) for title, value, subtitle, icon, color in cards])
@@ -193,8 +194,8 @@ class PerformancePage:
             return None
         names = [row["machine"] for row in rows]
         series = [{"type": "bar", "stack": "h", "name": label, "data": [row.get(key) for row in rows], "itemStyle": {"color": COLORS[key]}}
-                  for key, label in (("good", "Good pieces"), ("scrap", "Scrap"), ("slow", "Running slow"), ("planned", "Planned stops"),
-                                     ("unplanned", "Breakdowns and other stops"), ("idle", "Idle, no reason given"))]
+                  for key, label in (("good", "Good pieces"), ("scrap", "Scrap"), ("slow", "Running slow"), ("changeover", "Changeovers"),
+                                     ("planned", "Planned stops"), ("unplanned", "Breakdowns and other stops"), ("idle", "Idle, no reason given"))]
         return _chart("By machine", "Staffed hours per machine, lowest productive share first. Machines with no rated speed are left out.", {
             "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}}, "legend": {"top": 0, "type": "scroll"},
             "grid": {"left": 104, "right": 24, "top": 40, "bottom": 24},
@@ -229,43 +230,134 @@ class PerformancePage:
 
     def _tab_changeovers(self):
         data = self.data.get("changeovers") or {}
-        kpis = self.data.get("kpis") or {}
-        shifts = data.get("shifts") or []
+        if not data.get("count"):
+            return [Layout.empty_state("No changeover in this period.")]
+        sources = {row["key"]: row["count"] for row in data.get("sources") or []}
         lead = Layout.grid("repeat(auto-fit, minmax(170px, 1fr))",
-            KpiCard(title="Changeovers", value=_n(kpis.get("changeovers")), subtitle="product changes on a machine", icon="swap_horiz", icon_color="#d97706"),
-            KpiCard(title="Planned stop hours", value=_n(data.get("plannedHours")), subtitle="mold changes and other planned stops", icon="build", icon_color="#3b82f6"))
-        shift_chart = _chart("Speed by shift, on changeover days and other days",
-                             "Median pieces made against the rated speed while running. A product change costs the shift it lands on.", {
+            KpiCard(title="Changeovers", value=_n(data.get("count")), subtitle="%s cost production time" % _n(data.get("withLoss")),
+                    icon="swap_horiz", icon_color="#0d9488"),
+            KpiCard(title="Production lost", value="%s h" % _n(data.get("hours")), subtitle="median %s h a change" % Format.trim(data.get("median")),
+                    icon="hourglass_bottom", icon_color="#dc2626"),
+            KpiCard(title="Times from a logged stop", value=_n(sources.get("stop")), subtitle="%s derived from output" % _n(sources.get("derived")),
+                    icon="fact_check", icon_color="#2563eb"),
+            KpiCard(title="Mold not recorded", value=_n(data.get("unknownMold")), subtitle="kind of change unknown", icon="help", icon_color="#d97706"))
+        parts = [lead, self._changeover_takeaway(data), self._changeover_notes(data)]
+        parts.append(Layout.grid("repeat(auto-fit, minmax(320px, 1fr))", self._kinds_card(data), self._when_chart(data)))
+        parts.append(self._speed_chart(data))
+        parts.append(self._change_machines(data))
+        parts.append(Layout.grid("repeat(auto-fit, minmax(320px, 1fr))", self._change_months(data), self._lengths_chart(data)))
+        return parts
+
+    def _changeover_takeaway(self, data):
+        rows = [row for row in data.get("shifts") or [] if row.get("changeover") is not None and row.get("normal") is not None and row.get("count")]
+        if not rows:
+            return None
+        busiest = max(data.get("byShift") or [{"shift": "", "count": 0}], key=lambda row: row["count"])
+        row = next((entry for entry in rows if entry["shift"] == busiest["shift"]), rows[0])
+        share = round(100.0 * busiest["count"] / data["withLoss"]) if data.get("withLoss") else 0
+        if row["changeover"] >= row["normal"] - 5:
+            speed = "With the changeover time taken out, the rest of that shift runs at <b>%s%%</b> of rated speed, against <b>%s%%</b> on other shifts: " \
+                    "the loss is the change itself, not slow running after it." % (row["changeover"], row["normal"])
+        else:
+            speed = "Even with the changeover time taken out, the rest of that shift runs at <b>%s%%</b> of rated speed, against <b>%s%%</b> on " \
+                    "other shifts: start-up after a change is slow too." % (row["changeover"], row["normal"])
+        return Layout.html("<p class='cy-takeaway'><b>%s%%</b> of the changeovers that cost time start in the %s shift. %s</p>"
+                           % (share, busiest["shift"].lower(), speed))
+
+    def _changeover_notes(self, data):
+        low = data.get("lowConfidence") or 0
+        unknown = data.get("unknownMold") or 0
+        lines = ["Most changeovers are not written in the log. Their times are worked out from the output the shifts around each change did not make, "
+                 "against what each recipe usually makes in an hour; a logged mold-change stop is used where there is one."]
+        if low:
+            lines.append("%s rest on a speed known from few shifts and are marked low confidence." % _n(low))
+        unknown_text = (" %s changeovers are between recipes with no mold written, so a mold change cannot be told from a color change. "
+                        "<a href='javascript:void(0)' data-nav='gap'>Add the mold on those recipes.</a>" % _n(unknown)) if unknown else ""
+        markup = "<p class='bc-note bc-note-muted'>%s%s <a href='javascript:void(0)' data-nav='list'>Open every changeover with how its time was " \
+                 "worked out.</a></p>" % (Layout.esc(" ".join(lines)), unknown_text)
+        return Layout.interactive(markup, self._on_change_nav)
+
+    def _on_change_nav(self, mode, node):
+        where = Layout.attr(node, "data-nav")
+        if where == "gap":
+            Nav.go("recipe", query={"gap": "no-mold"})
+        elif where == "list":
+            Nav.go("changeover")
+
+    def _kinds_card(self, data):
+        rows = "".join("<tr><td>%s</td><td class='cy-num'>%s</td><td class='cy-num'>%s h</td><td class='cy-num'>%s</td></tr>" % (
+            Layout.esc(row["label"]), _n(row["count"]), _n(row["hours"]), "%s h" % Format.trim(row["median"]) if row.get("median") is not None else "—")
+            for row in data.get("kinds") or [])
+        card = Layout.section("By kind of change", "A mold change is told from a color or material change by the mold and inputs on the two recipes.")
+        Layout.body(card, Layout.html("<table class='cy-table'><thead><tr><th>Kind</th><th class='cy-num'>Changes</th><th class='cy-num'>Lost</th>"
+                                      "<th class='cy-num'>Median</th></tr></thead><tbody>%s</tbody></table>" % rows))
+        return card
+
+    def _when_chart(self, data):
+        rows = data.get("byShift") or []
+        return _chart("Which shift the time is lost in", "Changeovers that cost production time, by the shift they started in.", {
+            "tooltip": {"trigger": "axis"}, "grid": {"left": 48, "right": 16, "top": 16, "bottom": 28},
+            "xAxis": {"type": "category", "data": [row["shift"] for row in rows]}, "yAxis": {"type": "value", "name": "Changes"},
+            "series": [{"type": "bar", "data": [row["count"] for row in rows], "itemStyle": {"color": "#14b8a6"}, "label": {"show": True, "position": "top"}}],
+        }, height="260px")
+
+    def _speed_chart(self, data):
+        shifts = data.get("shifts") or []
+        return _chart("Speed by shift, with the changeover time taken out",
+                      "Median pieces made against the rated speed while running. Amber: shifts with a changeover; green: the others.", {
             "tooltip": {"trigger": "axis"}, "legend": {"top": 0},
             "grid": {"left": 48, "right": 16, "top": 40, "bottom": 28},
             "xAxis": {"type": "category", "data": [row["shift"] for row in shifts]},
             "yAxis": {"type": "value", "name": "%"},
             "series": [
-                {"type": "bar", "name": "Days with a product change", "data": [row["changeover"] for row in shifts], "itemStyle": {"color": "#f59e0b"},
+                {"type": "bar", "name": "Shifts with a changeover", "data": [row["changeover"] for row in shifts], "itemStyle": {"color": "#f59e0b"},
                  "label": {"show": True, "position": "top", "formatter": "{c}%"}},
-                {"type": "bar", "name": "Other days", "data": [row["normal"] for row in shifts], "itemStyle": {"color": "#22c55e"},
+                {"type": "bar", "name": "Other shifts", "data": [row["normal"] for row in shifts], "itemStyle": {"color": "#22c55e"},
                  "label": {"show": True, "position": "top", "formatter": "{c}%"}},
             ],
-        })
+        }, height="280px")
+
+    def _change_machines(self, data):
+        rows = data.get("byMachine") or []
+        if not rows:
+            return None
+        body = "".join("<tr><td><a href='javascript:void(0)' data-nav='%s'>%s</a></td><td class='cy-num'>%s</td><td class='cy-num'>%s h</td>"
+                       "<td class='cy-num'>%s</td></tr>" % (Layout.esc(Nav.path("machine", row["id"]) + "?tab=changeovers"), Layout.esc(row["machine"]),
+                                                            _n(row["count"]), _n(row["hours"]),
+                                                            "%s h" % Format.trim(row["median"]) if row.get("median") is not None else "—")
+                       for row in rows)
+        card = Layout.section("By machine", "Most production lost first. Open a machine for its changeovers.")
+        Layout.body(card, Layout.interactive("<table class='cy-table'><thead><tr><th>Machine</th><th class='cy-num'>Changes</th>"
+                                             "<th class='cy-num'>Lost</th><th class='cy-num'>Median</th></tr></thead><tbody>%s</tbody></table>" % body,
+                                             self._on_machine_nav))
+        return card
+
+    def _on_machine_nav(self, mode, node):
+        if mode == "nav":
+            target = Layout.attr(node, "data-nav") or ""
+            path, _, query = target.partition("?")
+            parts = [part for part in path.split("/") if part]
+            if len(parts) == 2:
+                Nav.go("machine", parts[1], query={"tab": query.split("=")[-1]} if query else None)
+
+    def _change_months(self, data):
+        months = data.get("byMonth") or {}
+        return _chart("Month by month", "Bars: changeovers. Line: hours of production lost.", {
+            "tooltip": {"trigger": "axis"}, "legend": {"top": 0},
+            "grid": {"left": 48, "right": 48, "top": 40, "bottom": 28},
+            "xAxis": {"type": "category", "data": months.get("labels") or []},
+            "yAxis": [{"type": "value", "name": "Changes"}, {"type": "value", "name": "Hours", "splitLine": {"show": False}}],
+            "series": [{"type": "bar", "name": "Changeovers", "data": months.get("values") or [], "itemStyle": {"color": "#14b8a6"}},
+                       {"type": "line", "name": "Hours lost", "yAxisIndex": 1, "data": months.get("hours") or [], "itemStyle": {"color": "#dc2626"}}],
+        }, height="280px")
+
+    def _lengths_chart(self, data):
         lengths = data.get("lengths") or []
-        length_chart = _chart("How long a product stays on a machine", "Days per campaign: short campaigns mean more changeovers.", {
+        return _chart("How long an item stays on a machine", "Days per campaign: short campaigns mean more changeovers.", {
             "tooltip": {"trigger": "axis"}, "grid": {"left": 48, "right": 16, "top": 16, "bottom": 28},
             "xAxis": {"type": "category", "data": [row["label"] for row in lengths]}, "yAxis": {"type": "value", "name": "Campaigns"},
             "series": [{"type": "bar", "data": [row["count"] for row in lengths], "itemStyle": {"color": "#6366f1"}, "label": {"show": True, "position": "top"}}],
-        })
-        months = data.get("byMonth") or {}
-        month_chart = _chart("Changeovers per month", "", {
-            "tooltip": {"trigger": "axis"}, "grid": {"left": 48, "right": 16, "top": 16, "bottom": 28},
-            "xAxis": {"type": "category", "data": months.get("labels") or []}, "yAxis": {"type": "value"},
-            "series": [{"type": "bar", "data": months.get("values") or [], "itemStyle": {"color": "#d97706"}}],
-        }, height="260px")
-        gaps = [row for row in shifts if row.get("changeover") is not None and row.get("normal") is not None]
-        worst = max(gaps, key=lambda row: row["normal"] - row["changeover"]) if gaps else None
-        takeaway = None
-        if worst and worst["normal"] - worst["changeover"] >= 10:
-            takeaway = Layout.html("<p class='cy-takeaway'>On days a product changes, the %s shift runs at <b>%s%%</b> of rated speed, against <b>%s%%</b> on other days.</p>"
-                                   % (worst["shift"].lower(), worst["changeover"], worst["normal"]))
-        return [lead, takeaway, shift_chart, Layout.grid("repeat(auto-fit, minmax(320px, 1fr))", length_chart, month_chart)]
+        }, height="280px")
 
     # Scrap --------------------------------------------------------------------------------
 

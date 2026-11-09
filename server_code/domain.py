@@ -25,6 +25,9 @@ ORDER_STATUSES = ("planned", "released", "in progress", "done", "cancelled")
 OPEN_ORDERS = ("planned", "released", "in progress")
 LOT_STATUSES = ("released", "quarantined", "blocked")
 FISHBONE = ("Man", "Machine", "Method", "Material", "Measurement", "Environment")
+CHANGEOVER_KINDS = (("mold", "Mold change"), ("color", "Color change"), ("material", "Material change"),
+                    ("other", "Same mold, other item"), ("unknown", "Mold not recorded"))
+CHANGEOVER_SOURCES = (("stop", "Logged stop"), ("derived", "Derived from output"), ("entered", "Entered by hand"))
 TEMP_LABELS = records.TEMP_LABELS
 TEMP_KEYS = tuple(key for key, _ in TEMP_LABELS)
 SETTING_LABELS = (
@@ -44,7 +47,7 @@ PREFIX = {
     "items": ("ITM", 5), "molds": ("MLD", 4), "machines": ("MCH", 2), "recipes": ("REC", 4), "production_orders": ("PO", 5),
     "production_runs": ("RUN", 5), "lots": ("LOT", 6), "stoppages": ("STP", 5), "item_categories": ("CAT", 2),
     "machine_types": ("MTY", 2), "shifts": ("SHF", 2), "stoppage_causes": ("CAU", 2), "scrap_reasons": ("SCR", 2), "personnel": ("PER", 3),
-    "person_roles": ("ROL", 2), "units": ("UNT", 2),
+    "person_roles": ("ROL", 2), "units": ("UNT", 2), "changeovers": ("CHG", 5),
 }
 SETTING_TABLES = {
     "shift": "shifts", "cause": "stoppage_causes", "reason": "scrap_reasons", "category": "item_categories",
@@ -144,7 +147,7 @@ _DEFAULTS = {
     "item_categories": {"name": "", "type": "RAW", "role": ""},
     "machine_types": {"name": ""},
     "shifts": {"name": "", "start": "", "end": "", "status": "active"},
-    "stoppage_causes": {"name": "", "category": "Machine", "planned": False, "status": "active"},
+    "stoppage_causes": {"name": "", "category": "Machine", "planned": False, "changeover": False, "status": "active"},
     "scrap_reasons": {"name": "", "category": "Method", "status": "active"},
     "machines": {"name": "", "alias": "", "typeId": "", "attachedToId": "", "floor": None, "serial": "", "euromap": "", "year": "",
                  "changeoverMin": None, "location": "", "status": "active", "notes": ""},
@@ -163,6 +166,8 @@ _DEFAULTS = {
     "lots": {"number": "", "itemId": "", "origin": "received", "runId": "", "supplierLot": "", "receivedAt": "", "quantity": None,
              "status": "released", "notes": ""},
     "stoppages": {"machineId": "", "runId": "", "startedAt": "", "endedAt": "", "causeId": "", "description": "", "fix": "", "reportedById": ""},
+    "changeovers": {"machineId": "", "fromRunId": "", "toRunId": "", "fromItemId": "", "toItemId": "", "kind": "unknown", "startedAt": "",
+                    "endedAt": "", "lostHours": None, "source": "entered", "confidence": "", "stoppageId": "", "basis": "", "notes": ""},
 }
 
 
@@ -202,6 +207,9 @@ def reindex(graph):
         "ordersByItem": group_by(graph.get("production_orders") or [], "itemId"),
         "attached": group_by(graph.get("machines") or [], "attachedToId"),
         "consumers": {},
+        "changeoversByMachine": group_by(graph.get("changeovers") or [], "machineId"),
+        "changeoversByToRun": group_by(graph.get("changeovers") or [], "toRunId"),
+        "changeoversByFromRun": group_by(graph.get("changeovers") or [], "fromRunId"),
     })
     for recipe in recipes:
         for entry in recipe.get("inputs") or []:
@@ -583,6 +591,30 @@ def stoppage_row(graph, stop):
     }
 
 
+CHANGEOVER_KIND_LABEL = dict(CHANGEOVER_KINDS)
+CHANGEOVER_SOURCE_LABEL = dict(CHANGEOVER_SOURCES)
+
+
+def changeover_row(graph, change):
+    index = _ix(graph)
+    confidence = change.get("confidence") or ""
+    return {
+        "id": change["id"], "machine": name_of(index, "machines", change.get("machineId")), "machineId": change.get("machineId") or "",
+        "from": name_of(index, "items", change.get("fromItemId")), "to": name_of(index, "items", change.get("toItemId")),
+        "fromItemId": change.get("fromItemId") or "", "toItemId": change.get("toItemId") or "",
+        "fromRun": change.get("fromRunId") or "", "toRun": change.get("toRunId") or "",
+        "kind": CHANGEOVER_KIND_LABEL.get(change.get("kind"), cap(change.get("kind"))), "kindKey": change.get("kind") or "",
+        "start": change.get("startedAt") or "", "end": change.get("endedAt") or "", "hours": num(change.get("lostHours")),
+        "source": CHANGEOVER_SOURCE_LABEL.get(change.get("source"), cap(change.get("source"))), "stoppage": change.get("stoppageId") or "",
+        "basis": change.get("basis") or "", "notes": change.get("notes") or "",
+        "status": cap(confidence), "tone": {"high": "ok", "medium": "muted", "low": "warn"}.get(confidence, "muted"),
+    }
+
+
+def changeover_rows(graph, changes):
+    return sorted((changeover_row(graph, change) for change in changes), key=lambda row: row["start"], reverse=True)
+
+
 def lot_row(graph, lot):
     index = _ix(graph)
     status = cap(lot.get("status"))
@@ -641,6 +673,10 @@ def gaps(graph):
          [recipe["id"] for recipe in running if missing_share(recipe)]),
         ("no-cycle", "recipe", ("planner",), "Recipes without a cycle time", "Hours per order can be computed for these items.",
          [recipe["id"] for recipe in running if not num(recipe.get("cycle"))]),
+        ("no-mold", "recipe", ("engineer", "planner"), "Recipes without a mold",
+         "With the mold set, a mold change, which takes hours, can be told from a color change on the same mold, which takes far less. "
+         "Changeover times and the order of jobs on a machine are planned from it.",
+         [recipe["id"] for recipe in running if not recipe.get("moldId")]),
         ("dup-standard", "recipe", ("engineer",), "Same color on the same machine, more than one recipe, none marked standard",
          "The setter gets one answer instead of choosing between rows. Mark one recipe as standard on its page.", duplicates),
         ("trial", "recipe", ("engineer",), "Recipes still in trial (sheet rows 2–16)",
@@ -724,6 +760,7 @@ _LISTS = {
     "run": lambda graph: run_rows(graph, graph.get("production_runs") or []),
     "stoppage": lambda graph: stoppage_rows(graph, graph.get("stoppages") or []),
     "lot": lambda graph: [lot_row(graph, lot) for lot in graph.get("lots") or []],
+    "changeover": lambda graph: changeover_rows(graph, graph.get("changeovers") or []),
 }
 
 
@@ -971,6 +1008,7 @@ def detail_machine(graph, code):
         "recipes": [recipe_row(graph, recipe) for recipe in recipes],
         "production": run_rows(graph, runs),
         "stoppages": stoppage_rows(graph, index["stoppagesByMachine"].get(code) or []),
+        "changeovers": changeover_rows(graph, index["changeoversByMachine"].get(code) or []),
     }
 
 
@@ -1064,6 +1102,7 @@ def detail_run(graph, code):
                        for position, entry in enumerate(run.get("inputs") or [])],
         "outputLots": [lot_row(graph, lot) for lot in index["lotsByRun"].get(code) or []],
         "stoppages": stoppage_rows(graph, index["stoppagesByRun"].get(code) or []),
+        "changeovers": changeover_rows(graph, (index["changeoversByToRun"].get(code) or []) + (index["changeoversByFromRun"].get(code) or [])),
         "candidateLots": [{"value": lot["id"], "label": "%s · %s%s" % (lot.get("number"), name_of(index, "items", lot.get("itemId")),
                                                                         "" if lot.get("status") == "released" else " (%s)" % lot.get("status"))}
                           for lot in graph.get("lots") or [] if lot.get("itemId") in fed and lot.get("status") != "blocked"],
@@ -1993,6 +2032,7 @@ def action_save_setting(graph, payload):
         entry["runsMachines"] = text(payload.get("runsMachines")) in ("yes", "true", "1")
     if table == "stoppage_causes":
         entry["planned"] = text(payload.get("planned")) in ("yes", "true", "1")
+        entry["changeover"] = text(payload.get("changeover")) in ("yes", "true", "1")
     if table == "item_categories":
         entry["type"] = _choice(payload.get("type"), TYPE_LABEL, "RAW")
         entry["role"] = _choice(payload.get("role") or "", [key for key, _ in ROLES], "") if entry["type"] == "RAW" else ""

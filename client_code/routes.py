@@ -105,6 +105,11 @@ class StoppagesRoute(AppPage):
     form = "StoppagesForm"
 
 
+class ChangeoversRoute(AppPage):
+    path = "/changeovers"
+    form = "ChangeoversForm"
+
+
 class LotsRoute(AppPage):
     path = "/lots"
     form = "LotsForm"

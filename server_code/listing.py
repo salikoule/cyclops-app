@@ -186,6 +186,10 @@ def _lot_context(plant, rows):
     return store._run_context(plant)
 
 
+def _changeover_context(plant, rows):
+    return store._changeover_items(plant)
+
+
 RUNNING = {"Running": None, "Done": q.not_(None)}
 OPEN = {"Open": None, "Closed": q.not_(None)}
 
@@ -239,6 +243,14 @@ LISTS = {
         "filter": {"id": code(), "number": contains("number"), "item": linked("item", "items"), "origin": contains("origin"),
                    "received": moment("received_at"), "run": linked("run", "production_runs", "code"),
                    "status": chosen("status", {domain.cap(status): status for status in domain.LOT_STATUSES})},
+    },
+    "changeover": {
+        "table": "changeovers", "order": ("started_at", False), "context": _changeover_context, "row": domain.changeover_row,
+        "sort": {"id": "code", "start": "started_at", "hours": "lost_h"},
+        "filter": {"id": code(), "start": moment("started_at"), "machine": linked("machine", "machines"), "from": linked("from_item", "items"),
+                   "to": linked("to_item", "items"), "kind": chosen("kind", {label: key for key, label in domain.CHANGEOVER_KINDS}),
+                   "source": chosen("source", {label: key for key, label in domain.CHANGEOVER_SOURCES}),
+                   "status": chosen("confidence", {"High": "high", "Medium": "medium", "Low": "low"}), "basis": contains("basis")},
     },
 }
 

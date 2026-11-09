@@ -124,7 +124,15 @@ def _machine_scope(plant, code):
     plant.find("stoppages", machine=row)
     plant.follow("stoppages", "run")
     plant.all("personnel", "shifts", "stoppage_causes")
+    plant.find("changeovers", machine=row)
+    _changeover_items(plant)
     return _run_context(plant)
+
+
+def _changeover_items(plant):
+    plant.follow("changeovers", "from_item")
+    plant.follow("changeovers", "to_item")
+    return plant
 
 
 def _recipe_scope(plant, code):
@@ -161,6 +169,9 @@ def _run_scope(plant, code):
         return plant
     plant.all("personnel", "shifts", "stoppage_causes", "scrap_reasons")
     _run_context(plant)
+    plant.find("changeovers", to_run=row)
+    plant.find("changeovers", from_run=row)
+    _changeover_items(plant)
     plant.by_codes("production_runs", _consumers(plant.find("lots", run=row)))
     if row["recipe"] is not None:
         wanted = [line["item"] for line in plant.lines_of("recipe_inputs", plant.get("recipes", row["recipe"]["code"])) or []]
@@ -252,7 +263,9 @@ _PERFORMANCE_FIELDS = {
     "recipes": ("itemId", "machineId"),
     "production_runs": ("recipeId", "shiftId", "startedAt", "endedAt", "good", "cavities", "cycle"),
     "stoppages": ("machineId", "runId", "startedAt", "endedAt", "causeId"),
+    "changeovers": ("machineId", "fromRunId", "toRunId", "kind", "startedAt", "endedAt", "lostHours", "source", "confidence", "stoppageId"),
 }
+_CODED = {"changeovers": ("fromRunId", "toRunId", "stoppageId")}
 
 
 def _run_span():
@@ -272,19 +285,71 @@ def performance(year=None, month=0, machine=""):
     years = list(range(span[1].year, span[0].year - 1, -1)) if span else []
     year = int(year) if year else (years[0] if years else datetime.date.today().year)
     begin, end = performance_view.period(year, month)
-    within = {"production_runs": {"started_at": q.between(begin, end)}, "stoppages": {"started_at": q.between(begin, end)}}
+    within = {"production_runs": {"started_at": q.between(begin, end)}, "stoppages": {"started_at": q.between(begin, end)},
+              "changeovers": {"ended_at": q.between(begin, end)}}
     chosen = app_tables.machines.get(q.fetch_only("code"), code=machine) if machine else None
     if chosen is not None:
         made_here = {row["item"] for row in app_tables.recipes.search(q.fetch_only(item=q.fetch_only("code")), machine=chosen) if row["item"]}
         recipes = list(app_tables.recipes.search(q.fetch_only("code"), item=q.any_of(*made_here))) if made_here else []
         within["production_runs"]["recipe"] = q.any_of(*recipes)
         within["stoppages"]["machine"] = chosen
+        within["changeovers"]["machine"] = chosen
     codes = loader.Codes()
-    graph = {table: loader.narrow(table, keys, codes, **within.get(table, {})) for table, keys in _PERFORMANCE_FIELDS.items()}
+    graph = {table: loader.narrow(table, keys, codes, coded=_CODED.get(table, ()), **within.get(table, {}))
+             for table, keys in _PERFORMANCE_FIELDS.items()}
     scrap = loader.narrow_lines("run_scrap", ("quantity",), codes)
     for run in graph["production_runs"]:
         run["scrap"] = scrap.get(run["id"], [])
     return performance_view.view(graph, year, month, machine, years, span[1] if span else None)
+
+
+_DERIVE_FIELDS = {
+    "item_categories": ("role",),
+    "shifts": ("name", "start", "end"),
+    "stoppage_causes": ("name", "changeover"),
+    "items": ("categoryId",),
+    "recipes": ("itemId", "machineId", "moldId"),
+    "production_runs": ("recipeId", "shiftId", "startedAt", "endedAt", "good", "cavities", "cycle"),
+    "stoppages": ("machineId", "runId", "startedAt", "endedAt", "causeId"),
+}
+
+
+class _CodeRefs:
+    """Rows by code for the linked tables of a bulk write, each table read once with only its codes."""
+
+    def __init__(self, tables):
+        self.rows = {table: {row["code"]: row for row in _table(table).search(q.fetch_only("code"))} for table in tables}
+
+    def __call__(self, table, code):
+        return self.rows[table].get(code)
+
+
+def derive_changeovers():
+    """Derive the changeovers again from every run and stoppage; those entered by hand stay. Returns counts."""
+    import changeovers
+
+    codes = loader.Codes()
+    graph = {table: loader.narrow(table, keys, codes) for table, keys in _DERIVE_FIELDS.items()}
+    graph["changeovers"] = loader.narrow("changeovers", ("fromRunId", "toRunId", "source"), codes, coded=("fromRunId", "toRunId"),
+                                         source="entered")
+    for table, child, key, keys in (("recipes", "recipe_inputs", "inputs", ("itemId",)), ("production_runs", "run_scrap", "scrap", ("quantity",))):
+        lines = loader.narrow_lines(child, keys, codes)
+        for entry in graph[table]:
+            entry[key] = lines.get(entry["id"], [])
+    found = changeovers.derive(graph)
+    _replace_derived(found, bool(graph["changeovers"]))
+    return changeovers.summary(found)
+
+
+@anvil.tables.in_transaction
+def _replace_derived(found, entered):
+    if entered:
+        for row in app_tables.changeovers.search(source=q.not_("entered")):
+            row.delete()
+    else:
+        app_tables.changeovers.delete_all_rows()
+    refs = _CodeRefs(("machines", "production_runs", "items", "stoppages"))
+    _add("changeovers", [records.to_row("changeovers", item, refs) for item in found])
 
 
 def overview(who="all"):
@@ -443,7 +508,19 @@ def _persist(plant, dirty, loaded, before):
     for table, row in sorted(gone, key=lambda pair: -records.ORDER.index(pair[0])):
         for child, parent, _, _, _ in records.CHILDREN_OF.get(table, ()):
             _drop_lines(loaded, child, row, whole=True)
+        _unlink_changeovers(table, row)
         row.delete()
+
+
+def _unlink_changeovers(table, row):
+    """A changeover goes with either of its runs; a deleted stoppage only stops being its source of times."""
+    if table == "production_runs":
+        for column in ("from_run", "to_run"):
+            for change in app_tables.changeovers.search(**{column: row}):
+                change.delete()
+    elif table == "stoppages":
+        for change in app_tables.changeovers.search(stoppage=row):
+            change.update(stoppage=None)
 
 
 def _action_plant(action, payload):

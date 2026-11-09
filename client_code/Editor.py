@@ -475,6 +475,9 @@ def _setting_spec(kind, entry, choices):
     if kind == "cause":
         fields.append({"name": "planned", "label": "Planned stop", "type": "select", "value": "yes" if entry.get("planned") else "no",
                        "options": [{"value": "no", "label": "No, a breakdown or a fault"}, {"value": "yes", "label": "Yes (mold change, maintenance)"}]})
+        fields.append({"name": "changeover", "label": "Changeover", "type": "select", "value": "yes" if entry.get("changeover") else "no",
+                       "hint": "A stop with this cause between two items gives that changeover its times.",
+                       "options": [{"value": "no", "label": "No"}, {"value": "yes", "label": "Yes, the machine is changed to another item"}]})
     if kind == "category":
         fields += [{"name": "type", "label": "Item type", "type": "select", "options": choices.get("types") or [], "value": entry.get("type") or "RAW"},
                    {"name": "role", "label": "Role in a recipe", "type": "select", "options": choices.get("roles") or [], "value": entry.get("role") or "",

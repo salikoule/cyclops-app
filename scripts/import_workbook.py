@@ -361,10 +361,10 @@ PERSON_ROLES = (("Operator", True), ("Setter", True), ("Supervisor", False), ("M
                 ("Warehouse", False), ("Management", False), ("Other", False))
 SHIFTS = (("Morning", "06:00", "14:00"), ("Afternoon", "14:00", "22:00"), ("Night", "22:00", "06:00"))
 CAUSES = (
-    ("Machine breakdown", "Machine", False), ("Mold fault", "Machine", False), ("Robot fault", "Machine", False),
-    ("Planned maintenance", "Machine", True), ("Mold change", "Method", True), ("Color or material change", "Method", True),
-    ("Process setting", "Method", False), ("Material problem", "Material", False), ("No operator", "Man", False),
-    ("Quality hold", "Measurement", False), ("Power or utilities", "Environment", False),
+    ("Machine breakdown", "Machine", False, False), ("Mold fault", "Machine", False, False), ("Robot fault", "Machine", False, False),
+    ("Planned maintenance", "Machine", True, False), ("Mold change", "Method", True, True), ("Color or material change", "Method", True, True),
+    ("Process setting", "Method", False, False), ("Material problem", "Material", False, False), ("No operator", "Man", False, False),
+    ("Quality hold", "Measurement", False, False), ("Power or utilities", "Environment", False, False),
 )
 SCRAP_REASONS = (
     ("Start-up scrap", "Method"), ("Short shot", "Machine"), ("Flash", "Machine"), ("Sink marks", "Method"),
@@ -421,8 +421,8 @@ def to_plant(graph):
                              for n, (name, runs) in enumerate(PERSON_ROLES, start=1)]
     plant["shifts"] = [{"id": _code("SHF", n, 2), "name": name, "start": start, "end": end, "status": "active"}
                        for n, (name, start, end) in enumerate(SHIFTS, start=1)]
-    plant["stoppage_causes"] = [{"id": _code("CAU", n, 2), "name": name, "category": group, "planned": planned, "status": "active"}
-                                for n, (name, group, planned) in enumerate(CAUSES, start=1)]
+    plant["stoppage_causes"] = [{"id": _code("CAU", n, 2), "name": name, "category": group, "planned": planned, "changeover": changeover,
+                                 "status": "active"} for n, (name, group, planned, changeover) in enumerate(CAUSES, start=1)]
     plant["scrap_reasons"] = [{"id": _code("SCR", n, 2), "name": name, "category": group, "status": "active"}
                               for n, (name, group) in enumerate(SCRAP_REASONS, start=1)]
 
@@ -635,6 +635,11 @@ def main(argv=None):
         checks = found.rows()
         graph["meta"]["source"] = "%s + %s" % (graph["meta"]["source"], log.name)
         print("mapping in %s" % production_log.MAP_FILE.relative_to(ROOT))
+        sys.path.insert(0, str(ROOT / "server_code"))
+        import changeovers
+
+        graph["changeovers"] = changeovers.derive(graph)
+        counted.update(("changeovers, " + key.lower(), value) for key, value in changeovers.summary(graph["changeovers"]).items())
     print(" · ".join("%s %s" % (value, key) for key, value in counted.items()))
     if args.json:
         Path(args.json).write_text(json.dumps(graph, ensure_ascii=False, indent=1), encoding="utf-8")

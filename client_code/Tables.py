@@ -129,7 +129,8 @@ def _machine_pill(cell, **params):
 
 
 _NO_AUTOFILL = {"elementAttributes": {"autocomplete": "off", "name": "cy-filter"}}
-_LOGS = ("stoppage", "run")
+_LOGS = ("stoppage", "run", "changeover")
+_OPENS = {"summary": ("item", "id"), "changeover": ("run", "toRun")}
 
 
 def _col(title, field, **extra):
@@ -158,7 +159,7 @@ def _machine_col(field="machine"):
 
 SETTING_COLUMNS = {
     "shift": lambda: [_col("Starts", "start", width=90, formatter=_text), _col("Ends", "end", width=90, formatter=_text)],
-    "cause": lambda: [_list_col("Category", "category", 130), _list_col("Planned", "planned", 110)],
+    "cause": lambda: [_list_col("Category", "category", 130), _list_col("Planned", "planned", 110), _list_col("Changeover", "changeover", 120)],
     "reason": lambda: [_list_col("Category", "category", 130)],
     "category": lambda: [_list_col("Item type", "typeLabel", 150), _list_col("Recipe role", "roleLabel", 140)],
     "machineType": lambda: [],
@@ -272,6 +273,19 @@ def columns_for(kind, hide=()):
             _col("Fix", "fix", min_width=100, width_grow=2, formatter=_clip),
             _col("Reported by", "reportedBy", width=110, formatter=_clip),
             _status_col(118),
+        ]
+    elif kind == "changeover":
+        columns = [
+            _col("ID", "id", width=108, formatter=_text),
+            _when_col("Started", "start"),
+            dict(_num_col("Lost", "hours", 80), formatter=_suffix(" h")),
+            _machine_col(),
+            _col("From", "from", min_width=120, width_grow=2, formatter=_clip),
+            _col("To", "to", min_width=120, width_grow=2, formatter=_clip),
+            _list_col("Kind", "kind", 150),
+            _list_col("Source", "source", 150),
+            dict(_status_col(116), title="Confidence"),
+            _col("How it was worked out", "basis", min_width=160, width_grow=4, formatter=_clip),
         ]
     elif kind in SETTING_COLUMNS:
         columns = [_col("ID", "id", width=100, formatter=_id("setting")), _col("Name", "name", min_width=220, formatter=_text)]
@@ -392,7 +406,7 @@ def mount_remote(kind, columns, fields, gap=None, on_reply=None, height="640px",
 
 
 def _open_rows(table, kind, on_edit, edit_on_click):
-    target = "item" if kind == "summary" else kind
+    target, key = _OPENS.get(kind, (kind, "id"))
 
     def on_row(sender, **event_args):
         row = event_args.get("row")
@@ -411,7 +425,7 @@ def _open_rows(table, kind, on_edit, edit_on_click):
             data = dict(row.getData())
         except Exception:
             return
-        if data.get("id") and target in Nav.SLUG:
-            Nav.go(target, data["id"])
+        if data.get(key) and target in Nav.SLUG:
+            Nav.go(target, data[key])
 
     table.set_event_handler("row_click", on_row)

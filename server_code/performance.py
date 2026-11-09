@@ -1,8 +1,10 @@
 """How the plant used its time: the production log and stoppages turned into hours and losses.
 
 Every staffed shift is split into hours: good pieces and scrap at the rated speed (the run's
-cavities and cycle), running slower than that, stopped (planned or not, by the cause's flag),
-and idle with no reason given. Pages filter by year, month and machine.
+cavities and cycle), running slower than that, changing over, stopped (planned or not, by the
+cause's flag), and idle with no reason given. A run logged for a whole shift is cut at its
+changeover (see ``changeovers``), so two items in one shift share it instead of both filling it.
+Pages filter by year, month and machine.
 """
 
 import datetime
@@ -14,7 +16,7 @@ import records
 PLANT_ZONE = "Europe/Athens"
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 BUCKETS = (
-    ("good", "Good pieces"), ("scrap", "Scrap"), ("slow", "Running slow"),
+    ("good", "Good pieces"), ("scrap", "Scrap"), ("slow", "Running slow"), ("changeover", "Changeovers"),
     ("planned", "Planned stops"), ("unplanned", "Breakdowns and other stops"), ("idle", "Idle, no reason given"),
 )
 RUN_LENGTHS = (("1 day", 1, 1), ("2–3 days", 2, 3), ("4–7 days", 4, 7), ("1–2 weeks", 8, 14), ("Over 2 weeks", 15, 10000))
@@ -28,14 +30,40 @@ def _zone():
         return datetime.timezone(datetime.timedelta(hours=2))
 
 
-def _shift_hours(shift):
+def _clock(text):
+    """Hours after midnight of an "HH:MM" time, or None."""
     try:
-        start = [int(part) for part in (shift.get("start") or "").split(":")[:2]]
-        end = [int(part) for part in (shift.get("end") or "").split(":")[:2]]
+        parts = [int(part) for part in (text or "").split(":")[:2]]
     except ValueError:
+        return None
+    return parts[0] + parts[1] / 60.0 if len(parts) == 2 else None
+
+
+def _shift_hours(shift):
+    start, end = _clock(shift.get("start")), _clock(shift.get("end"))
+    if start is None or end is None:
         return 8.0
-    hours = (end[0] + end[1] / 60.0) - (start[0] + start[1] / 60.0)
+    hours = end - start
     return hours + 24 if hours <= 0 else hours
+
+
+def run_day(begin, shift, zone=None):
+    """The plant day of a run starting at ``begin``: a night shift's hours after midnight count for the day it started."""
+    start_local = begin.astimezone(zone or _zone())
+    day = start_local.date()
+    if shift and start_local.hour < 6 and (shift.get("start") or "") > (shift.get("end") or ""):
+        day = day - datetime.timedelta(days=1)
+    return day
+
+
+def slot_window(day, shift, zone=None):
+    """The UTC start and end of ``shift`` on plant day ``day``, or None when the shift has no times."""
+    start = _clock(shift.get("start")) if shift else None
+    if start is None:
+        return None
+    zone = zone or _zone()
+    begin = datetime.datetime(day.year, day.month, day.day, int(start), int(round((start % 1) * 60)), tzinfo=zone).astimezone(datetime.timezone.utc)
+    return begin, begin + datetime.timedelta(hours=_shift_hours(shift))
 
 
 def _rate(run):
@@ -120,12 +148,10 @@ def view(graph, year=None, month=0, machine="", years=None, through=None):
             continue
         recipe = index["recipes"].get(run.get("recipeId")) or {}
         shift = shifts.get(run.get("shiftId")) or {}
-        start_local = begin.astimezone(zone)
-        day = start_local.date()
-        if shift and start_local.hour < 6 and (shift.get("start") or "") > (shift.get("end") or ""):
-            day = day - datetime.timedelta(days=1)
+        day = run_day(begin, shift, zone)
         runs.append({"run": run, "begin": begin, "finish": finish, "day": day, "machine": recipe.get("machineId") or "",
-                     "item": recipe.get("itemId") or "", "shift": run.get("shiftId") or "", "shiftHours": _shift_hours(shift)})
+                     "item": recipe.get("itemId") or "", "shift": run.get("shiftId") or "", "shiftHours": _shift_hours(shift),
+                     "window": slot_window(day, shift, zone)})
     years = years or sorted({entry["day"].year for entry in runs}, reverse=True)
     year = int(year) if year else (years[0] if years else datetime.date.today().year)
     month = int(month or 0)
@@ -146,57 +172,75 @@ def view(graph, year=None, month=0, machine="", years=None, through=None):
         cause = causes.get(stop.get("causeId")) or {}
         stops.append({"stop": stop, "begin": begin, "finish": finish, "hours": (finish - begin).total_seconds() / 3600.0, "day": day,
                       "cause": cause.get("name") or "Not classified", "group": cause.get("category") or "", "planned": bool(cause.get("planned"))})
+    changes = _changeover_windows(graph.get("changeovers") or [])
+    counted_stops = {change["stoppageId"] for change in changes if change["stoppageId"]}
     stops_by_run = {}
     for entry in stops:
-        stops_by_run.setdefault(entry["stop"].get("runId"), []).append(entry)
+        if entry["stop"]["id"] not in counted_stops:
+            stops_by_run.setdefault(entry["stop"].get("runId"), []).append(entry)
+    _cut_at_changeovers(chosen, changes)
+    changes_by_machine = {}
+    for change in changes:
+        changes_by_machine.setdefault(change["machine"], []).append(change)
+    change_runs = {code for change in changes for code in (change["fromRun"], change["toRun"])}
 
-    parallel = _parallel(chosen)
     totals, by_month, by_machine = _blank(), {}, {}
     cells = {}
     shift_ratio = {}
     rated_runs = 0
     good_total = scrap_total = 0.0
+    slots = {}
     for entry in chosen:
-        run = entry["run"]
-        good = domain.num(run.get("good")) or 0
-        scrap = sum(domain.num(line.get("quantity")) or 0 for line in run.get("scrap") or [])
-        good_total += good
-        scrap_total += scrap
-        cell = cells.setdefault((entry["machine"], entry["day"]), {"good": 0.0, "rated": False, "shifts": set(), "pieces": 0, "items": set()})
-        cell["shifts"].add(entry["shift"])
-        cell["pieces"] += good
-        cell["items"].add(entry["item"])
-        rate = _rate(run)
-        if not rate:
+        slots.setdefault((entry["machine"], entry["day"], entry["shift"]), []).append(entry)
+    for (code, day, shift_code), group in slots.items():
+        shift_h = group[0]["shiftHours"]
+        window = group[0]["window"] or (min(entry["begin0"] for entry in group), max(entry["finish0"] for entry in group))
+        cell = cells.setdefault((code, day), {"good": 0.0, "rated": False, "shifts": set(), "pieces": 0, "items": set()})
+        cell["shifts"].add(shift_code)
+        hours = _blank()
+        rated = False
+        on_change = any(entry["run"]["id"] in change_runs for entry in group)
+        together = _parallel(group)
+        seen_stops = set()
+        for entry in group:
+            run = entry["run"]
+            good = domain.num(run.get("good")) or 0
+            scrap = sum(domain.num(line.get("quantity")) or 0 for line in run.get("scrap") or [])
+            good_total += good
+            scrap_total += scrap
+            cell["pieces"] += good
+            cell["items"].add(entry["item"])
+            own = stops_by_run.get(run["id"]) or []
+            for stop in own:
+                if stop["stop"]["id"] not in seen_stops:
+                    seen_stops.add(stop["stop"]["id"])
+                    hours["planned" if stop["planned"] else "unplanned"] += stop["hours"]
+            rate = _rate(run)
+            if not rate:
+                continue
+            rated = True
+            rated_runs += 1
+            run_h = (entry["finish"] - entry["begin"]).total_seconds() / 3600.0
+            stop_in = sum(_overlap(entry["begin"], entry["finish"], stop["begin"], stop["finish"]) for stop in own)
+            running = max(0.0, run_h - stop_in)
+            needed = (good + scrap) / rate
+            fit = min(1.0, running / needed) if needed else 1.0
+            share = 1.0 / together.get(run["id"], 1)
+            hours["good"] += good / rate * fit * share
+            hours["scrap"] += scrap / rate * fit * share
+            hours["slow"] += max(0.0, running - needed) * share
+            if running > 0.5 and needed:
+                shift_ratio.setdefault(shift_code, []).append((on_change, needed / running))
+        if not rated:
             continue
-        rated_runs += 1
-        shift_h = entry["shiftHours"]
-        run_h = (entry["finish"] - entry["begin"]).total_seconds() / 3600.0
-        own = stops_by_run.get(run["id"]) or []
-        stop_in = sum(_overlap(entry["begin"], entry["finish"], stop["begin"], stop["finish"]) for stop in own)
-        planned_h = sum(stop["hours"] for stop in own if stop["planned"])
-        unplanned_h = sum(stop["hours"] for stop in own if not stop["planned"])
-        stop_out = max(0.0, planned_h + unplanned_h - stop_in)
-        running = max(0.0, run_h - stop_in)
-        needed = (good + scrap) / rate
-        fit = min(1.0, running / needed) if needed else 1.0
-        hours = {
-            "good": good / rate * fit, "scrap": scrap / rate * fit, "slow": max(0.0, running - needed),
-            "planned": planned_h, "unplanned": unplanned_h, "idle": max(0.0, shift_h - run_h - stop_out),
-        }
-        spare = shift_h - sum(hours.values())
-        if spare < 0:
-            hours["idle"] = max(0.0, hours["idle"] + spare)
-        together = parallel.get(run["id"], 1)
-        if together > 1:
-            hours = {key: value / together for key, value in hours.items()}
+        hours["changeover"] = min(shift_h, sum(_overlap(change["begin"], change["end"], window[0], window[1])
+                                               for change in changes_by_machine.get(code) or []))
+        hours["idle"] = max(0.0, shift_h - sum(hours.values()))
         _add(totals, hours)
-        _add(by_month.setdefault(entry["day"].month, _blank()), hours)
-        _add(by_machine.setdefault(entry["machine"], _blank()), hours)
+        _add(by_month.setdefault(day.month, _blank()), hours)
+        _add(by_machine.setdefault(code, _blank()), hours)
         cell["good"] += hours["good"]
         cell["rated"] = True
-        if running > 0.5 and needed:
-            shift_ratio.setdefault(entry["shift"], []).append((entry["machine"], entry["day"], needed / running))
 
     staffed = sum(totals.values())
     machine_names = {entry["id"]: entry.get("name") or entry["id"] for entry in machines}
@@ -249,21 +293,20 @@ def view(graph, year=None, month=0, machine="", years=None, through=None):
         row["count"] += 1
     cause_rows = sorted(({**row, "hours": round(row["hours"], 1)} for row in causes_out.values()), key=lambda row: -row["hours"])
 
-    changeovers, lengths = _changeovers(chosen, machine_names)
-    changeover_days = {(entry["machine"], entry["day"]) for entry in changeovers}
+    lengths = _campaigns(chosen)
+    shown_runs = {entry["run"]["id"] for entry in chosen}
+    changeovers = [change for change in changes if change["toRun"] in shown_runs]
     shift_rows = []
     for code in shift_order:
         values = shift_ratio.get(code) or []
-        on_change = [ratio for machine_code, day, ratio in values if (machine_code, day) in changeover_days]
-        normal = [ratio for machine_code, day, ratio in values if (machine_code, day) not in changeover_days]
         shift_rows.append({
-            "shift": (shifts.get(code) or {}).get("name") or code,
-            "all": _median_pct(values and [ratio for _, _, ratio in values]), "changeover": _median_pct(on_change), "normal": _median_pct(normal),
+            "shift": (shifts.get(code) or {}).get("name") or code, "all": _median_pct([ratio for _, ratio in values]),
+            "changeover": _median_pct([ratio for flag, ratio in values if flag]), "normal": _median_pct([ratio for flag, ratio in values if not flag]),
             "count": len(values),
         })
-    change_by_month = {}
-    for entry in changeovers:
-        change_by_month[entry["day"].month] = change_by_month.get(entry["day"].month, 0) + 1
+    change_summary = _changeover_summary(changeovers, shifts, shift_order, machine_names, zone)
+    change_summary.update({"lengths": lengths, "shifts": shift_rows, "hours": round(sum(change["lost"] for change in changeovers), 1),
+                           "plannedHours": round(sum(entry["hours"] for entry in stops if entry["planned"] and entry["stop"]["id"] not in counted_stops))})
 
     scrap_items, scrap_machines = _scrap(chosen, index, machine_names)
     fit = _fit(every_machine_runs, stops_by_run, index, machine_names, machine)
@@ -276,7 +319,8 @@ def view(graph, year=None, month=0, machine="", years=None, through=None):
             "good": int(good_total), "scrapPct": round(100.0 * scrap_total / (good_total + scrap_total), 2) if good_total + scrap_total else None,
             "oee": round(100.0 * totals["good"] / staffed, 1) if staffed else None, "staffedHours": round(staffed),
             "lostHours": round(staffed - totals["good"]), "capacityPct": round(100.0 * used / possible, 1) if possible else None,
-            "unplannedHours": round(unplanned), "changeovers": len(changeovers), "runs": len(chosen), "ratedRuns": rated_runs,
+            "unplannedHours": round(unplanned), "changeovers": len(changeovers), "changeoverHours": round(sum(change["lost"] for change in changeovers)),
+            "runs": len(chosen), "ratedRuns": rated_runs,
         },
         "buckets": [{"key": key, "label": label, "hours": round(totals[key], 1)} for key, label in BUCKETS],
         "byMonth": {"labels": [MONTHS[number - 1] for number in months], "series": [
@@ -288,10 +332,7 @@ def view(graph, year=None, month=0, machine="", years=None, through=None):
         "calendar": calendar, "calendarMachines": [machine_names[code] for code in calendar_machines], "calendarItems": calendar_items,
         "calendarRange": [first.isoformat(), last.isoformat()],
         "capacity": capacity, "causes": cause_rows,
-        "changeovers": {"byMonth": {"labels": [MONTHS[number - 1] for number in sorted(change_by_month)],
-                                    "values": [change_by_month[number] for number in sorted(change_by_month)]},
-                        "lengths": lengths, "shifts": shift_rows,
-                        "plannedHours": round(sum(entry["hours"] for entry in stops if entry["planned"]))},
+        "changeovers": change_summary,
         "scrapItems": scrap_items, "scrapMachines": scrap_machines, "fit": fit,
     }
 
@@ -301,25 +342,110 @@ def _median_pct(values):
     return round(100.0 * statistics.median(values)) if values else None
 
 
-def _changeovers(chosen, machine_names):
-    """Each time a machine went from one item to another, and how many days each campaign lasted."""
-    changes, lengths = [], {label: 0 for label, _, _ in RUN_LENGTHS}
+def _changeover_windows(found):
+    """The stored changeovers with a start and end, as moments."""
+    changes = []
+    for change in found:
+        begin, end = records.parse_moment(change.get("startedAt")), records.parse_moment(change.get("endedAt"))
+        if begin is None or end is None or end < begin:
+            continue
+        changes.append({"id": change["id"], "machine": change.get("machineId") or "", "fromRun": change.get("fromRunId") or "",
+                        "toRun": change.get("toRunId") or "", "begin": begin, "end": end, "stoppageId": change.get("stoppageId") or "",
+                        "kind": change.get("kind") or "unknown", "lost": domain.num(change.get("lostHours")) or 0.0,
+                        "source": change.get("source") or "", "confidence": change.get("confidence") or ""})
+    return changes
+
+
+def _cut_at_changeovers(entries, changes):
+    """A run logged for the whole shift really ended where its changeover began, and the next run began where it ended."""
+    ends = {change["fromRun"]: change["begin"] for change in changes}
+    starts = {change["toRun"]: change["end"] for change in changes}
+    for entry in entries:
+        entry["begin0"], entry["finish0"] = entry["begin"], entry["finish"]
+        code = entry["run"]["id"]
+        if code in ends and entry["begin"] < ends[code] < entry["finish"]:
+            entry["finish"] = ends[code]
+        if code in starts and entry["begin"] < starts[code] < entry["finish"]:
+            entry["begin"] = starts[code]
+
+
+def _shift_at(moment, shifts, shift_order, zone):
+    shown = moment.astimezone(zone)
+    clock = shown.hour + shown.minute / 60.0
+    for code in shift_order:
+        shift = shifts[code]
+        start, end = _clock(shift.get("start")), _clock(shift.get("end"))
+        if start is None or end is None:
+            continue
+        if (start <= clock < end) if start < end else (clock >= start or clock < end):
+            return shift.get("name") or code
+    return ""
+
+
+def _changeover_summary(changes, shifts, shift_order, machine_names, zone):
+    """Counts and hours by kind, shift, machine and month; how each was known."""
+    with_loss = [change for change in changes if change["lost"] > 0]
+    kinds = []
+    for key, label in domain.CHANGEOVER_KINDS:
+        found = [change for change in changes if change["kind"] == key]
+        lost = [change["lost"] for change in found if change["lost"] > 0]
+        if found:
+            kinds.append({"key": key, "label": label, "count": len(found), "hours": round(sum(lost), 1),
+                          "median": round(statistics.median(lost), 1) if lost else None})
+    by_shift = {}
+    for change in with_loss:
+        name = _shift_at(change["begin"], shifts, shift_order, zone) or "Other"
+        by_shift[name] = by_shift.get(name, 0) + 1
+    by_machine = {}
+    for change in changes:
+        row = by_machine.setdefault(change["machine"], {"machine": machine_names.get(change["machine"], change["machine"]), "id": change["machine"],
+                                                        "count": 0, "hours": 0.0, "lost": []})
+        row["count"] += 1
+        row["hours"] += change["lost"]
+        if change["lost"] > 0:
+            row["lost"].append(change["lost"])
+    machine_rows = sorted(({"machine": row["machine"], "id": row["id"], "count": row["count"], "hours": round(row["hours"], 1),
+                            "median": round(statistics.median(row["lost"]), 1) if row["lost"] else None} for row in by_machine.values()),
+                          key=lambda row: -row["hours"])
+    by_month = {}
+    for change in changes:
+        number = local_day(change["end"]).month
+        row = by_month.setdefault(number, [0, 0.0])
+        row[0] += 1
+        row[1] += change["lost"]
+    lost = [change["lost"] for change in with_loss]
+    return {
+        "count": len(changes), "withLoss": len(with_loss), "median": round(statistics.median(lost), 1) if lost else None,
+        "kinds": kinds, "unknownMold": sum(1 for change in changes if change["kind"] == "unknown"),
+        "byShift": [{"shift": (shifts.get(code) or {}).get("name") or code, "count": by_shift.get((shifts.get(code) or {}).get("name") or code, 0)}
+                    for code in shift_order],
+        "sources": [{"key": key, "label": label, "count": sum(1 for change in changes if change["source"] == key)}
+                    for key, label in domain.CHANGEOVER_SOURCES],
+        "lowConfidence": sum(1 for change in changes if change["confidence"] == "low"),
+        "byMachine": machine_rows,
+        "byMonth": {"labels": [MONTHS[number - 1] for number in sorted(by_month)], "values": [by_month[number][0] for number in sorted(by_month)],
+                    "hours": [round(by_month[number][1], 1) for number in sorted(by_month)]},
+    }
+
+
+def _campaigns(chosen):
+    """How many days each campaign (one item on one machine in a row) lasted."""
+    lengths = {label: 0 for label, _, _ in RUN_LENGTHS}
     by_machine = {}
     for entry in chosen:
         by_machine.setdefault(entry["machine"], []).append(entry)
-    for code, entries in by_machine.items():
-        entries.sort(key=lambda entry: entry["begin"])
+    for entries in by_machine.values():
+        entries.sort(key=lambda entry: entry["begin0"])
         current, days = None, set()
         for entry in entries:
             if entry["item"] != current:
                 if current is not None:
-                    changes.append({"machine": code, "day": entry["day"]})
                     _count_length(lengths, len(days))
                 current, days = entry["item"], set()
             days.add(entry["day"])
         if current is not None:
             _count_length(lengths, len(days))
-    return changes, [{"label": label, "count": lengths[label]} for label, _, _ in RUN_LENGTHS]
+    return [{"label": label, "count": lengths[label]} for label, _, _ in RUN_LENGTHS]
 
 
 def _count_length(lengths, days):

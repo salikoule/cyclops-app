@@ -12,17 +12,18 @@ from cyclops_app import Format, Layout, Nav
 NAV = (
     ("Overview", "overview", "fa:table-cells", True),
     ("Performance", "performance", "fa:chart-line", False),
-    None,
+    "Records",
     ("Items", "item", "fa:box", False),
     ("Molds", "mold", "fa:cubes", False),
     ("Machines", "machine", "fa:industry", False),
     ("Recipes", "recipe", "fa:sliders", False),
-    None,
+    "Operations",
     ("Orders", "order", "fa:clipboard-list", False),
     ("Production", "run", "fa:play", False),
     ("Stoppages", "stoppage", "fa:wrench", False),
+    ("Changeovers", "changeover", "fa:arrow-right-arrow-left", False),
     ("Lots", "lot", "fa:barcode", False),
-    None,
+    "Setup",
     ("Configure", "configure", "fa:list-check", False),
 )
 
@@ -114,8 +115,8 @@ class CyclopsShell(CyclopsShellTemplate):
         self.menu_panel.add_component(Layout.html(BRAND), full_width_row=True)
         self.menu_panel.add_component(self._search.trigger(), full_width_row=True)
         for item in NAV:
-            if item is None:
-                self.menu_panel.add_component(Layout.html('<div class="cy-nav-sep"></div>'), full_width_row=True)
+            if isinstance(item, str):
+                self.menu_panel.add_component(Layout.html('<div class="cy-nav-group">%s</div>' % Layout.esc(item)), full_width_row=True)
                 continue
             text, kind, icon, exact = item
             self.menu_panel.add_component(NavLink(

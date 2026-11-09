@@ -98,6 +98,12 @@ def cyclops_performance(year=None, month=0, machine=""):
 
 
 @anvil.server.callable
+def cyclops_derive_changeovers():
+    _guard()
+    return _timed("derive changeovers", store.derive_changeovers)
+
+
+@anvil.server.callable
 def cyclops_search(term):
     _guard()
     return _timed("search", store.search, term or "")

@@ -38,7 +38,8 @@ TABLES = (
     ("units", [("name", "name", TEXT), ("status", "status", TEXT)]),
     ("person_roles", [("name", "name", TEXT), ("runs_machines", "runsMachines", BOOL), ("status", "status", TEXT)]),
     ("shifts", [("name", "name", TEXT), ("start_time", "start", TEXT), ("end_time", "end", TEXT), ("status", "status", TEXT)]),
-    ("stoppage_causes", [("name", "name", TEXT), ("category", "category", TEXT), ("planned", "planned", BOOL), ("status", "status", TEXT)]),
+    ("stoppage_causes", [("name", "name", TEXT), ("category", "category", TEXT), ("planned", "planned", BOOL), ("changeover", "changeover", BOOL),
+                         ("status", "status", TEXT)]),
     ("scrap_reasons", [("name", "name", TEXT), ("category", "category", TEXT), ("status", "status", TEXT)]),
     ("machines", [("name", "name", TEXT), ("alias", "alias", TEXT), ("machine_type", "typeId", link("machine_types")),
                   ("attached_to", "attachedToId", link("machines")), ("floor_number", "floor", NUM), ("serial", "serial", TEXT),
@@ -66,6 +67,11 @@ TABLES = (
     ("stoppages", [("machine", "machineId", link("machines")), ("run", "runId", link("production_runs")),
                    ("started_at", "startedAt", MOMENT), ("ended_at", "endedAt", MOMENT), ("cause", "causeId", link("stoppage_causes")),
                    ("description", "description", TEXT), ("fix", "fix", TEXT), ("reported_by", "reportedById", link("personnel"))]),
+    ("changeovers", [("machine", "machineId", link("machines")), ("from_run", "fromRunId", link("production_runs")),
+                     ("to_run", "toRunId", link("production_runs")), ("from_item", "fromItemId", link("items")), ("to_item", "toItemId", link("items")),
+                     ("kind", "kind", TEXT), ("started_at", "startedAt", MOMENT), ("ended_at", "endedAt", MOMENT), ("lost_h", "lostHours", NUM),
+                     ("source", "source", TEXT), ("confidence", "confidence", TEXT), ("stoppage", "stoppageId", link("stoppages")),
+                     ("basis", "basis", TEXT), ("notes", "notes", TEXT)]),
 )
 COLUMNS = dict(TABLES)
 ORDER = tuple(name for name, _ in TABLES)

@@ -11,6 +11,7 @@ SLUG = {
     "order": "orders",
     "run": "production",
     "stoppage": "stoppages",
+    "changeover": "changeovers",
     "lot": "lots",
     "configure": "configure",
 }
@@ -26,6 +27,7 @@ LABEL = {
     "order": "Production order",
     "run": "Production run",
     "stoppage": "Stoppage",
+    "changeover": "Changeover",
     "lot": "Lot",
     "configure": "Configure",
 }

@@ -17,7 +17,7 @@ NAV = (
     ("Items", "item", "fa:box", False),
     ("Molds", "mold", "fa:cubes", False),
     ("Machines", "machine", "fa:industry", False),
-    ("Recipes", "recipe", "fa:sliders", False),
+    ("Recipes", "recipe", "fa:bowl-food", False),
     "Operations",
     ("Orders", "order", "fa:clipboard-list", False),
     ("Production", "run", "fa:play", False),

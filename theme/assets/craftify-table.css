@@ -61,19 +61,6 @@ html.craftify-theme-dark .cf-table-search {
   margin-top: 2px;
 }
 
-.tabulator.craftify-table .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter::before,
-.tabulator .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter::before {
-  content: "Filter";
-  display: block;
-  margin: 0 0 4px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #94a3b8;
-  line-height: 1.2;
-}
-
 .tabulator.craftify-table .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter input,
 .tabulator.craftify-table .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter select,
 .tabulator .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter input,
@@ -81,11 +68,6 @@ html.craftify-theme-dark .cf-table-search {
   min-height: 32px;
   border-radius: 8px;
   font-size: 12px;
-}
-
-.tabulator .tabulator-header .tabulator-col.cf-filter-date .tabulator-header-filter::before {
-  display: none !important;
-  content: none !important;
 }
 
 .tabulator .tabulator-header .tabulator-col.cf-filter-date .tabulator-header-filter input.cf-date-range-value {

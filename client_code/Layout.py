@@ -91,6 +91,12 @@ def body(card, *children):
     return card
 
 
+def footer(card, *children):
+    for child in children:
+        card.add_component(flat(child), slot="foot")
+    return card
+
+
 def field(label, component, hint=""):
     box = flat(HtmlTemplate(html="@theme:bc-field.html"))
     box.dom_nodes["label"].textContent = label or ""

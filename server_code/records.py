@@ -36,6 +36,7 @@ TABLES = (
     ("item_categories", [("name", "name", TEXT), ("item_type", "type", TEXT), ("role", "role", TEXT)]),
     ("machine_types", [("name", "name", TEXT)]),
     ("units", [("name", "name", TEXT), ("status", "status", TEXT)]),
+    ("variant_attributes", [("name", "name", TEXT), ("status", "status", TEXT)]),
     ("person_roles", [("name", "name", TEXT), ("runs_machines", "runsMachines", BOOL), ("status", "status", TEXT)]),
     ("shifts", [("name", "name", TEXT), ("start_time", "start", TEXT), ("end_time", "end", TEXT), ("status", "status", TEXT)]),
     ("stoppage_causes", [("name", "name", TEXT), ("category", "category", TEXT), ("planned", "planned", BOOL), ("changeover", "changeover", BOOL),
@@ -48,7 +49,8 @@ TABLES = (
     ("personnel", [("name", "name", TEXT), ("role", "roleId", link("person_roles")), ("status", "status", TEXT), ("qualified_machines", "machineIds", links("machines"))]),
     ("items", [("name", "name", TEXT), ("item_type", "type", TEXT), ("category", "categoryId", link("item_categories")),
                ("unit", "uomId", link("units")), ("erp_code", "erpCode", TEXT), ("approved_machines", "approvedMachineIds", links("machines")),
-               ("supplier", "supplier", TEXT), ("properties", "properties", JSON), ("status", "status", TEXT), ("notes", "notes", TEXT)]),
+               ("supplier", "supplier", TEXT), ("properties", "properties", JSON), ("status", "status", TEXT), ("notes", "notes", TEXT),
+               ("parent", "parentId", link("items"))]),
     ("molds", [("name", "name", TEXT), ("cavities", "cavities", NUM), ("shot_weight_g", "shotWeight", NUM),
                ("location", "location", TEXT), ("status", "status", TEXT), ("notes", "notes", TEXT)]),
     ("recipes", [("item", "itemId", link("items")), ("mold", "moldId", link("molds")), ("machine", "machineId", link("machines")),
@@ -75,12 +77,13 @@ TABLES = (
 )
 COLUMNS = dict(TABLES)
 ORDER = tuple(name for name, _ in TABLES)
-LATE = {"machines": ("attached_to",)}
+LATE = {"machines": ("attached_to",), "items": ("parent",)}
 
 CHILDREN = (
     ("recipe_inputs", "recipes", "recipe", "inputs", [("item", "itemId", link("items")), ("share_pct", "share", NUM)]),
     ("run_scrap", "production_runs", "run", "scrap", [("reason", "reasonId", link("scrap_reasons")), ("quantity", "quantity", NUM)]),
     ("run_inputs", "production_runs", "run", "inputs", [("lot", "lotId", link("lots")), ("quantity", "quantity", NUM)]),
+    ("item_attributes", "items", "item", "attributes", [("attribute", "attributeId", link("variant_attributes")), ("value", "value", TEXT)]),
 )
 CHILDREN_OF = {}
 for _child in CHILDREN:

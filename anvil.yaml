@@ -1,5 +1,26 @@
 allow_embedding: false
 db_schema:
+  access_grants:
+    client: none
+    columns:
+    - {name: email, type: string}
+    - {name: role, type: string}
+    - {name: screens, type: simpleObject}
+    - {name: active, type: bool}
+    server: full
+    title: Access
+  audit_events:
+    client: none
+    columns:
+    - {name: at, type: datetime}
+    - {name: email, type: string}
+    - {name: record_table, type: string}
+    - {name: record, type: string}
+    - {name: action, type: string}
+    - {name: summary, type: string}
+    - {name: changes, type: simpleObject}
+    server: full
+    title: Change history
   changeovers:
     client: none
     columns:
@@ -20,6 +41,14 @@ db_schema:
     - {name: notes, type: string}
     server: full
     title: Changeovers
+  item_attributes:
+    client: none
+    columns:
+    - {name: item, target: items, type: link_single}
+    - {name: attribute, target: variant_attributes, type: link_single}
+    - {name: value, type: string}
+    server: full
+    title: Item attributes
   item_categories:
     client: none
     columns:
@@ -43,6 +72,7 @@ db_schema:
     - {name: properties, type: simpleObject}
     - {name: status, type: string}
     - {name: notes, type: string}
+    - {name: parent, target: items, type: link_single}
     server: full
     title: Items
   lots:
@@ -97,6 +127,26 @@ db_schema:
     - {name: notes, type: string}
     server: full
     title: Molds
+  notification_prefs:
+    client: none
+    columns:
+    - {name: email, type: string}
+    - {name: maintenance, type: bool}
+    - {name: breakdowns, type: bool}
+    server: full
+    title: Notification settings
+  notifications:
+    client: none
+    columns:
+    - {name: email, type: string}
+    - {name: kind, type: string}
+    - {name: record, type: string}
+    - {name: title, type: string}
+    - {name: body, type: string}
+    - {name: created_at, type: datetime}
+    - {name: read_at, type: datetime}
+    server: full
+    title: Notifications
   person_roles:
     client: none
     columns:
@@ -273,9 +323,21 @@ db_schema:
       client_hidden: true
       name: confirmed_email
       type: bool
+    - admin_ui: {order: 8, width: 200}
+      client_hidden: true
+      name: mfa
+      type: simpleObject
     indexes: []
     server: full
     title: Users
+  variant_attributes:
+    client: none
+    columns:
+    - {name: code, type: string}
+    - {name: name, type: string}
+    - {name: status, type: string}
+    server: full
+    title: Variant attributes
 dependencies:
 - dep_id: dep_wkevhfjmozeq0f
   resolution_hints: {app_id: ST3GINETRT4QJYDC, name: craftify-library, package_name: craftify_library}
@@ -319,7 +381,7 @@ services:
 - client_config: {enable_split: true, enable_v2: true}
   server_config: {auto_create_missing_columns: true}
   source: /runtime/services/tables.yml
-- client_config: {allow_remember_me: true, allow_signup: true, confirm_email: true, enable_automatic_sign_in: true, mfa_timeout_days: 0, remember_me_days: 30, require_mfa: false, use_email: true, use_google: true}
+- client_config: {allow_mfa_email_reset: true, allow_remember_me: true, allow_signup: true, confirm_email: true, enable_automatic_sign_in: true, mfa_timeout_days: 0, remember_me_days: 30, require_mfa: false, use_email: true, use_google: true}
   server_config: {user_table: users}
   source: /runtime/services/anvil/users.yml
 - client_config: {}

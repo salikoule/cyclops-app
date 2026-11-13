@@ -59,6 +59,18 @@
   }
   .ts-body { width: 100%; }
   .ts-body.is-padded { padding: 14px 16px 16px; }
+  .ts-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 16px 14px;
+    border-top: 1px solid #f1f5f9;
+    background: #f8fafc;
+  }
+  .ts-foot .anvil-component,
+  .ts-foot .anvil-container { width: auto !important; max-width: none !important; }
   .ts-card.is-lead .ts-head { padding: 18px 20px 14px; align-items: flex-start; }
   .ts-card.is-lead .ts-head h3 { font-size: 22px; letter-spacing: -0.02em; line-height: 1.2; }
   .ts-card.is-lead .ts-head p { margin-top: 6px; font-size: 13px; line-height: 1.5; max-width: 760px; }
@@ -75,5 +87,6 @@
       <div class="ts-actions" anvil-slot="actions"></div>
     </div>
     <div class="ts-body" anvil-name="body" anvil-slot="body"></div>
+    <div class="ts-foot" anvil-name="foot" anvil-slot="foot"></div>
   </div>
 </div>

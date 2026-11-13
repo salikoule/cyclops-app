@@ -140,6 +140,7 @@ def period_of(text):
 # What each list reads ----------------------------------------------------------------------------
 
 def _item_context(plant, rows):
+    plant.follow("items", "parent")
     store._every_recipe_of(plant, rows)
     if rows:
         using = [line["recipe"]["code"] for line in
@@ -294,6 +295,37 @@ def _gap(kind, key):
     if match is None:
         return None, None
     return match["ids"], {"count": match["count"], "title": match["title"], "benefit": match["benefit"]}
+
+
+def matching_codes(kind, filters=None, gap=None):
+    """Every code of ``kind`` that matches the same filters as the list page, in list order."""
+    spec = LISTS.get(kind)
+    if spec is None:
+        return None
+    gap_ids, _banner = _gap(kind, gap)
+    try:
+        conditions = _conditions(spec, filters, gap_ids)
+    except _NoMatch:
+        return []
+    found = _table(spec["table"]).search(q.fetch_only("code"), *_ordering(spec, ()), **conditions)
+    return [row["code"] for row in found]
+
+
+def records_for(kind, filters=None, gap=None):
+    """The rows of a list, filters included, for an export. Read in batches so a long log stays bounded."""
+    spec = LISTS.get(kind)
+    codes = matching_codes(kind, filters, gap)
+    if spec is None or codes is None:
+        return None
+    rows = []
+    for start in range(0, len(codes), 200):
+        chunk = codes[start:start + 200]
+        plant = store._plant()
+        loaded = plant.by_codes(spec["table"], chunk)
+        graph = spec["context"](plant, loaded).graph()
+        read = domain.reindex(graph)[spec["table"]]
+        rows.extend(spec["row"](graph, read[code]) for code in chunk if code in read)
+    return rows
 
 
 def page(kind, number=1, size=25, sorters=None, filters=None, gap=None):

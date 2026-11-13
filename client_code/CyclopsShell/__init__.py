@@ -7,9 +7,10 @@ from craftify_library.CustomComponents.AccountMenu import AccountMenu
 from craftify_library.CustomComponents.SearchPalette import SearchPalette
 from craftify_library.CustomComponents.SettingsOverlay import SettingsOverlay
 from craftify_library.CraftifyRouting import NavLink, add_event_handler, get_routing_context, navigate
-from cyclops_app import Format, Layout, Nav
+from cyclops_app import Data, Format, Layout, Nav
 
 NAV = (
+    ("Live floor", "floor", "fa:gauge-high", True),
     ("Overview", "overview", "fa:table-cells", True),
     ("Performance", "performance", "fa:chart-line", False),
     "Records",
@@ -25,6 +26,10 @@ NAV = (
     ("Lots", "lot", "fa:barcode", False),
     "Setup",
     ("Configure", "configure", "fa:list-check", False),
+    ("Notifications", "notify", "fa:bell", True),
+    ("Account", "account", "fa:user-gear", True),
+    ("Audit log", "history", "fa:clock-rotate-left", True),
+    ("Users", "users", "fa:users", True),
 )
 
 BRAND = (
@@ -114,11 +119,24 @@ class CyclopsShell(CyclopsShellTemplate):
         self.menu_panel.clear()
         self.menu_panel.add_component(Layout.html(BRAND), full_width_row=True)
         self.menu_panel.add_component(self._search.trigger(), full_width_row=True)
+        try:
+            allowed = set((Data.session().get("screens") or []))
+            unread = Data.session().get("unread") or 0
+        except Exception:
+            allowed, unread = set(), 0
+        pending = None
         for item in NAV:
             if isinstance(item, str):
-                self.menu_panel.add_component(Layout.html('<div class="cf-nav-group">%s</div>' % Layout.esc(item)), full_width_row=True)
+                pending = item
                 continue
             text, kind, icon, exact = item
+            if kind not in allowed:
+                continue
+            if pending:
+                self.menu_panel.add_component(Layout.html('<div class="cf-nav-group">%s</div>' % Layout.esc(pending)), full_width_row=True)
+                pending = None
+            if kind == "notify" and unread:
+                text = "Notifications (%s)" % unread
             self.menu_panel.add_component(NavLink(
                 text=text,
                 path=Nav.path(kind),
@@ -144,6 +162,8 @@ class CyclopsShell(CyclopsShellTemplate):
         self.footer_panel.add_component(menu, full_width_row=True)
 
     def _build_settings(self):
+        from cyclops_app.Security import account_mfa_panel
+
         self._settings = SettingsOverlay(
             app_name="Cyclops",
             app_version="1.1",
@@ -151,6 +171,7 @@ class CyclopsShell(CyclopsShellTemplate):
             default_section="plant",
             extra_sections=({"id": "plant", "label": "Plant data", "build": _plant_section},),
             hidden_sections=("notifications", "ai", "data"),
+            account_mfa_build=account_mfa_panel,
         )
         self.add_component(self._settings)
 
@@ -170,10 +191,16 @@ class CyclopsShell(CyclopsShellTemplate):
             anvil.users.logout()
         except Exception:
             pass
+        Data.invalidate_session()
         navigate(path="/login")
 
     def _on_router_navigate(self, routing_context=None, **event_args):
         self._search.close()
+        try:
+            Data.session(force=True)
+        except Exception:
+            pass
+        self._build_nav()
         self._maybe_open_from_query(routing_context)
 
     def _maybe_open_from_query(self, routing_context=None):

@@ -1,6 +1,7 @@
 """Path helpers for the Cyclops routes."""
 
 SLUG = {
+    "floor": "floor",
     "overview": "overview",
     "performance": "performance",
     "structure": "structure",
@@ -14,9 +15,14 @@ SLUG = {
     "changeover": "changeovers",
     "lot": "lots",
     "configure": "configure",
+    "notify": "notifications",
+    "account": "account",
+    "history": "history",
+    "users": "users",
 }
 KIND = {slug: kind for kind, slug in SLUG.items()}
 LABEL = {
+    "floor": "Live floor",
     "overview": "Overview",
     "performance": "Performance",
     "structure": "Structure",
@@ -30,6 +36,10 @@ LABEL = {
     "changeover": "Changeover",
     "lot": "Lot",
     "configure": "Configure",
+    "notify": "Notifications",
+    "account": "Account",
+    "history": "Audit log",
+    "users": "Users",
 }
 
 

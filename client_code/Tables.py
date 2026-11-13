@@ -165,6 +165,7 @@ SETTING_COLUMNS = {
     "machineType": lambda: [],
     "role": lambda: [_list_col("Runs machines", "runsMachines", 140)],
     "unit": lambda: [],
+    "attribute": lambda: [],
     "person": lambda: [_list_col("Role", "roleLabel", 150), _col("Qualified on", "machines", min_width=220, formatter=_clip)],
 }
 
@@ -177,7 +178,8 @@ def columns_for(kind, hide=()):
             _status_col(),
             _list_col("Type", "typeLabel", 130),
             _list_col("Category", "category", 130),
-            _col("ERP code", "erp", width=110, formatter=_text),
+            _col("SKU", "erp", width=110, formatter=_text),
+            _col("Product", "parent", min_width=160, formatter=_text),
             {"title": "Runs on", "field": "machines", "min_width": 150, "formatter": _pills("machine")},
             _num_col("Recipes", "recipes", 86),
             _num_col("Trial", "trial", 70),

@@ -407,9 +407,18 @@ def _item_fields(data, choices, item_type):
         {"name": "categoryId", "label": "Category", "type": "select", "options": [], "follows": "type",
          "groups": choices.get("categoriesByType") or {}, "empty": "Add a category for this type in Configure", "value": data.get("categoryId")},
         {"name": "uomId", "label": "Unit", "type": "select", "options": choices.get("uoms") or [], "value": data.get("uomId") or _unit_named(choices, "kg" if item_type == "RAW" else "pcs")},
-        {"name": "erpCode", "label": "ERP code", "value": data.get("erpCode"), "placeholder": "from the ERP"},
+        {"name": "erpCode", "label": "SKU", "value": data.get("erpCode"), "placeholder": "ERP code",
+         "hint": "The ERP code is the SKU. The ERP keeps prices and accounts."},
+        {"name": "parentId", "label": "Shared product", "type": "select", "wide": True,
+         "options": [_blank("Not a variant")] + [opt for opt in (choices.get("products") or []) if opt.get("value") != data.get("id")],
+         "value": data.get("parentId") or "",
+         "hint": "Set this when the item is a variant of another item. A product without variants stays a normal item."},
         {"name": "supplier", "label": "Supplier", "value": data.get("supplier")},
     ]
+    known = {entry.get("id"): entry.get("value") or "" for entry in data.get("attributes") or []}
+    for attr in choices.get("variantAttributes") or []:
+        fields.append({"name": "attr::" + attr.get("value"), "label": attr.get("label") or "Attribute", "value": known.get(attr.get("value"), ""),
+                       "hint": "Leave empty when this item does not use the attribute."})
     if data.get("id"):
         fields.append({"name": "status", "label": "Status", "type": "select", "options": choices.get("statuses") or [], "value": data.get("itemStatus")})
     for entry in properties:
@@ -492,12 +501,56 @@ def _setting_spec(kind, entry, choices):
     if kind == "role":
         fields.append({"name": "runsMachines", "label": "Runs machines", "type": "select", "value": "yes" if entry.get("runsMachines") else "no",
                        "options": [{"value": "no", "label": "No"}, {"value": "yes", "label": "Yes: can be named on a run, holds machine qualifications"}]})
-    if "status" in entry or kind in ("shift", "cause", "reason", "person", "role", "unit"):
+    if "status" in entry or kind in ("shift", "cause", "reason", "person", "role", "unit", "attribute"):
         fields.append({"name": "status", "label": "Status", "type": "select", "options": choices.get("statuses") or [], "value": entry.get("status") or "active"})
     titles = {"shift": "shift", "cause": "stoppage cause", "reason": "scrap reason", "category": "item category",
-              "machineType": "machine type", "person": "person", "role": "role", "unit": "unit"}
+              "machineType": "machine type", "person": "person", "role": "role", "unit": "unit", "attribute": "variant attribute"}
     title = ("Edit %s" if entry.get("id") else "New %s") % titles.get(kind, "setting")
     return (title, fields, "Retire a value instead of deleting it, so the records that use it keep it.")
+
+
+def _with_current(options, value, label):
+    options = list(options or [])
+    if value and value not in [opt.get("value") for opt in options]:
+        options = [{"value": value, "label": label or value}] + options
+    return options
+
+
+def _shift_spec(card, choices, closing):
+    """Order and recipe come from the open run. Shift and start stay as logged; the clock fills them only when that run has none."""
+    card = card or {}
+    order_value, recipe_value = card.get("order") or "", card.get("recipe") or ""
+    fields = [
+        {"name": "machine", "type": "hidden", "value": card.get("id") or ""},
+        {"name": "close", "type": "hidden", "value": "yes" if closing else ""},
+    ]
+    if order_value:
+        fields.append({"name": "order", "label": "Order", "type": "select", "wide": True,
+                       "options": _with_current(choices.get("openOrders"), order_value, card.get("orderLabel") or order_value),
+                       "value": order_value})
+        recipes = (choices.get("recipesByOrder") or {}).get(order_value) or []
+        fields.append({"name": "recipe", "label": "Recipe", "type": "select", "wide": True,
+                       "options": _with_current(recipes, recipe_value, recipe_value), "value": recipe_value})
+    else:
+        fields.append({"name": "order", "label": "Order", "type": "select", "wide": True,
+                       "options": [_blank("Choose the order")] + (choices.get("openOrders") or [])})
+        fields.append({"name": "recipe", "label": "Recipe", "type": "select", "options": [], "follows": "order", "wide": True,
+                       "groups": choices.get("recipesByOrder") or {}, "empty": "Choose an order with a live recipe"})
+    fields.extend([
+        {"name": "shiftId", "label": "Shift", "type": "select", "options": [_blank("Choose the shift")] + (choices.get("shifts") or []),
+         "value": card.get("shiftId") or _shift_now(choices)},
+        _moment("startedAt", "Started", card.get("startedAt"), now=not card.get("startedAt")),
+        {"name": "operatorId", "label": "Who was on it", "type": "select",
+         "options": [_blank("Choose the operator")] + _sorted(choices.get("operators")), "value": card.get("operatorId") or ""},
+        {"name": "good", "label": "Good pieces", "type": "number", "value": card.get("good")},
+        {"name": "scrapReason", "label": "Scrap reason", "type": "select", "options": [_blank("No scrap")] + (choices.get("reasons") or []), "wide": True},
+        {"name": "scrapQty", "label": "Scrap", "type": "number"},
+    ])
+    if closing:
+        fields.append(_moment("endedAt", "Ended", now=True))
+    title = "Close the shift" if closing else "Log the shift"
+    hint = "Saving does not need a consumed lot or a cavity count. Anything still missing is listed after the save, and can be filled in on the run."
+    return (title, fields, hint, "Close shift" if closing else "Save shift")
 
 
 def _spec(screen, action, extra):
@@ -507,7 +560,7 @@ def _spec(screen, action, extra):
     if action == "new-item":
         return ("New item", _item_fields({}, choices, extra.get("type") or "SFG"), "Every product, part, and material is an item. The type and category decide where it is used.", "Create item")
     if action == "edit-item":
-        return ("Edit item", _item_fields(data, choices, data.get("type")), "The ERP code is what lets orders and stock meet this record.")
+        return ("Edit item", _item_fields(data, choices, data.get("type")), "The SKU is this item's ERP code. A parent links a variant to the shared product.")
     if action == "set-approved":
         return ("Approved machines", [
             {"name": "machines", "label": "This item may run on", "type": "tags", "options": choices.get("presses") or [], "value": data.get("approvedMachineIds") or [],
@@ -579,6 +632,18 @@ def _spec(screen, action, extra):
         recipes = {"name": "recipe", "label": "Recipe", "type": "select", "options": [], "follows": "order", "wide": True,
                    "groups": choices.get("recipesByOrder") or {}, "empty": "Choose an order with a live recipe"}
         return ("Log a run", _run_fields({}, choices, order_field=order, recipes=recipes), "One run is one job on one machine, start to end.", "Log run")
+    if action == "log-shift":
+        return _shift_spec(row, choices, extra.get("close"))
+    if action == "save-access":
+        return ("Access", [
+            {"name": "email", "type": "hidden", "value": row.get("email")},
+            {"name": "role", "label": "Role", "type": "select", "options": choices.get("accessRoles") or [], "value": row.get("role") or "observer"},
+            {"name": "active", "label": "Account", "type": "select", "value": "yes" if row.get("active") else "no",
+             "options": [{"value": "yes", "label": "Active"}, {"value": "no", "label": "Deactivated"}]},
+            {"name": "screens", "label": "Screens", "type": "tags", "options": choices.get("accessScreens") or [],
+             "value": row.get("screens") or [], "placeholder": "Add a screen…", "wide": True,
+             "hint": "Administrators see every screen. For the other roles, these are the pages in the sidebar."},
+        ], row.get("email") or "", "Save")
     if action == "edit-run":
         return ("Edit run", _run_fields(data, choices), "%s on %s" % (data.get("item") or "", data.get("machine") or ""), "Save",
                 ("delete-run", "Delete this run?", "Its scrap, consumed lots, and output lots are removed. Its stoppages stay on the machine.", {}))

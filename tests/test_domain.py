@@ -73,6 +73,21 @@ def test_a_run_needs_its_full_data(plant):
     assert act(plant, "add-run", **base)["redirect"]["kind"] == "run"
 
 
+def test_a_shift_log_saves_without_a_lot_or_cavities(plant):
+    order, run = _running(plant)
+    recipe = domain.reindex(plant)["recipes"][RECIPE]
+    reason = plant["scrap_reasons"][0]["id"]
+    result = act(plant, "log-shift", contextKind="floor", machine=recipe["machineId"], good="40",
+                 scrapReason=reason, scrapQty="2", operatorId="PER-001")
+    assert not result.get("error"), result
+    assert "No consumed lot" in result["gaps"]
+    assert "No cavity count" in result["gaps"]
+    saved = domain.reindex(plant)["production_runs"][run]
+    assert saved["good"] == 40 and saved["cavities"] is None and saved["inputs"] == []
+    assert saved["scrap"] == [{"reasonId": reason, "quantity": 2}]
+    assert saved.get("endedAt") in ("", None)
+
+
 def test_a_stoppage_closes_only_with_a_cause(plant):
     _, run = _running(plant)
     result = act(plant, "add-stoppage", contextKind="run", contextId=run, startedAt="2026-11-06T07:00:00Z", endedAt="2026-11-06T08:00:00Z")

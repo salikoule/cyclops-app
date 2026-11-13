@@ -1,6 +1,8 @@
 """Screens for the plant record. Routes call mount_*."""
 
+import anvil.media
 import anvil.server
+import anvil.users
 from anvil import *
 from anvil.js import window
 from craftify_library.CraftifyUtils import dialogs
@@ -71,6 +73,8 @@ SETTING_SECTIONS = (
     ("person", "personnel", "personnel", "Personnel", "Everyone who runs machines or reports stoppages. Only roles that run machines have machine qualifications."),
     ("role", "roles", "roles", "Roles", "The jobs people hold. A role that runs machines can be named on a run and holds machine qualifications."),
     ("unit", "units", "units", "Units", "How items are counted and weighed."),
+    ("attribute", "variantAttributes", "attributes", "Variant attributes",
+     "Names the plant uses to tell variants of one product apart, such as customer, pack size, or color. The value is stored on the item. The SKU is that item's ERP code."),
 )
 
 
@@ -104,24 +108,38 @@ class Screen:
     def render(self):
         if self.kind == "overview":
             self._overview()
+        elif self.kind == "floor":
+            self._floor()
         elif self.kind == "structure":
             self._structure()
         elif self.kind == "configure":
             self._configure_page()
+        elif self.kind == "users":
+            self._users()
+        elif self.kind == "history":
+            self._history_page()
+        elif self.kind == "notify":
+            self._notifications()
+        elif self.kind == "account":
+            self._account()
         elif self.code:
             self._detail()
         else:
             self._list()
 
     def show(self, *children):
-        self.form.clear()
-        kept = [child for child in children if child is not None]
-        self.form.add_component(Layout.stack(*kept), full_width_row=True)
+        """Replace the page. A form with ``content`` keeps its other components, such as a refresh timer."""
+        target = getattr(self.form, "content", None) or self.form
+        target.clear()
+        kept = [child for child in children if child is not None and child != ""]
+        target.add_component(Layout.stack(*kept), full_width_row=True)
 
     def show_tabbed(self, top, tabs):
         """``top`` stays above the tab bar; ``tabs`` are (key, label, count or None, build), and only the open tab is built.
         The open tab is kept in the address (?tab=) so a refresh or a shared link opens it again."""
         tabs = [tab for tab in tabs if tab]
+        if self.code and self.kind in ("item", "mold", "machine", "recipe", "order", "run", "stoppage", "lot"):
+            tabs = list(tabs) + [("history", "Audit", None, lambda: [self._record_history()])]
         if not tabs:
             self.show(*top)
             return
@@ -174,6 +192,15 @@ class Screen:
         })
 
     def handle(self, action, dataset):
+        if action not in ("open-gap", "tab", "") and not Data.can_write():
+            Notification("You have read-only access.", style="warning", timeout=4).show()
+            return
+        if action in ("log-shift", "close-shift"):
+            card = next((entry for entry in (self.data or {}).get("machines") or [] if entry.get("id") == dataset.get("item")), None)
+            if card is None:
+                return
+            Editor.open_editor(self, "log-shift", {"row": card, "close": action == "close-shift"})
+            return
         if action == "open-gap":
             Nav.go(dataset.get("route"), query={"gap": dataset.get("gap") or ""})
             return
@@ -205,6 +232,9 @@ class Screen:
             return "The change could not be saved."
         if result.get("error"):
             return result["error"]
+        gaps = result.get("gaps") or []
+        if gaps:
+            Notification("Saved. Still open: %s." % "; ".join(gaps), style="warning", timeout=6).show()
         if close is not None:
             close()
         Data.invalidate()
@@ -404,9 +434,11 @@ class Screen:
             self.show(Layout.empty_state("The list could not be loaded."))
             return
         create = CREATE.get(self.kind)
-        actions = (Layout.button(create[0], self.act(create[1]), primary=True),) if create else ()
+        actions = []
+        if create and Data.can_write():
+            actions.append(Layout.button(create[0], self.act(create[1]), primary=True))
         if self.kind == "changeover":
-            actions = (Layout.button("Derive again", self._derive_changeovers),)
+            actions = [Layout.button("Derive again", self._derive_changeovers)] if Data.can_write() else []
         banner = Layout.stack()
         card = Layout.section(TITLES.get(self.kind) or "Records", LEADS.get(self.kind) or "", padded=False, actions=actions, lead=True)
         shown = {"banner": False}
@@ -419,8 +451,30 @@ class Screen:
                     % (info.get("count") or 0, Layout.esc((info.get("title") or "")[:1].lower() + (info.get("title") or "")[1:]), Layout.esc(info.get("benefit")), Layout.esc(Nav.path(self.kind)))))
 
         editing = {"on_edit": self._edit_stoppage, "edit_on_click": True} if self.kind == "stoppage" else {}
-        Layout.body(card, banner, Tables.mount_remote(self.kind, Tables.columns_for(self.kind), fields, gap, on_reply, **editing))
+        table = Tables.mount_remote(self.kind, Tables.columns_for(self.kind), fields, gap, on_reply, **editing)
+        self._table = table
+        footer_actions = LinearPanel(spacing_above="none", spacing_below="none")
+        footer_actions.add_component(Layout.button("Download CSV", lambda **e: self._download("csv")))
+        footer_actions.add_component(Layout.button("Download Excel", lambda **e: self._download("xlsx"), primary=True))
+        Layout.body(card, banner, table)
+        Layout.footer(card, Label(text="Exports respect the filters above."), footer_actions)
         self.show(card)
+
+    def _download(self, fmt):
+        filters = []
+        table = getattr(self, "_table", None)
+        if table is not None:
+            try:
+                filters = [{"field": item.get("field"), "value": item.get("value")}
+                           for item in (table.get_header_filters() or []) if item.get("value")]
+            except Exception:
+                filters = []
+        try:
+            media = anvil.server.call("cyclops_export", self.kind, fmt, filters, self.query.get("gap") or "")
+        except Exception as error:
+            Notification(str(error) or "The export could not be built.", style="danger", timeout=5).show()
+            return
+        anvil.media.download(media)
 
     def _edit_stoppage(self, row):
         Editor.open_editor(self, "edit-stoppage", {"row": row})
@@ -504,9 +558,13 @@ class Screen:
             ("Type", Layout.esc(data.get("typeLabel")), False),
             ("Category", Format.text(data.get("category")) + ((" <small>· %s</small>" % Layout.esc(data.get("role"))) if data.get("role") else ""), False),
             ("Unit", Format.text(data.get("uom")), False),
-            ("ERP code", Format.text(data.get("erpCode"), "<small>none yet</small>"), not data.get("erpCode") and made),
+            ("SKU", Format.text(data.get("erpCode"), "<small>none yet</small>"), not data.get("erpCode") and made),
+            ("Product", Format.link("item", data.get("parentId"), data.get("parentName")), False) if data.get("parentId") else None,
             ("Supplier", Format.text(data.get("supplier")), False) if data.get("supplier") else None,
         ]
+        for entry in data.get("attributes") or []:
+            if entry.get("value"):
+                facts.append((entry.get("name") or "Attribute", Format.text(entry.get("value")), False))
         for entry in data.get("properties") or []:
             if entry.get("key") == "swatch" and entry.get("value"):
                 facts.append((entry["label"], '<span class="cy-swatch" style="background:%s"></span> %s' % (Layout.esc(entry["value"]), Layout.esc(entry["value"].upper())), False))
@@ -542,6 +600,8 @@ class Screen:
         lot_actions = () if made else (Layout.button("Receive a lot", self.act("receive-lot")),)
         tabs.append(("lots", "Lots", len(data.get("lots") or []), lambda: [self._table_section(
             "Lots", "", data.get("lots") or [], "lot", ("item",), actions=lot_actions, empty="No lots recorded.")]))
+        if data.get("parentId") or data.get("variants"):
+            tabs.append(("variants", "Variants", len(data.get("variants") or []), lambda: [self._variants(data)]))
         if data.get("missingBits"):
             tabs.append(("missing", "Missing", len(data.get("missingBits")), lambda: [self._missing(data)]))
         self.show_tabbed(top, tabs)
@@ -930,6 +990,240 @@ class Screen:
         Editor.open_editor(self, "save-setting", {"settingKind": kind, "row": entry})
 
 
+    def _variants(self, data):
+        rows = data.get("variants") or []
+        card = self._table_section("Variants", "Items whose shared product is this one. Each keeps its own SKU.", rows, "item", empty="No variants. Set this item as the shared product on another item.")
+        return card
+
+    def _record_history(self):
+        rows = _call("cyclops_history", self.kind, self.code) or []
+        return self._audit_table("Audit log", "Who changed what on this record, with before and after values.", rows)
+
+    def _audit_table(self, title, subtitle, rows):
+        card = Layout.section(title, subtitle)
+        if not rows:
+            Layout.body(card, Layout.note("No changes recorded yet."))
+            return card
+        bits = [
+            '<thead><tr><th>When</th><th>Who</th><th>Where</th><th>Change</th><th>Before</th><th>After</th></tr></thead><tbody>',
+        ]
+        for row in rows:
+            lines = row.get("lines") or []
+            if not lines:
+                lines = [{"label": row.get("summary") or row.get("action"), "before": "—", "after": "—"}]
+            for index, line in enumerate(lines):
+                head = ""
+                if index == 0:
+                    head = '<td rowspan="%s">%s</td><td rowspan="%s">%s</td><td rowspan="%s">%s</td>' % (
+                        len(lines), Layout.esc(Format.when(row.get("at"))),
+                        len(lines), Layout.esc(row.get("email") or ""),
+                        len(lines), Layout.esc(row.get("place") or row.get("record") or ""),
+                    )
+                bits.append(
+                    "<tr>%s<td>%s</td><td>%s</td><td>%s</td></tr>"
+                    % (head, Layout.esc(line.get("label") or ""), Layout.esc(line.get("before") or "—"), Layout.esc(line.get("after") or "—"))
+                )
+        bits.append("</tbody>")
+        Layout.body(card, self.block('<div class="cy-audit-wrap"><table class="cy-table cy-audit">%s</table></div>' % "".join(bits)))
+        return card
+
+    def _floor(self):
+        today = ""
+        try:
+            today = Format.now().date().isoformat()
+        except Exception:
+            today = ""
+        data = _call("cyclops_floor", today)
+        if not data:
+            self.show(Layout.empty_state("The floor could not be loaded."))
+            return
+        self.data = data
+        counts = data.get("counts") or {}
+        kpis = data.get("kpis") or {}
+        writable = Data.can_write() and not data.get("demo")
+        cards = []
+        for machine in data.get("machines") or []:
+            state = machine.get("state") or "Idle"
+            css = {"Running": "cy-running", "Stopped": "cy-stopped", "Idle": "cy-idle"}.get(state, "")
+            title = machine.get("item") or '<span class="cy-muted">No run open</span>'
+            progress = machine.get("progress")
+            prog_bar = ""
+            if progress is not None:
+                prog_bar = (
+                    '<div class="cy-prog"><div class="cy-prog-bar" style="width:%s%%"></div></div>'
+                    '<div class="cy-sub">%s / %s pcs%s</div>'
+                ) % (progress, Format.trim(machine.get("good")), Format.trim(machine.get("orderQty")),
+                     (" · " + str(progress) + "%") if progress is not None else "")
+            metrics = []
+            if machine.get("mold"):
+                metrics.append("Mold %s" % machine.get("mold"))
+            if machine.get("cycleSec") is not None:
+                metrics.append("%s s cycle" % Format.trim(machine.get("cycleSec")))
+            if machine.get("pph"):
+                metrics.append("%s pcs/h" % machine.get("pph"))
+            if machine.get("barrelTemp"):
+                metrics.append("%s °C" % machine.get("barrelTemp"))
+            meta = []
+            if machine.get("orderLabel") or machine.get("order"):
+                meta.append("Order %s" % (machine.get("orderLabel") or machine.get("order")))
+            if machine.get("recipe"):
+                meta.append(machine.get("recipe"))
+            if machine.get("operator"):
+                meta.append(machine.get("operator"))
+            if machine.get("shift"):
+                meta.append(machine.get("shift"))
+            if machine.get("elapsed"):
+                meta.append(machine.get("elapsed"))
+            stop = ""
+            if machine.get("state") == "Stopped":
+                stop = '<div class="cy-alert">Stopped%s%s</div>' % (
+                    (" · " + Layout.esc(machine.get("cause"))) if machine.get("cause") else "",
+                    (" · " + Layout.esc(machine.get("stoppedFor"))) if machine.get("stoppedFor") else "",
+                )
+            buttons = ""
+            if writable:
+                buttons = '<div class="cy-floor-actions"><button type="button" class="cy-mini" data-action="log-shift" data-item="%s">Log shift</button>' % Layout.esc(machine.get("id"))
+                if machine.get("run"):
+                    buttons += '<button type="button" class="cy-mini" data-action="close-shift" data-item="%s">Close shift</button>' % Layout.esc(machine.get("id"))
+                buttons += "</div>"
+            cards.append(
+                '<article class="cy-presscard cy-floorcard %s"><div class="pn">%s %s</div>'
+                '<div class="mounted">%s</div>%s<div class="cy-metrics">%s</div><div class="sub">%s</div>%s%s</article>'
+                % (css, Layout.esc(machine.get("name")), Format.status(state, machine.get("tone")),
+                   title, prog_bar, Layout.esc(" · ".join(metrics)), Layout.esc(" · ".join(meta)), stop, buttons)
+            )
+        kpi_bits = ""
+        if kpis:
+            kpi_bits = "".join(
+                '<div class="cy-kpi"><span>%s</span><b>%s</b></div>' % (Layout.esc(label), Layout.esc(text))
+                for index, (label, text) in enumerate((
+                    ("Good today", kpis.get("goodToday")),
+                    ("Downtime", kpis.get("downtime")),
+                    ("Due this week", kpis.get("ordersDue")),
+                    ("Utilization", ("%s%%" % kpis.get("utilization")) if kpis.get("utilization") is not None else "—"),
+                ))
+            )
+        timeline = ""
+        for event in data.get("timeline") or []:
+            timeline += '<li class="cy-evt-%s"><span>%s</span> %s</li>' % (
+                Layout.esc(event.get("tone") or "muted"), Layout.esc(event.get("at") or ""), Layout.esc(event.get("text") or ""))
+        if timeline:
+            timeline = '<div class="cy-card cy-timeline"><h3>Last on the floor</h3><ul>%s</ul></div>' % timeline
+        demo_note = None
+        if data.get("demo"):
+            demo_note = Layout.html('<p class="cy-banner cy-demo">Preview data — no shift is open on the plant yet. Numbers and states are examples.</p>')
+        strip = self._attention(data)
+        board = Layout.section("Machines", "One card per press. Refreshes about every 20 seconds.")
+        Layout.body(board, self.block('<div class="cy-board cy-floor-board">%s</div>' % "".join(cards or ['<p class="cy-muted">No machines.</p>'])))
+        header = "%s running · %s idle · %s stopped" % (counts.get("running") or 0, counts.get("idle") or 0, counts.get("stopped") or 0)
+        self.show(
+            Layout.page_header("Live floor", description=header),
+            demo_note,
+            self.block('<div class="cy-floor-kpis">%s</div>' % kpi_bits) if kpi_bits else None,
+            strip,
+            self.block(timeline) if timeline else None,
+            board,
+        )
+
+    def _attention(self, data):
+        parts = []
+        due = data.get("dueSoon") or []
+        down = data.get("down") or []
+        quiet = data.get("noGood") or []
+        if due:
+            items = "".join('<div class="cy-sub"><a href="javascript:void(0)" data-nav="%s">%s</a> · %s · due %s</div>'
+                            % (Layout.esc(Nav.path("order", row.get("id"))), Layout.esc(row.get("id")), Layout.esc(row.get("item")), Layout.esc(row.get("due")))
+                            for row in due)
+            parts.append('<div class="cy-card"><h3>Orders due soon</h3>%s</div>' % items)
+        if down:
+            items = "".join('<div class="cy-sub"><a href="javascript:void(0)" data-nav="%s">%s</a>%s</div>'
+                            % (Layout.esc(Nav.path("machine", row.get("id"))), Layout.esc(row.get("name")),
+                               (" · " + Layout.esc(row.get("cause"))) if row.get("cause") else " · down")
+                            for row in down)
+            parts.append('<div class="cy-card"><h3>Machines down</h3>%s</div>' % items)
+        if quiet:
+            items = "".join('<div class="cy-sub"><a href="javascript:void(0)" data-nav="%s">%s</a> · %s · %s</div>'
+                            % (Layout.esc(Nav.path("run", row.get("id"))), Layout.esc(row.get("machine")), Layout.esc(row.get("item")),
+                               Layout.esc(row.get("elapsed") or "no good pieces yet"))
+                            for row in quiet)
+            parts.append('<div class="cy-card"><h3>No good pieces yet</h3>%s</div>' % items)
+        if not parts:
+            return None
+        return self.block('<div class="cy-strip">%s</div>' % "".join(parts))
+
+    def _users(self):
+        data = _call("cyclops_users")
+        if not data:
+            self.show(Layout.empty_state("Users could not be loaded."))
+            return
+        self.data = data
+        rows = []
+        for user in data.get("users") or []:
+            rows.append({
+                "email": user.get("email"),
+                "role": user.get("roleLabel") or user.get("role"),
+                "status": "Active" if user.get("active") else "Deactivated",
+                "tone": "ok" if user.get("active") else "muted",
+                "screens": "All screens" if user.get("role") == "administrator" else (", ".join(user.get("screens") or []) or "Notifications and account"),
+                "lastLogin": Format.when(user.get("lastLogin"), ""),
+                "id": user.get("email"),
+            })
+        card = Layout.section("Users", "Activate an account, set its role, and choose the screens it sees. Administrator, User, and Observer are the three roles the app branches on.", padded=False)
+        Layout.body(card, Tables.mount(rows, "user", [
+            Tables._col("Email", "email", min_width=220, formatter=Tables._text),
+            Tables._col("Role", "role", width=140, formatter=Tables._text),
+            Tables._status_col(120),
+            Tables._col("Screens", "screens", min_width=220, formatter=Tables._clip),
+            Tables._col("Last sign-in", "lastLogin", width=160, formatter=Tables._text),
+        ], height="640px" if len(rows) > 12 else None, on_edit=self._edit_user, edit_on_click=True))
+        self.show(Layout.page_header("Users", description="The first signed-in account is an administrator. One active administrator always remains."), card)
+
+    def _edit_user(self, row):
+        user = next((entry for entry in (self.data or {}).get("users") or [] if entry.get("email") == row.get("email")), None)
+        if user is not None:
+            Editor.open_editor(self, "save-access", {"row": user})
+
+    def _history_page(self):
+        rows = _call("cyclops_history") or []
+        self.show(Layout.page_header("Audit log", description="Who changed what, where, and when. Before and after values are stored for every save."),
+                  self._audit_table("Latest changes", "Recipes, orders, runs, master data, and user access.", rows))
+
+    def _notifications(self):
+        rows = _call("cyclops_notifications") or []
+        bits = []
+        for row in rows:
+            bits.append(
+                '<div class="cy-row%s"><div class="cy-when">%s</div><div class="cy-grow"><b>%s</b><div class="cy-sub">%s</div></div></div>'
+                % ("" if row.get("read") else " cy-unread", Layout.esc(Format.when(row.get("at"))), Layout.esc(row.get("title")), Layout.esc(row.get("body")))
+            )
+        card = Layout.section("Notifications", "Maintenance and breakdowns you asked to hear about.",
+                              actions=(Layout.button("Mark all read", self._mark_read),))
+        body = '<div class="cy-list">%s</div>' % "".join(bits) if bits else '<p class="cy-muted">Nothing yet. Turn alerts on from Account.</p>'
+        Layout.body(card, self.block(body))
+        self.show(Layout.page_header("Notifications"), card)
+
+    def _mark_read(self, **event_args):
+        _call("cyclops_mark_notifications")
+        Data.invalidate_session()
+        self.render()
+
+    def _account(self):
+        prefs = _call("cyclops_notification_prefs") or {}
+        maintenance = CheckBox(text="Planned maintenance", checked=bool(prefs.get("maintenance")))
+        breakdowns = CheckBox(text="Breakdowns", checked=bool(prefs.get("breakdowns")))
+
+        def save_prefs(**event_args):
+            saved = _call("cyclops_save_notification_prefs", bool(maintenance.checked), bool(breakdowns.checked))
+            if saved is not None:
+                Notification("Notification settings saved.", style="success", timeout=3).show()
+
+        alerts = Layout.section("Notifications", "Stored in the app for the signed-in user. Email is sent as well when the Anvil email service can send.")
+        Layout.body(alerts, maintenance, breakdowns, Layout.button("Save", save_prefs, primary=True))
+        security = Layout.section("Password and two-factor authentication", "Open the account menu at the bottom of the sidebar, choose Account, then use Password and Two-factor authentication.")
+        Layout.body(security, Layout.note("Notification preferences stay on this page. Everything about signing in lives in account settings."))
+        self.show(Layout.page_header("Account", description=anvil.users.get_user()["email"] if anvil.users.get_user() else ""), alerts, security)
+
+
 def mount_overview(form, ctx):
     Screen(form, "overview", None, ctx).render()
 
@@ -948,3 +1242,25 @@ def mount_list(form, kind, ctx):
 
 def mount_detail(form, kind, ctx):
     Screen(form, kind, Nav.params(ctx).get("code"), ctx).render()
+
+
+def mount_floor(form, ctx):
+    Screen(form, "floor", None, ctx).render()
+
+
+def mount_users(form, ctx):
+    Screen(form, "users", None, ctx).render()
+
+
+def mount_history(form, ctx):
+    Screen(form, "history", None, ctx).render()
+
+
+def mount_notifications(form, ctx):
+    Screen(form, "notify", None, ctx).render()
+
+
+def mount_account(form, ctx):
+    Screen(form, "account", None, ctx).render()
+
+

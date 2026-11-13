@@ -13,6 +13,7 @@ import anvil.tables
 import anvil.tables.query as q
 from anvil.tables import app_tables
 
+import accounts
 import domain
 import loader
 import performance as performance_view
@@ -20,7 +21,7 @@ import records
 
 _BATCH = 200
 _SEEDED = False
-_REFERENCE = ("machines", "machine_types", "item_categories", "units", "person_roles")
+_REFERENCE = ("machines", "machine_types", "item_categories", "units", "person_roles", "variant_attributes")
 _PEOPLE = ("personnel", "shifts")
 _REASONS = ("stoppage_causes", "scrap_reasons")
 _SETTINGS = _REFERENCE + _PEOPLE + _REASONS
@@ -93,6 +94,10 @@ def _item_scope(plant, code):
     row = plant.get("items", code)
     if row is None:
         return plant
+    if row["parent"] is not None:
+        plant.by_codes("items", [row["parent"]["code"]])
+    plant.find("items", parent=row)
+    plant.lines("item_attributes")
     made = plant.find("recipes", item=row)
     using = [line["recipe"]["code"] for line in app_tables.recipe_inputs.search(q.fetch_only(recipe=q.fetch_only("code")), item=row)
              if line["recipe"] is not None]
@@ -211,7 +216,7 @@ _SCOPES = {
 
 def detail(kind, code):
     if kind == "settings":
-        return domain.settings_view(_plant(*_PEOPLE + _REASONS).graph())
+        return domain.settings_view(_plant(*_PEOPLE + _REASONS, "variant_attributes").graph())
     scope = _SCOPES.get(kind)
     if scope is None:
         return {"missing": True, "kind": kind, "id": code}
@@ -399,6 +404,8 @@ def _add(table, rows):
 def _clear_all():
     for row in app_tables.machines.search(attached_to=q.not_(None)):
         row.update(attached_to=None)
+    for row in app_tables.items.search(parent=q.not_(None)):
+        row.update(parent=None)
     for child, _, _, _, _ in records.CHILDREN:
         _table(child).delete_all_rows()
     for table in reversed(records.ORDER):
@@ -434,11 +441,22 @@ def _seed_if_empty():
     _write_all(domain.normalize({table: seed.get(table) or [] for table in records.ORDER}))
 
 
+def _ensure_attributes():
+    """Variant attribute names, when the plant has not named any. Items already stored are not touched."""
+    if list(app_tables.variant_attributes.search(q.fetch_only("code"))):
+        return
+    graph = domain.normalize({"variant_attributes": []})
+    domain.ensure_variant_attributes(graph)
+    for entry in graph["variant_attributes"]:
+        app_tables.variant_attributes.add_row(**records.to_row("variant_attributes", entry, lambda *_args: None))
+
+
 def ensure_seeded():
     """A new app, or one whose tables were emptied, starts from the workbook import."""
     global _SEEDED
     if not _SEEDED:
         _seed_if_empty()
+        _ensure_attributes()
         _SEEDED = True
 
 
@@ -533,11 +551,19 @@ def _action_plant(action, payload):
     if scope is not None and context:
         scope(plant, context)
     for key, table in (("recipe", "recipes"), ("run", "production_runs"), ("order", "production_orders"), ("item", "items"),
-                       ("color", "items"), ("mold", "molds"), ("lot", "lots"), ("from", "recipes"), ("stoppage", "stoppages")):
+                       ("color", "items"), ("mold", "molds"), ("lot", "lots"), ("from", "recipes"), ("stoppage", "stoppages"),
+                       ("machine", "machines"), ("parentId", "items")):
         if payload.get(key):
             plant.by_codes(table, [payload[key]])
     if action in domain.WHOLE_ACTIONS:
         plant.all(*domain.WHOLE_ACTIONS[action])
+    if action == "log-shift":
+        machine = plant.get("machines", payload.get("machine") or payload.get("contextId") or "")
+        recipes = plant.find("recipes", machine=machine) if machine is not None else []
+        if recipes:
+            plant.find("production_runs", recipe=q.any_of(*recipes), ended_at=None)
+    if action in ("new-item", "edit-item", "clone-item"):
+        plant.lines("item_attributes")
     _run_context(plant)
     if action in domain.LOT_NUMBER_ACTIONS:
         _lots_of_items(plant, action, payload)
@@ -560,8 +586,12 @@ def _lots_of_items(plant, action, payload):
         plant.find("lots", item=q.any_of(*items))
 
 
+def _by_id(plant, table):
+    return {item["id"]: item for item in plant.get(table) or []}
+
+
 @anvil.tables.in_transaction
-def apply_action(action, payload):
+def apply_action(action, payload, actor=""):
     payload = payload or {}
     loaded = _action_plant(action, payload)
     plant = loaded.graph()
@@ -569,12 +599,42 @@ def apply_action(action, payload):
     result = domain.dispatch(plant, action, payload)
     if result.get("error"):
         return {"error": result["error"]}
-    _persist(plant, result.get("dirty") or {}, loaded, before)
-    return {"redirect": result.get("redirect"), "refresh": bool(result.get("refresh"))}
+    dirty = result.get("dirty") or {}
+    _persist(plant, dirty, loaded, before)
+    accounts.record_changes(before, {table: _by_id(plant, table) for table in records.ORDER}, dirty, actor)
+    machines = _by_id(plant, "machines")
+    stops = {}
+    for code, stop in _by_id(plant, "stoppages").items():
+        named = dict(stop)
+        named["machineId"] = (machines.get(stop.get("machineId")) or {}).get("name") or stop.get("machineId") or ""
+        stops[code] = named
+    notices = accounts.notifications_for(before.get("stoppages") or {}, stops, _by_id(plant, "stoppage_causes"), dirty.get("stoppages"))
+    return {"redirect": result.get("redirect"), "refresh": bool(result.get("refresh")), "gaps": result.get("gaps") or [],
+            "notify": notices}
+
+
+def floor(today):
+    """Open runs, open stoppages, and open orders. Closed history stays in the tables."""
+    plant = _plant("shifts", "personnel", "stoppage_causes", "molds")
+    plant.find("production_runs", ended_at=None, started_at=q.not_(None))
+    plant.follow("production_runs", "recipe")
+    plant.follow("production_runs", "order")
+    plant.follow("production_runs", "operator")
+    plant.follow("production_runs", "shift")
+    plant.follow("recipes", "mold")
+    plant.follow("recipes", "item")
+    plant.follow("production_orders", "item")
+    plant.find("stoppages", ended_at=None)
+    plant.follow("stoppages", "cause")
+    plant.find("production_orders", status=q.any_of(*domain.OPEN_ORDERS))
+    plant.follow("production_orders", "item")
+    now = records.moment_text(datetime.datetime.now(datetime.timezone.utc))
+    return domain.floor_view(plant.graph(), now, today or now[:10])
 
 
 @anvil.tables.in_transaction
 def replace_all(graph_in):
     """Replace the whole plant record, e.g. from the workbook import."""
     _write_all(domain.normalize({table: graph_in.get(table) or [] for table in records.ORDER}))
+    _ensure_attributes()
     return counts()

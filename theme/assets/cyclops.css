@@ -371,3 +371,30 @@ html.ipac-dark .anvil-role-login-divider::after { background: #334155; }
 .cy-check ul { margin: 0; padding-left: 16px; color: var(--cy-muted); font-size: 12px; }
 .bc-note-warn { color: #b45309; }
 .cy-takeaway { margin: 0; padding: 12px 16px; border-left: 3px solid #f59e0b; border-radius: 8px; background: rgba(245, 158, 11, 0.1); color: var(--cy-ink); font-size: 14px; }
+
+.cy-presscard.cy-running { border-color: #16a34a; }
+.cy-presscard.cy-stopped { background: #fef2f2; border-color: #dc2626; }
+.cy-floor-actions { display: flex; gap: 6px; margin-top: 8px; }
+.cy-floor-board { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.cy-floor-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.cy-kpi { padding: 12px 14px; border: 1px solid var(--cy-line); border-radius: 12px; background: linear-gradient(180deg, rgba(30, 58, 95, 0.04), transparent); }
+.cy-kpi span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cy-muted); }
+.cy-kpi b { display: block; margin-top: 4px; font-size: 22px; font-variant-numeric: tabular-nums; color: var(--bc-navy, #1e3a5f); }
+.cy-floorcard .cy-metrics { margin: 6px 0; font-size: 12px; color: var(--cy-muted); }
+.cy-prog { height: 6px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin: 8px 0 4px; }
+.cy-prog-bar { height: 100%; background: linear-gradient(90deg, #16a34a, #22c55e); border-radius: inherit; }
+.cy-alert { margin-top: 8px; padding: 6px 8px; border-radius: 8px; background: #fef2f2; color: #b91c1c; font-size: 12px; font-weight: 600; }
+.cy-demo { margin-bottom: 10px; }
+.cy-timeline ul { margin: 0; padding: 0; list-style: none; }
+.cy-timeline li { padding: 6px 0; border-bottom: 1px solid var(--cy-line); font-size: 13px; }
+.cy-timeline li span { display: inline-block; min-width: 48px; color: var(--cy-muted); font-variant-numeric: tabular-nums; }
+.cy-timeline .cy-evt-ok { color: var(--cy-ink); }
+.cy-audit-wrap { overflow: auto; }
+.cy-table.cy-audit td, .cy-table.cy-audit th { vertical-align: top; }
+.cy-table.cy-audit td[rowspan] { background: rgba(241, 245, 249, 0.6); white-space: nowrap; }
+.cy-table-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; width: 100%; }
+.cy-table-footer .anvil-component { width: auto !important; }
+.cy-mini { font: inherit; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--cy-line); background: var(--bc-surface, #fff); color: inherit; cursor: pointer; }
+.cy-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.cy-row.cy-unread b { font-weight: 750; }
+html.ipac-dark .cy-presscard.cy-stopped, html.craftify-theme-dark .cy-presscard.cy-stopped { background: rgba(220, 38, 38, 0.12); }

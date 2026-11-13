@@ -9,6 +9,7 @@ and sends local entries back as UTC, so nothing here depends on a time zone.
 """
 
 import copy
+import datetime
 import re
 import unicodedata
 
@@ -40,26 +41,27 @@ SETTING_PREFIX = "setting::"
 STATUS_TONE = {
     "Active": "ok", "Running": "ok", "Done": "ok", "Closed": "ok", "Released": "ok", "Standard": "std", "Approved": "ok",
     "Incomplete": "warn", "No code": "warn", "Open": "warn", "Trial": "warn", "Trial only": "warn", "No recipe": "warn",
-    "Planned": "muted", "In progress": "ok", "Quarantined": "warn", "Stopped": "warn",
+    "Planned": "muted", "In progress": "ok", "Quarantined": "warn", "Stopped": "warn", "Idle": "muted",
     "Cannot produce": "bad", "Check dates": "bad", "No stop time": "bad", "Blocked": "bad",
 }
 PREFIX = {
     "items": ("ITM", 5), "molds": ("MLD", 4), "machines": ("MCH", 2), "recipes": ("REC", 4), "production_orders": ("PO", 5),
     "production_runs": ("RUN", 5), "lots": ("LOT", 6), "stoppages": ("STP", 5), "item_categories": ("CAT", 2),
     "machine_types": ("MTY", 2), "shifts": ("SHF", 2), "stoppage_causes": ("CAU", 2), "scrap_reasons": ("SCR", 2), "personnel": ("PER", 3),
-    "person_roles": ("ROL", 2), "units": ("UNT", 2), "changeovers": ("CHG", 5),
+    "person_roles": ("ROL", 2), "units": ("UNT", 2), "changeovers": ("CHG", 5), "variant_attributes": ("VAT", 2),
 }
 SETTING_TABLES = {
     "shift": "shifts", "cause": "stoppage_causes", "reason": "scrap_reasons", "category": "item_categories",
     "machineType": "machine_types", "person": "personnel", "role": "person_roles", "unit": "units",
+    "attribute": "variant_attributes",
 }
 CREATES = {
     "new-item": ("items",), "clone-item": ("items", "recipes"), "new-mold": ("molds",), "new-machine": ("machines",),
     "add-recipe": ("recipes", "molds"), "clone-recipe": ("recipes",), "new-order": ("production_orders",),
-    "add-run": ("production_runs",), "add-output-lot": ("lots",), "receive-lot": ("lots",), "add-stoppage": ("stoppages",),
-    "save-setting": tuple(SETTING_TABLES.values()),
+    "add-run": ("production_runs",), "log-shift": ("production_runs",), "add-output-lot": ("lots",), "receive-lot": ("lots",),
+    "add-stoppage": ("stoppages",), "save-setting": tuple(SETTING_TABLES.values()),
 }
-WHOLE_ACTIONS = {}
+WHOLE_ACTIONS = {"new-item": ("items",), "edit-item": ("items",), "clone-item": ("items",)}
 LOT_NUMBER_ACTIONS = ("receive-lot", "add-output-lot", "edit-lot")
 KIND_TABLE = {
     "item": "items", "mold": "molds", "machine": "machines", "recipe": "recipes", "order": "production_orders",
@@ -154,8 +156,9 @@ _DEFAULTS = {
     "personnel": {"name": "", "roleId": "", "status": "active", "machineIds": []},
     "person_roles": {"name": "", "runsMachines": False, "status": "active"},
     "units": {"name": "", "status": "active"},
+    "variant_attributes": {"name": "", "status": "active"},
     "items": {"name": "", "type": "SFG", "categoryId": "", "uomId": "", "erpCode": "", "approvedMachineIds": [], "supplier": "",
-              "properties": {}, "status": "active", "notes": ""},
+              "properties": {}, "status": "active", "notes": "", "parentId": "", "attributes": []},
     "molds": {"name": "", "cavities": None, "shotWeight": None, "location": "", "status": "in use", "notes": ""},
     "recipes": {"itemId": "", "moldId": "", "machineId": "", "status": "approved", "standard": False, "cycle": None,
                 "cooling": "", "screwRpm": "", "temps": {}, "settings": [], "px": "", "py": "", "printPieces": "", "printTotal": "",
@@ -205,6 +208,7 @@ def reindex(graph):
         "lotsByItem": group_by(graph.get("lots") or [], "itemId"),
         "lotsByRun": group_by(graph.get("lots") or [], "runId"),
         "ordersByItem": group_by(graph.get("production_orders") or [], "itemId"),
+        "itemsByParent": group_by(graph.get("items") or [], "parentId"),
         "attached": group_by(graph.get("machines") or [], "attachedToId"),
         "consumers": {},
         "changeoversByMachine": group_by(graph.get("changeovers") or [], "machineId"),
@@ -477,6 +481,8 @@ def item_row(graph, item):
         "usedIn": len(live(index["recipesUsing"].get(item["id"]) or [])),
         "colors": uniq([color_label(index, code) for recipe in running for code in colorants(index, recipe)]),
         "supplier": item.get("supplier") or "",
+        "parent": name_of(index, "items", item.get("parentId")) if item.get("parentId") else "",
+        "parentId": item.get("parentId") or "",
     }
     row.update(_status(item_status(graph, item)))
     return row
@@ -817,6 +823,179 @@ def overview(graph, who="all"):
     }
 
 
+def elapsed_text(start, now):
+    """How long a run has been going, from two ISO UTC moments."""
+    begin, finish = records.parse_moment(start), records.parse_moment(now)
+    if begin is None or finish is None or finish < begin:
+        return ""
+    minutes = int((finish - begin).total_seconds() // 60)
+    hours, mins = divmod(minutes, 60)
+    if hours:
+        return "%sh %sm" % (hours, mins)
+    if minutes:
+        return "%sm" % minutes
+    return "under a minute"
+
+
+def floor_state(graph, machine):
+    """Running, idle, or stopped. An open stoppage counts as stopped even when a run is still open."""
+    if machine.get("status") == "retired":
+        return "Retired"
+    if open_stoppage(graph, machine["id"]):
+        return "Stopped"
+    if open_run(graph, machine["id"]):
+        return "Running"
+    return "Idle"
+
+
+def run_gaps(run):
+    """What a shift log can still fill in. Listed for the operator; none of these block a save."""
+    gaps = []
+    if not (run.get("inputs") or []):
+        gaps.append("No consumed lot")
+    if run.get("cavities") is None:
+        gaps.append("No cavity count")
+    if run.get("good") is None:
+        gaps.append("No good-piece count yet")
+    return gaps
+
+
+def _due_soon(order, today):
+    due = order.get("dueDate") or ""
+    if not due or order.get("status") not in OPEN_ORDERS:
+        return False
+    try:
+        day = datetime.date.fromisoformat(due[:10])
+        start = datetime.date.fromisoformat((today or "")[:10])
+    except ValueError:
+        return False
+    return day <= start + datetime.timedelta(days=7)
+
+
+def floor_view(graph, now, today):
+    """The live board: one card per machine that stands on its own, from the open runs and stoppages."""
+    index = reindex(graph)
+    presses = [machine for machine in graph.get("machines") or [] if not machine.get("attachedToId") and machine.get("status") != "retired"]
+    presses.sort(key=lambda machine: (machine.get("name") or "").lower())
+    cards = []
+    for machine in presses:
+        run = open_run(graph, machine["id"])
+        stop = open_stoppage(graph, machine["id"])
+        recipe = index["recipes"].get(run.get("recipeId")) if run else None
+        order = index["production_orders"].get(run.get("orderId")) if run else None
+        state = floor_state(graph, machine)
+        cause = index["stoppage_causes"].get(stop.get("causeId")) if stop else None
+        qty = (order or {}).get("quantity")
+        good = run.get("good") if run else None
+        progress = None
+        if good is not None and qty:
+            try:
+                progress = min(100, int(100 * float(good) / float(qty)))
+            except (TypeError, ValueError, ZeroDivisionError):
+                progress = None
+        cards.append({
+            "id": machine["id"], "name": machine.get("name") or machine["id"], "location": machine.get("location") or "",
+            "state": state, "tone": {"Running": "ok", "Stopped": "bad", "Idle": "muted"}.get(state, "muted"),
+            "run": run["id"] if run else "", "order": run.get("orderId") if run else "", "orderLabel": (order or {}).get("erpOrderNo") or (run.get("orderId") if run else ""),
+            "recipe": run.get("recipeId") if run else "", "item": name_of(index, "items", recipe.get("itemId")) if recipe else "",
+            "itemId": (recipe or {}).get("itemId") or "",
+            "mold": name_of(index, "molds", recipe.get("moldId")) if recipe else "",
+            "cycleSec": num(recipe.get("cycle")) if recipe else None,
+            "operator": name_of(index, "personnel", run.get("operatorId")) if run and run.get("operatorId") else "",
+            "operatorId": run.get("operatorId") if run else "",
+            "shift": name_of(index, "shifts", run.get("shiftId")) if run and run.get("shiftId") else "",
+            "shiftId": run.get("shiftId") if run else "",
+            "startedAt": run.get("startedAt") if run else "", "elapsed": elapsed_text(run.get("startedAt"), now) if run else "",
+            "good": good, "orderQty": qty, "progress": progress,
+            "pph": pieces_per_hour(index, recipe) if recipe else None,
+            "stoppage": stop.get("id") if stop else "", "cause": (cause or {}).get("name") or "",
+            "stoppedSince": stop.get("startedAt") if stop else "", "stoppedFor": elapsed_text(stop.get("startedAt"), now) if stop else "",
+            "gaps": run_gaps(run) if run else [],
+            "barrelTemp": 215 if state == "Running" else None,
+        })
+    due = sorted((order for order in graph.get("production_orders") or [] if _due_soon(order, today)), key=lambda order: order.get("dueDate") or "")
+    no_good = [run for run in graph.get("production_runs") or [] if run.get("startedAt") and not run.get("endedAt") and run.get("good") is None]
+    counts = {
+        "running": sum(1 for card in cards if card["state"] == "Running"),
+        "idle": sum(1 for card in cards if card["state"] == "Idle"),
+        "stopped": sum(1 for card in cards if card["state"] == "Stopped"),
+    }
+    board = {
+        "now": now or "", "today": today or "",
+        "counts": counts,
+        "machines": cards,
+        "dueSoon": [{"id": order["id"], "item": name_of(index, "items", order.get("itemId")), "due": order.get("dueDate") or "",
+                     "erp": order.get("erpOrderNo") or "", "status": cap(order.get("status"))} for order in due[:8]],
+        "down": [{"id": card["id"], "name": card["name"], "cause": card["cause"], "since": card["stoppedSince"], "for": card["stoppedFor"]}
+                 for card in cards if card["state"] == "Stopped"][:8],
+        "noGood": [{"id": run["id"], "machine": name_of(index, "machines", machine_of_run(index, run)),
+                    "item": name_of(index, "items", item_of_run(index, run)), "elapsed": elapsed_text(run.get("startedAt"), now)}
+                   for run in no_good[:8]],
+        "demo": False,
+    }
+    return floor_with_demo(board)
+
+
+_DEMO_SCENES = (
+    {"state": "Running", "tone": "ok", "item": "Closure 38 mm", "mold": "MLD-1204", "recipe": "REC-DEMO-1", "orderLabel": "SO-24018",
+     "operator": "Nikos P.", "shift": "Morning", "elapsed": "4h 12m", "good": 18400, "orderQty": 36000, "progress": 51, "pph": 720,
+     "cycleSec": 9.8, "barrelTemp": 218, "gaps": []},
+    {"state": "Stopped", "tone": "bad", "item": "Jar 250 ml", "mold": "MLD-0881", "recipe": "REC-DEMO-2", "orderLabel": "SO-24002",
+     "operator": "Elena K.", "shift": "Morning", "elapsed": "1h 05m", "cause": "Heater band", "stoppedFor": "22m", "good": 4200, "orderQty": 24000,
+     "progress": 18, "pph": 540, "cycleSec": 11.2, "barrelTemp": 205, "gaps": ["No good-piece count yet"]},
+    {"state": "Running", "tone": "ok", "item": "Measuring cup", "mold": "MLD-0402", "recipe": "REC-DEMO-3", "orderLabel": "SO-24031",
+     "operator": "Ada L.", "shift": "Morning", "elapsed": "2h 40m", "good": 9600, "orderQty": 12000, "progress": 80, "pph": 1080,
+     "cycleSec": 7.4, "barrelTemp": 232, "gaps": []},
+    {"state": "Idle", "tone": "muted", "item": "", "mold": "", "recipe": "", "orderLabel": "", "operator": "", "shift": "", "elapsed": "",
+     "good": None, "orderQty": None, "progress": None, "pph": None, "cycleSec": None, "barrelTemp": None, "gaps": []},
+)
+
+
+def floor_with_demo(board):
+    """When nothing is running on the real plant, show a realistic preview board for walkthroughs."""
+    counts = board.get("counts") or {}
+    live = (counts.get("running") or 0) + (counts.get("stopped") or 0)
+    if live:
+        board["demo"] = False
+        good = sum(card.get("good") or 0 for card in board.get("machines") or [] if card.get("state") == "Running")
+        board["kpis"] = {
+            "goodToday": good or "—",
+            "downtime": sum(1 for card in board.get("machines") or [] if card.get("state") == "Stopped"),
+            "ordersDue": len(board.get("dueSoon") or []),
+            "utilization": int(round(100 * (counts.get("running") or 0) / max(1, len(board.get("machines") or [])))),
+        }
+        return board
+    machines = list(board.get("machines") or [])
+    if not machines:
+        return board
+    painted = []
+    for index, card in enumerate(machines):
+        scene = dict(_DEMO_SCENES[index % len(_DEMO_SCENES)])
+        painted.append({**card, **scene, "demoSlot": True})
+    board = dict(board)
+    board["machines"] = painted
+    board["demo"] = True
+    board["counts"] = {
+        "running": sum(1 for card in painted if card.get("state") == "Running"),
+        "idle": sum(1 for card in painted if card.get("state") == "Idle"),
+        "stopped": sum(1 for card in painted if card.get("state") == "Stopped"),
+    }
+    board["timeline"] = [
+        {"at": "10:42", "text": "Press 2 stopped · Heater band", "tone": "bad"},
+        {"at": "10:18", "text": "Press 1 started order SO-24018", "tone": "ok"},
+        {"at": "09:55", "text": "Press 3 changeover finished", "tone": "muted"},
+        {"at": "09:12", "text": "Lot LOT-8821 received", "tone": "muted"},
+    ]
+    board["dueSoon"] = board.get("dueSoon") or [
+        {"id": "PO-DEMO-1", "item": "Closure 38 mm", "due": board.get("today") or "", "erp": "SO-24018", "status": "Released"},
+        {"id": "PO-DEMO-2", "item": "Jar 250 ml", "due": board.get("today") or "", "erp": "SO-24002", "status": "Released"},
+    ]
+    board["down"] = [{"id": card["id"], "name": card["name"], "cause": card.get("cause") or "", "since": "", "for": card.get("stoppedFor") or ""}
+                     for card in painted if card.get("state") == "Stopped"][:4]
+    board["kpis"] = {"goodToday": "32,200", "downtime": "0.6 h", "ordersDue": len(board["dueSoon"]), "utilization": 68}
+    return board
+
+
 # Details ----------------------------------------------------------------------------------------
 
 def _flow_recipe(graph, recipe):
@@ -953,6 +1132,10 @@ def detail_item(graph, code):
         "kind": "item", "missing": False, "id": item["id"], "name": item.get("name") or "", "status": status, "tone": tone(status),
         "type": item.get("type") or "", "typeLabel": TYPE_LABEL.get(item.get("type"), ""), "categoryId": item.get("categoryId") or "",
         "category": category_name(index, item), "role": role, "uom": unit_of(index, item["id"]), "uomId": item.get("uomId") or "", "erpCode": item.get("erpCode") or "",
+        "parentId": item.get("parentId") or "", "parentName": name_of(index, "items", item.get("parentId")) if item.get("parentId") else "",
+        "attributes": [{"id": entry.get("attributeId") or "", "name": name_of(index, "variant_attributes", entry.get("attributeId")),
+                        "value": entry.get("value") or ""} for entry in item.get("attributes") or []],
+        "variants": [item_row(graph, child) for child in index["itemsByParent"].get(code) or []],
         "supplier": item.get("supplier") or "", "itemStatus": item.get("status") or "active", "notes": item.get("notes") or "",
         "catalog": properties.get("catalog", True), "properties": _properties(item, role),
         "link": link if link.startswith(("https://", "http://")) else "",
@@ -1173,6 +1356,7 @@ def settings_view(graph):
         "machineTypes": [dict(entry) for entry in graph.get("machine_types") or []],
         "roles": [dict(entry) for entry in graph.get("person_roles") or []],
         "units": [dict(entry) for entry in graph.get("units") or []],
+        "variantAttributes": [dict(entry) for entry in graph.get("variant_attributes") or []],
         "personnel": [dict(entry, roleLabel=name_of(index, "person_roles", entry["roleId"]) if entry.get("roleId") else "",
                            machines=[name_of(index, "machines", code) for code in entry.get("machineIds") or []])
                       for entry in graph.get("personnel") or []],
@@ -1277,6 +1461,8 @@ def choices(graph):
         "types": [{"value": key, "label": label} for key, label in ITEM_TYPES],
         "roles": [{"value": key, "label": label} for key, label in ROLES],
         "uoms": _options(graph.get("units") or [], keep=_active),
+        "products": _options(items, lambda entry: "%s (%s)" % (entry.get("name") or entry["id"], entry["id"]), _active),
+        "variantAttributes": _options(graph.get("variant_attributes") or [], keep=_active),
         "statuses": [{"value": value, "label": cap(value)} for value in STATUSES],
         "recipeStatuses": [{"value": value, "label": cap(value)} for value in RECIPE_STATUSES],
         "moldStatuses": [{"value": value, "label": cap(value)} for value in MOLD_STATUSES],
@@ -1343,6 +1529,52 @@ def _moment_error(payload, start_key, end_key, start_label, end_label, required=
     return None
 
 
+def _parent_error(graph, item, parent_id):
+    if not parent_id:
+        return None
+    if parent_id == item.get("id"):
+        return "A product cannot be its own variant."
+    seen = set()
+    cursor = parent_id
+    while cursor:
+        if cursor == item.get("id") or cursor in seen:
+            return "That parent would make a loop."
+        seen.add(cursor)
+        parent = _get(graph, "items", cursor)
+        if parent is None:
+            return "Choose the shared product from the list."
+        cursor = parent.get("parentId") or ""
+    return None
+
+
+def _attribute_values(graph, payload):
+    active = {entry["id"]: entry for entry in graph.get("variant_attributes") or [] if entry.get("status") != "retired"}
+    values = []
+    for key, value in payload.items():
+        if not str(key).startswith("attr::"):
+            continue
+        code = str(key)[6:]
+        if code not in active:
+            return None, "Choose a variant attribute from the list."
+        written = text(value)
+        if written:
+            values.append({"attributeId": code, "value": written})
+    return values, None
+
+
+def ensure_variant_attributes(graph):
+    """The starting attribute names, only when the plant has none yet. Existing items are left alone."""
+    if graph.get("variant_attributes"):
+        return []
+    made = []
+    graph["variant_attributes"] = []
+    for name in ("Customer", "Pack size", "Color"):
+        entry = {"id": new_code(graph, "variant_attributes"), "name": name, "status": "active"}
+        graph["variant_attributes"].append(entry)
+        made.append(entry["id"])
+    return made
+
+
 def _item_fields(graph, item, payload):
     name = text(payload.get("name"))
     if not name:
@@ -1377,6 +1609,17 @@ def _item_fields(graph, item, payload):
     if properties.get("catalog") is False:
         properties["catalog"] = True
     item["properties"] = properties
+    if "parentId" in payload:
+        parent_id = text(payload.get("parentId"))
+        error = _parent_error(graph, item, parent_id)
+        if error:
+            return error
+        item["parentId"] = parent_id
+    if any(str(key).startswith("attr::") for key in payload):
+        values, error = _attribute_values(graph, payload)
+        if error:
+            return error
+        item["attributes"] = values
     return None
 
 
@@ -1780,7 +2023,9 @@ def action_add_run(graph, payload):
     graph["production_runs"].append(run)
     dirty = {"production_runs": [run["id"]]}
     _order_progress(graph, run["orderId"], dirty)
-    return _redirect("run", run["id"], dirty)
+    result = _redirect("run", run["id"], dirty)
+    result["gaps"] = run_gaps(run)
+    return result
 
 
 def action_edit_run(graph, payload):
@@ -1791,6 +2036,79 @@ def action_edit_run(graph, payload):
     if error:
         return {"error": error}
     return _refresh({"production_runs": [run["id"]]})
+
+
+def _shift_payload(run, payload, closing):
+    """Order, recipe, shift, and start stay as they are on an open run. The clock fills a new run."""
+    merged = dict(payload)
+    if run.get("id"):
+        for key, field in (("order", "orderId"), ("recipe", "recipeId"), ("shiftId", "shiftId"), ("operatorId", "operatorId")):
+            if not text(merged.get(key)):
+                merged[key] = run.get(field) or ""
+        if not text(merged.get("startedAt")):
+            merged["startedAt"] = run.get("startedAt") or ""
+        if not text(merged.get("good")) and not closing:
+            merged["good"] = "" if run.get("good") is None else run.get("good")
+        if "cavities" not in payload:
+            merged["cavities"] = "" if run.get("cavities") is None else run.get("cavities")
+        if "cycle" not in payload:
+            merged["cycle"] = "" if run.get("cycle") is None else run.get("cycle")
+        if "notes" not in payload:
+            merged["notes"] = run.get("notes") or ""
+    if closing:
+        merged["endedAt"] = text(merged.get("endedAt"))
+    else:
+        merged["endedAt"] = ""
+    return merged
+
+
+def _apply_scrap(graph, run, payload):
+    reason, quantity = text(payload.get("scrapReason")), text(payload.get("scrapQty"))
+    if not reason and not quantity:
+        return None
+    if _get(graph, "scrap_reasons", reason) is None:
+        return "Choose the scrap reason."
+    amount = num(quantity)
+    if amount is None or amount <= 0:
+        return "Give the scrapped quantity."
+    run.setdefault("scrap", []).append({"reasonId": reason, "quantity": amount})
+    return None
+
+
+def action_log_shift(graph, payload):
+    """Good pieces, scrap, and who was on the machine. A missing lot or cavity count is listed, not refused."""
+    index = _ix(graph)
+    machine_code = text(payload.get("machine")) or (text(payload.get("contextId")) if payload.get("contextKind") == "floor" else "")
+    if _get(graph, "machines", machine_code) is None and payload.get("contextKind") != "run":
+        return {"error": "Choose the machine."}
+    closing = text(payload.get("close")) in ("yes", "true", "1")
+    run = None
+    if payload.get("contextKind") == "run":
+        run = _get(graph, "production_runs", payload.get("contextId"))
+    if run is None and machine_code:
+        run = open_run(graph, machine_code)
+    dirty = {"production_runs": []}
+    if run is None:
+        run = dict(copy.deepcopy(_DEFAULTS["production_runs"]), id=new_code(graph, "production_runs"))
+        graph["production_runs"].append(run)
+        fresh = True
+    else:
+        fresh = False
+    error = _run_fields(graph, run, _shift_payload(run, payload, closing))
+    if error:
+        if fresh:
+            graph["production_runs"] = [entry for entry in graph["production_runs"] if entry["id"] != run["id"]]
+        return {"error": error}
+    error = _apply_scrap(graph, run, payload)
+    if error:
+        if fresh:
+            graph["production_runs"] = [entry for entry in graph["production_runs"] if entry["id"] != run["id"]]
+        return {"error": error}
+    dirty["production_runs"].append(run["id"])
+    _order_progress(graph, run["orderId"], dirty)
+    result = _refresh(dirty)
+    result["gaps"] = run_gaps(run)
+    return result
 
 
 def action_delete_run(graph, payload):
@@ -2057,7 +2375,7 @@ ACTIONS = {
     "set-standard": action_set_standard, "clone-recipe": action_clone_recipe, "delete-recipe": action_delete_recipe,
     "add-input": action_add_input, "edit-input": action_edit_input, "remove-input": action_remove_input,
     "new-order": action_new_order, "edit-order": action_edit_order, "delete-order": action_delete_order,
-    "add-run": action_add_run, "edit-run": action_edit_run, "delete-run": action_delete_run,
+    "add-run": action_add_run, "edit-run": action_edit_run, "log-shift": action_log_shift, "delete-run": action_delete_run,
     "add-scrap": action_add_scrap, "remove-scrap": action_remove_scrap,
     "add-run-input": action_add_run_input, "remove-run-input": action_remove_run_input, "add-output-lot": action_add_output_lot,
     "receive-lot": action_receive_lot, "edit-lot": action_edit_lot, "delete-lot": action_delete_lot,

@@ -449,16 +449,13 @@ class Screen:
                     % (info.get("count") or 0, Layout.esc((info.get("title") or "")[:1].lower() + (info.get("title") or "")[1:]), Layout.esc(info.get("benefit")), Layout.esc(Nav.path(self.kind)))))
 
         editing = {"on_edit": self._edit_stoppage, "edit_on_click": True} if self.kind == "stoppage" else {}
-        table = Tables.mount_remote(self.kind, Tables.columns_for(self.kind), fields, gap, on_reply, **editing)
+        table = Tables.mount_remote(self.kind, Tables.columns_for(self.kind), fields, gap, on_reply,
+                                    on_excel=self._download_excel, **editing)
         self._table = table
-        footer_actions = LinearPanel(spacing_above="none", spacing_below="none")
-        footer_actions.add_component(Layout.button("Download CSV", lambda **e: self._download("csv")))
-        footer_actions.add_component(Layout.button("Download Excel", lambda **e: self._download("xlsx"), primary=True))
         Layout.body(card, banner, table)
-        Layout.footer(card, Label(text="Exports respect the filters above."), footer_actions)
         self.show(card)
 
-    def _download(self, fmt):
+    def _download_excel(self):
         filters = []
         table = getattr(self, "_table", None)
         if table is not None:
@@ -468,7 +465,7 @@ class Screen:
             except Exception:
                 filters = []
         try:
-            media = anvil.server.call("cyclops_export", self.kind, fmt, filters, self.query.get("gap") or "")
+            media = anvil.server.call("cyclops_export", self.kind, "xlsx", filters, self.query.get("gap") or "")
         except Exception as error:
             Notification(str(error) or "The export could not be built.", style="danger", timeout=5).show()
             return

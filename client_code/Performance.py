@@ -5,7 +5,7 @@ from anvil import *
 from craftify_library.CustomComponents.ChartCard import ChartCard
 from craftify_library.CustomComponents.EChart import EChart
 from craftify_library.CustomComponents.KpiCard import KpiCard
-from cyclops_app import Format, Layout, Nav
+from cyclops_app import Format, Layout, Nav, Tables
 
 TABS = (
     ("time", "Time"), ("stoppages", "Stoppages"), ("changeovers", "Changeovers"), ("scrap", "Scrap"),
@@ -24,6 +24,25 @@ def _n(value):
 
 def _pct(value):
     return "—" if value is None else "%s%%" % Format.trim(value)
+
+
+def _cause_table_rows(rows):
+    total = sum(row["hours"] for row in rows) or 1
+    return [{
+        "cause": row["cause"],
+        "group": row["group"] or "—",
+        "kind": "Planned" if row["planned"] else "Unplanned",
+        "count": row["count"],
+        "hours": row["hours"],
+        "share": round(100.0 * row["hours"] / total, 1),
+    } for row in rows]
+
+
+def _open_machine(data, tab=None):
+    code = data.get("id")
+    if not code:
+        return
+    Nav.go("machine", code, query={"tab": tab} if tab else None)
 
 
 def _chart(title, subtitle, options, height="320px"):
@@ -209,7 +228,6 @@ class PerformancePage:
         rows = self.data.get("causes") or []
         if not rows:
             return [Layout.empty_state("No stoppages in this period.")]
-        total = sum(row["hours"] for row in rows) or 1
         chart = _chart("Hours lost by cause", "Blue: planned stops. Red: breakdowns and other unplanned stops. Grey: no cause yet.", {
             "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
             "grid": {"left": 170, "right": 40, "top": 12, "bottom": 28},
@@ -218,12 +236,8 @@ class PerformancePage:
                         "data": [{"value": row["hours"], "itemStyle": {"color": "#94a3b8" if not row["group"] else ("#3b82f6" if row["planned"] else "#ef4444")}}
                                  for row in rows]}],
         }, height="%dpx" % max(220, 30 * len(rows) + 60))
-        table = "".join("<tr><td>%s</td><td>%s</td><td>%s</td><td class='cy-num'>%s</td><td class='cy-num'>%s h</td><td class='cy-num'>%s%%</td></tr>" % (
-            Layout.esc(row["cause"]), Layout.esc(row["group"] or "—"), "Planned" if row["planned"] else "Unplanned",
-            row["count"], Format.trim(row["hours"]), Format.trim(round(100.0 * row["hours"] / total, 1))) for row in rows)
         card = Layout.section("Causes", "Stoppages taken from the log's notes carry an auto-classified cause; open one on the Stoppages page to correct it.")
-        Layout.body(card, Layout.html("<table class='cy-table'><thead><tr><th>Cause</th><th>Group</th><th>Kind</th><th class='cy-num'>Stops</th>"
-                                      "<th class='cy-num'>Hours</th><th class='cy-num'>Share</th></tr></thead><tbody>%s</tbody></table>" % table))
+        Layout.body(card, Tables.mount_report(_cause_table_rows(rows), Tables.columns_perf_causes()))
         return [chart, card]
 
     # Changeovers --------------------------------------------------------------------------
@@ -285,12 +299,9 @@ class PerformancePage:
             Nav.go("changeover")
 
     def _kinds_card(self, data):
-        rows = "".join("<tr><td>%s</td><td class='cy-num'>%s</td><td class='cy-num'>%s h</td><td class='cy-num'>%s</td></tr>" % (
-            Layout.esc(row["label"]), _n(row["count"]), _n(row["hours"]), "%s h" % Format.trim(row["median"]) if row.get("median") is not None else "—")
-            for row in data.get("kinds") or [])
+        rows = data.get("kinds") or []
         card = Layout.section("By kind of change", "A mold change is told from a color or material change by the mold and inputs on the two recipes.")
-        Layout.body(card, Layout.html("<table class='cy-table'><thead><tr><th>Kind</th><th class='cy-num'>Changes</th><th class='cy-num'>Lost</th>"
-                                      "<th class='cy-num'>Median</th></tr></thead><tbody>%s</tbody></table>" % rows))
+        Layout.body(card, Tables.mount_report(rows, Tables.columns_perf_changeover_kinds()))
         return card
 
     def _when_chart(self, data):
@@ -321,24 +332,10 @@ class PerformancePage:
         rows = data.get("byMachine") or []
         if not rows:
             return None
-        body = "".join("<tr><td><a href='javascript:void(0)' data-nav='%s'>%s</a></td><td class='cy-num'>%s</td><td class='cy-num'>%s h</td>"
-                       "<td class='cy-num'>%s</td></tr>" % (Layout.esc(Nav.path("machine", row["id"]) + "?tab=changeovers"), Layout.esc(row["machine"]),
-                                                            _n(row["count"]), _n(row["hours"]),
-                                                            "%s h" % Format.trim(row["median"]) if row.get("median") is not None else "—")
-                       for row in rows)
-        card = Layout.section("By machine", "Most production lost first. Open a machine for its changeovers.")
-        Layout.body(card, Layout.interactive("<table class='cy-table'><thead><tr><th>Machine</th><th class='cy-num'>Changes</th>"
-                                             "<th class='cy-num'>Lost</th><th class='cy-num'>Median</th></tr></thead><tbody>%s</tbody></table>" % body,
-                                             self._on_machine_nav))
+        card = Layout.section("By machine", "Most production lost first. Click a row to open that machine's changeovers.")
+        Layout.body(card, Tables.mount_report(rows, Tables.columns_perf_changeover_machines(),
+                                              on_row=lambda row: _open_machine(row, "changeovers")))
         return card
-
-    def _on_machine_nav(self, mode, node):
-        if mode == "nav":
-            target = Layout.attr(node, "data-nav") or ""
-            path, _, query = target.partition("?")
-            parts = [part for part in path.split("/") if part]
-            if len(parts) == 2:
-                Nav.go("machine", parts[1], query={"tab": query.split("=")[-1]} if query else None)
 
     def _change_months(self, data):
         months = data.get("byMonth") or {}
@@ -398,11 +395,8 @@ class PerformancePage:
             "series": [{"type": "bar", "data": [row["pct"] for row in rows], "itemStyle": {"color": "#0f766e"},
                         "label": {"show": True, "position": "right", "formatter": "{c}%"}}],
         }, height="%dpx" % max(220, 26 * len(rows) + 60))
-        table = "".join("<tr><td>%s</td><td class='cy-num'>%s</td><td class='cy-num'>%s</td><td class='cy-num'>%s</td><td class='cy-num'>%s</td></tr>" % (
-            Layout.esc(row["machine"]), _n(row["used"]), _pct(row["pct"]), _n(row["oneShiftDays"]), _n(row["idleDays"])) for row in rows)
-        card = Layout.section("Shifts and idle days", "One-shift days ran a single shift; idle days had no run at all.")
-        Layout.body(card, Layout.html("<table class='cy-table'><thead><tr><th>Machine</th><th class='cy-num'>Shifts run</th><th class='cy-num'>Used</th>"
-                                      "<th class='cy-num'>One-shift days</th><th class='cy-num'>Idle days</th></tr></thead><tbody>%s</tbody></table>" % table))
+        card = Layout.section("Shifts and idle days", "One-shift days ran a single shift; idle days had no run at all. Click a row to open the machine.")
+        Layout.body(card, Tables.mount_report(rows, Tables.columns_perf_capacity(), on_row=_open_machine))
         return [chart, card, self._fit()]
 
     def _fit(self):

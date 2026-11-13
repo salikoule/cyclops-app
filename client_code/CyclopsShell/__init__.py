@@ -177,6 +177,18 @@ class CyclopsShell(CyclopsShellTemplate):
             account_mfa_build=account_mfa_panel,
         )
         self.add_component(self._settings)
+        self._settings.set_event_handler("profile_photo_changed", self._on_account_identity)
+        self._settings.set_event_handler("display_name_changed", self._on_account_identity)
+
+    def _on_account_identity(self, **event_args):
+        footer = getattr(self, "footer_panel", None)
+        if footer is None:
+            return
+        for component in footer.get_components():
+            refresh = getattr(component, "refresh_identity", None) or getattr(component, "refresh_avatar", None)
+            if callable(refresh):
+                refresh()
+                return
 
     def open_settings(self, section=None):
         if section in (None, "", "settings"):

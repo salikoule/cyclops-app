@@ -4,6 +4,7 @@ import anvil.server
 from anvil import *
 from tabulator.Tabulator import Tabulator
 
+from craftify_library.CraftifyUtils import craftify_table as cf_table
 from cyclops_app import Format, Layout, Nav
 
 Tabulator.modules = set(Tabulator.modules) | {"Ajax"}
@@ -311,7 +312,101 @@ def columns_for(kind, hide=()):
     return [column for column in columns if column.get("field") not in hidden]
 
 
-def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False):
+def _median_hours(cell, **params):
+    value = _value(cell)
+    if value is None or value == "":
+        return _empty()
+    return Layout.esc(Format.trim(value)) + " h"
+
+
+def columns_perf_causes():
+    return [
+        _col("Cause", "cause", min_width=160, width_grow=2, formatter=_clip),
+        _col("Group", "group", width=120, formatter=_text),
+        _list_col("Kind", "kind", 110),
+        _num_col("Stops", "count", 88),
+        dict(_num_col("Hours", "hours", 88), formatter=_suffix(" h")),
+        dict(_num_col("Share", "share", 88), formatter=_suffix("%")),
+    ]
+
+
+def columns_perf_changeover_kinds():
+    return [
+        _col("Kind", "label", min_width=160, width_grow=2, formatter=_text),
+        _num_col("Changes", "count", 100),
+        dict(_num_col("Lost", "hours", 88), formatter=_suffix(" h")),
+        dict(_num_col("Median", "median", 100), formatter=_median_hours),
+    ]
+
+
+def columns_perf_changeover_machines():
+    return [
+        dict(_machine_col("machine"), min_width=140, width_grow=1),
+        _num_col("Changes", "count", 100),
+        dict(_num_col("Lost", "hours", 88), formatter=_suffix(" h")),
+        dict(_num_col("Median", "median", 100), formatter=_median_hours),
+    ]
+
+
+def columns_perf_capacity():
+    return [
+        dict(_machine_col("machine"), min_width=140, width_grow=1),
+        _num_col("Shifts run", "used", 110),
+        dict(_num_col("Used", "pct", 88), formatter=_suffix("%")),
+        _num_col("One-shift days", "oneShiftDays", 130),
+        _num_col("Idle days", "idleDays", 100),
+    ]
+
+
+def report_height(count):
+    if count <= 12:
+        return None
+    return "%dpx" % min(520, 40 * count + 48)
+
+
+def mount_report(rows, columns, height=None, on_row=None, on_excel=None):
+    """Read-only report table: sortable columns, no header filters, optional row action."""
+    table = Tabulator()
+    data = []
+    for index, row in enumerate(rows or []):
+        entry = dict(row)
+        entry.setdefault("_row", "r%d" % index)
+        data.append(entry)
+    count = len(data)
+    if height is None:
+        height = report_height(count)
+    use_page = count > 25
+    table.options = {
+        "pagination": use_page,
+        "pagination_size": 25,
+        "pagination_size_selector": [25, 50, 100] if use_page else False,
+        "pagination_counter": "rows" if use_page else False,
+        "layout": "fitColumns",
+        "index": "_row",
+        "placeholder": "No rows.",
+    }
+    if height:
+        table.height = height
+    table.columns = [{**column, "header_filter": False} for column in columns]
+    table.data = data
+    if on_row is not None:
+
+        def on_row_click(sender, **event_args):
+            row = event_args.get("row")
+            if row is None:
+                return
+            try:
+                on_row(dict(row.getData()))
+            except Exception:
+                pass
+
+        table.set_event_handler("row_click", on_row_click)
+    if on_excel is not None:
+        cf_table.attach_excel_download(table, on_excel)
+    return Layout.flat(table)
+
+
+def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False, on_excel=None):
     """``on_edit(row_data)`` adds an Edit button to each row; the rest of the row still opens the record,
     unless ``edit_on_click`` (stoppages, which have no page of their own)."""
     table = Tabulator()
@@ -326,9 +421,14 @@ def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False
         "index": "id",
         "placeholder": "No rows match.",
     }
-    table.columns = _with_edit(columns, on_edit)
+    cf_table.apply_table_theme(table)
+    built = _with_edit(columns, on_edit)
+    table.columns = cf_table.stamp_columns(built)
     table.data = rows or []
     _open_rows(table, kind, on_edit, edit_on_click)
+    cf_table.attach_toolbar(table, remote=False)
+    if on_excel is not None:
+        cf_table.attach_excel_download(table, on_excel)
     return Layout.flat(table)
 
 
@@ -352,8 +452,8 @@ def _remote_column(column, fields):
     elif field in fields["filter"]:
         column["header_filter"] = "input"
         column["header_filter_params"] = dict(_NO_AUTOFILL)
-        if column.get("formatter") in (_when, _day):
-            column["header_filter_placeholder"] = "15 Mar 2025, Mar 2025, 2025"
+        if field in cf_table.DATE_FIELDS or column.get("formatter") in (_when, _day):
+            column["header_filter_placeholder"] = cf_table.DATE_FILTER_HINT
     else:
         column["header_filter"] = False
     return column
@@ -366,7 +466,7 @@ def _reply_value(response, key):
         return None
 
 
-def mount_remote(kind, columns, fields, gap=None, on_reply=None, height="640px", on_edit=None, edit_on_click=False):
+def mount_remote(kind, columns, fields, gap=None, on_reply=None, height="640px", on_edit=None, edit_on_click=False, on_excel=None):
     """A list read a page at a time from the ``/list/<kind>`` endpoint; ``on_reply(total, banner)`` sees each page."""
     table = Tabulator()
     if height:
@@ -401,9 +501,14 @@ def mount_remote(kind, columns, fields, gap=None, on_reply=None, height="640px",
         "index": "id",
         "placeholder": "No rows match.",
     }
-    table.columns = _with_edit([_remote_column(column, fields) for column in columns], on_edit)
+    cf_table.apply_table_theme(table)
+    built = _with_edit([_remote_column(column, fields) for column in columns], on_edit)
+    table.columns = cf_table.stamp_columns(built, fields)
     _open_rows(table, kind, on_edit, edit_on_click)
     table.on("dataLoadError", failed)
+    cf_table.attach_toolbar(table, remote=True)
+    if on_excel is not None:
+        cf_table.attach_excel_download(table, on_excel)
     return Layout.flat(table)
 
 

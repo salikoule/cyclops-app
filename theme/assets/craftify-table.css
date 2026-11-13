@@ -1,0 +1,213 @@
+/* Craftify data tables — toolbar and column filter row (UI-for-Anvil style) */
+
+.tabulator.craftify-table {
+  border-radius: 0 0 12px 12px;
+}
+
+.cf-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+html.ipac-dark .cf-table-toolbar,
+html.craftify-theme-dark .cf-table-toolbar,
+html[data-theme="dark"] .cf-table-toolbar {
+  border-bottom-color: #243044;
+  background: #0f172a;
+}
+
+.cf-table-search {
+  flex: 1 1 200px;
+  min-width: 160px;
+  max-width: 320px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.cf-table-search:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #3b82f6 18%, transparent);
+}
+
+html.ipac-dark .cf-table-search,
+html.craftify-theme-dark .cf-table-search {
+  background: #111827;
+  border-color: #334155;
+  color: #e8eef6;
+}
+
+.cf-table-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.tabulator.craftify-table .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter,
+.tabulator .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter {
+  margin-top: 2px;
+}
+
+.tabulator.craftify-table .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter::before,
+.tabulator .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter::before {
+  content: "Filter";
+  display: block;
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
+.tabulator.craftify-table .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter input,
+.tabulator.craftify-table .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter select,
+.tabulator .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter input,
+.tabulator .tabulator-header .tabulator-col.cf-filter-col .tabulator-header-filter select {
+  min-height: 32px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.tabulator .tabulator-header .tabulator-col.cf-filter-date .tabulator-header-filter::before {
+  display: none !important;
+  content: none !important;
+}
+
+.tabulator .tabulator-header .tabulator-col.cf-filter-date .tabulator-header-filter input.cf-date-range-value {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
+.cf-date-range {
+  position: relative;
+  width: 100%;
+}
+
+.cf-date-range-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cf-date-range-trigger:hover {
+  border-color: #cbd5e1;
+}
+
+.cf-date-range-trigger i {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.cf-date-range-panel {
+  position: fixed;
+  z-index: 4000;
+  min-width: 260px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+.cf-date-range-panel[hidden] {
+  display: none !important;
+}
+
+.cf-date-range-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.cf-date-range-caption {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.cf-date-range-row input[type="date"] {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.cf-date-range-row input[type="date"]:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #3b82f6 18%, transparent);
+}
+
+.cf-date-range-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cf-date-range-clear {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: #3b82f6;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+html.ipac-dark .cf-date-range-trigger,
+html.craftify-theme-dark .cf-date-range-trigger,
+html[data-theme="dark"] .cf-date-range-trigger {
+  background: #111827;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+html.ipac-dark .cf-date-range-panel,
+html.craftify-theme-dark .cf-date-range-panel,
+html[data-theme="dark"] .cf-date-range-panel {
+  background: #0f172a;
+  border-color: #334155;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
+html.ipac-dark .cf-date-range-row input[type="date"],
+html.craftify-theme-dark .cf-date-range-row input[type="date"] {
+  background: #111827;
+  border-color: #334155;
+  color: #e2e8f0;
+}

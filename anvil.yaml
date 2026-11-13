@@ -327,6 +327,10 @@ db_schema:
       client_hidden: true
       name: mfa
       type: simpleObject
+    - admin_ui: {order: 9, width: 160}
+      client_hidden: true
+      name: profile_photo
+      type: media
     indexes: []
     server: full
     title: Users
@@ -368,6 +372,7 @@ native_deps:
     })();
     </script>
     <link rel="stylesheet" href="_/theme/craftify-full-theme.css">
+    <link rel="stylesheet" href="_/theme/craftify-table.css">
     <link rel="stylesheet" href="_/theme/tabulator_styles.css">
     <link rel="stylesheet" href="_/theme/coach.css">
     <link rel="stylesheet" href="_/theme/craftify-theme.css">

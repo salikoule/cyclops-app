@@ -86,23 +86,16 @@ def chosen(column, values):
     return build
 
 
-def moment(column):
-    def build(text):
-        start, end = period_of(text)
-        begin, finish = performance.local_bounds(start, end)
-        return {column: q.between(begin, finish, min_inclusive=True, max_inclusive=False)}
-    return build
+def _normalize_typed_date(text):
+    """Drop filter hint tails, clock times, and extra whitespace before parsing."""
+    cleaned = _text(text)
+    if "," in cleaned:
+        cleaned = cleaned.split(",", 1)[0].strip() or cleaned
+    cleaned = re.sub(r"\s*\d{1,2}:\d{2}(?::\d{2})?\s*", " ", cleaned)
+    return cleaned.strip()
 
 
-def day(column):
-    def build(text):
-        start, end = period_of(text)
-        return {column: q.between(start, end, min_inclusive=True, max_inclusive=False)}
-    return build
-
-
-def period_of(text):
-    """The days a typed date covers, as (first day, day after): "2025", "Mar 2025", "15 Mar 2025", "15/3/2025", "2025-03"."""
+def _period_words(text):
     words = [part for part in re.split(r"[\s/.,-]+", _text(text).lower()) if part]
     numbers, month = [], None
     for word in words:
@@ -114,8 +107,10 @@ def period_of(text):
             raise _NoMatch()
     year = next((number for number in numbers if number > 31), None)
     rest = [number for number in numbers if number != year]
-    if year is None:
-        year = datetime.date.today().year
+    return words, month, year, rest, numbers
+
+
+def _period_span(year, month, rest, numbers, words):
     try:
         if month is None and len(rest) >= 2:
             day_number, month = rest[0], rest[1]
@@ -133,8 +128,85 @@ def period_of(text):
         if numbers == [year]:
             return datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1)
     except ValueError:
-        pass
+        raise _NoMatch()
     raise _NoMatch()
+
+
+def _iso_period_range(text):
+    """``YYYY-MM-DD..YYYY-MM-DD`` from the date-range picker (end date inclusive)."""
+    raw = _text(text)
+    if ".." not in raw:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+            day = datetime.date.fromisoformat(raw)
+            return [(day, day + datetime.timedelta(days=1))]
+        return None
+    left, right = raw.split("..", 1)
+    try:
+        start = datetime.date.fromisoformat(left.strip())
+        end_inclusive = datetime.date.fromisoformat(right.strip())
+    except ValueError:
+        return None
+    if end_inclusive < start:
+        raise _NoMatch()
+    return [(start, end_inclusive + datetime.timedelta(days=1))]
+
+
+def period_ranges(text):
+    """Half-open day ranges for a header date filter — one range, or two when the year is omitted."""
+    iso = _iso_period_range(text)
+    if iso is not None:
+        return iso
+    cleaned = _normalize_typed_date(text)
+    words, month, year, rest, numbers = _period_words(cleaned)
+    if year is not None:
+        return [_period_span(year, month, rest, numbers, words)]
+    today = datetime.date.today()
+    years = []
+    if month is not None or rest:
+        years = [today.year, today.year - 1]
+    elif numbers:
+        years = numbers
+    else:
+        years = [today.year]
+    spans = []
+    for try_year in years:
+        try:
+            spans.append(_period_span(try_year, month, rest, numbers, words))
+        except _NoMatch:
+            continue
+    if not spans:
+        raise _NoMatch()
+    return list(dict.fromkeys(spans))
+
+
+def period_of(text):
+    """The primary day range for ``text`` (first of :func:`period_ranges`)."""
+    return period_ranges(text)[0]
+
+
+def _between_ranges(column, ranges, *, as_moment):
+    clauses = []
+    for start, end in ranges:
+        if as_moment:
+            begin, finish = performance.local_bounds(start, end)
+            clauses.append(q.between(begin, finish, min_inclusive=True, max_inclusive=False))
+        else:
+            clauses.append(q.between(start, end, min_inclusive=True, max_inclusive=False))
+    if len(clauses) == 1:
+        return {column: clauses[0]}
+    return {column: q.any_of(*clauses)}
+
+
+def moment(column):
+    def build(text):
+        return _between_ranges(column, period_ranges(text), as_moment=True)
+    return build
+
+
+def day(column):
+    def build(text):
+        return _between_ranges(column, period_ranges(text), as_moment=False)
+    return build
 
 
 # What each list reads ----------------------------------------------------------------------------
@@ -258,7 +330,7 @@ LISTS = {
 
 def capabilities():
     """Which fields each list can filter and sort, and the labels of its pick-list filters, for the page's column headers."""
-    return {kind: {"filter": sorted(spec["filter"]), "sort": sorted(spec["sort"]),
+    return {kind: {"filter": sorted(spec["filter"].keys()), "sort": sorted(spec["sort"].keys()),
                    "choices": {field: build.choices for field, build in spec["filter"].items() if hasattr(build, "choices")}}
             for kind, spec in LISTS.items()}
 

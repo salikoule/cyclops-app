@@ -68,12 +68,105 @@ def linked(column, table, field="name"):
     return lambda text: {column: q.any_of(*_rows_where(table, **{field: _like(text)}))}
 
 
+def _match_rows(table, fields, text):
+    """Rows of ``table`` whose ``code`` or other listed fields contain ``text``."""
+    found, seen = [], set()
+    for field in fields:
+        try:
+            rows = _rows_where(table, **{field: _like(text)})
+        except _NoMatch:
+            continue
+        for row in rows:
+            code = row["code"]
+            if code in seen:
+                continue
+            seen.add(code)
+            found.append(row)
+    if not found:
+        raise _NoMatch()
+    return found
+
+
+def linked_any(column, table, fields=("code", "name")):
+    """A link filter that matches any of ``fields`` (an item's code or its name)."""
+    return lambda text: {column: q.any_of(*_match_rows(table, fields, text))}
+
+
 def through(column, table, link, target, field="name"):
     """Rows whose ``column`` links to a ``table`` row whose ``link`` points at a matching ``target`` row."""
     def build(text):
         targets = _rows_where(target, **{field: _like(text)})
         return {column: q.any_of(*_rows_where(table, **{link: q.any_of(*targets)}))}
     return build
+
+
+def through_any(column, table, link, target, fields=("code", "name")):
+    """Like :func:`through`, matching the target on any of ``fields``."""
+    def build(text):
+        targets = _match_rows(target, fields, text)
+        return {column: q.any_of(*_rows_where(table, **{link: q.any_of(*targets)}))}
+    return build
+
+
+def _compare_parts(text):
+    raw = _text(text).replace(",", ".")
+    op = ">="
+    for token in (">=", "<=", ">", "<", "="):
+        if raw.startswith(token):
+            op = token
+            raw = raw[len(token):].strip()
+            break
+    if raw == "":
+        raise _NoMatch()
+    try:
+        number = float(raw)
+    except ValueError:
+        raise _NoMatch()
+    return op, number
+
+
+def _compare_query(op, number):
+    if op == ">=":
+        return q.greater_than_or_equal_to(number)
+    if op == ">":
+        return q.greater_than(number)
+    if op == "<=":
+        return q.less_than_or_equal_to(number)
+    if op == "<":
+        return q.less_than(number)
+    if op == "=":
+        return number
+    raise _NoMatch()
+
+
+def compare(column):
+    """A stored number: the header value is ``>= 2``, ``< 0.5``, and so on."""
+    def build(text):
+        op, number = _compare_parts(text)
+        return {column: _compare_query(op, number)}
+    return build
+
+
+def clock(start_col, end_col):
+    """Hours between two moments. Applied after the query, because the duration is not stored."""
+    def build(text):
+        op, number = _compare_parts(text)
+        return {"__clock__": (start_col, end_col, op, number)}
+    return build
+
+
+def _clock_ok(hours, op, number):
+    if hours is None:
+        return False
+    if op == ">=":
+        return hours >= number
+    if op == ">":
+        return hours > number
+    if op == "<=":
+        return hours <= number
+    if op == "<":
+        return hours < number
+    return hours == number
 
 
 def chosen(column, values):
@@ -266,6 +359,16 @@ def _changeover_context(plant, rows):
 RUNNING = {"Running": None, "Done": q.not_(None)}
 OPEN = {"Open": None, "Closed": q.not_(None)}
 
+
+def _stoppage_item():
+    """Stoppages whose run's recipe is for an item matching the code or the name."""
+    def build(text):
+        items = _match_rows("items", ("code", "name"), text)
+        recipes = _rows_where("recipes", item=q.any_of(*items))
+        runs = _rows_where("production_runs", recipe=q.any_of(*recipes))
+        return {"run": q.any_of(*runs)}
+    return build
+
 LISTS = {
     "item": {
         "table": "items", "order": ("code", True), "context": _item_context, "row": domain.item_row,
@@ -287,25 +390,27 @@ LISTS = {
     "recipe": {
         "table": "recipes", "order": ("code", True), "context": lambda plant, rows: store._recipe_context(plant), "row": domain.recipe_row,
         "sort": {"id": "code", "cycle": "cycle_s"},
-        "filter": {"id": code(), "item": linked("item", "items"), "machine": linked("machine", "machines"), "mold": linked("mold", "molds", "code")},
+        "filter": {"id": code(), "item": linked_any("item", "items"), "machine": linked("machine", "machines"), "mold": linked("mold", "molds", "code")},
     },
     "order": {
         "table": "production_orders", "order": ("code", True), "context": _order_context, "row": domain.order_row,
         "sort": {"id": "code", "quantity": "quantity", "due": "due_date", "erp": "erp_order_no"},
-        "filter": {"id": code(), "item": linked("item", "items"), "erp": contains("erp_order_no"), "due": day("due_date"),
+        "filter": {"id": code(), "item": linked_any("item", "items"), "erp": contains("erp_order_no"), "due": day("due_date"),
                    "status": chosen("status", {domain.cap(status): status for status in domain.ORDER_STATUSES})},
     },
     "run": {
         "table": "production_runs", "order": ("started_at", False), "context": _run_context, "row": domain.run_row,
         "sort": {"id": "code", "start": "started_at", "good": "good_qty"},
         "filter": {"id": code(), "start": moment("started_at"), "order": linked("order", "production_orders", "code"),
-                   "machine": through("recipe", "recipes", "machine", "machines"), "item": through("recipe", "recipes", "item", "items"),
+                   "machine": through("recipe", "recipes", "machine", "machines"), "item": through_any("recipe", "recipes", "item", "items"),
+                   "hours": clock("started_at", "ended_at"),
                    "operator": linked("operator", "personnel"), "status": chosen("ended_at", RUNNING)},
     },
     "stoppage": {
         "table": "stoppages", "order": ("started_at", False), "context": _stoppage_context, "row": domain.stoppage_row,
         "sort": {"start": "started_at", "end": "ended_at"},
-        "filter": {"start": moment("started_at"), "end": moment("ended_at"), "machine": linked("machine", "machines"),
+        "filter": {"start": moment("started_at"), "end": moment("ended_at"), "hours": clock("started_at", "ended_at"),
+                   "machine": linked("machine", "machines"), "item": _stoppage_item(),
                    "cause": linked("cause", "stoppage_causes"), "category": linked("cause", "stoppage_causes", "category"),
                    "description": contains("description"), "fix": contains("fix"), "reportedBy": linked("reported_by", "personnel"),
                    "status": chosen("ended_at", OPEN)},
@@ -313,15 +418,16 @@ LISTS = {
     "lot": {
         "table": "lots", "order": ("code", True), "context": _lot_context, "row": domain.lot_row,
         "sort": {"id": "code", "number": "number", "quantity": "quantity", "received": "received_at"},
-        "filter": {"id": code(), "number": contains("number"), "item": linked("item", "items"), "origin": contains("origin"),
+        "filter": {"id": code(), "number": contains("number"), "item": linked_any("item", "items"), "origin": contains("origin"),
                    "received": moment("received_at"), "run": linked("run", "production_runs", "code"),
                    "status": chosen("status", {domain.cap(status): status for status in domain.LOT_STATUSES})},
     },
     "changeover": {
         "table": "changeovers", "order": ("started_at", False), "context": _changeover_context, "row": domain.changeover_row,
         "sort": {"id": "code", "start": "started_at", "hours": "lost_h"},
-        "filter": {"id": code(), "start": moment("started_at"), "machine": linked("machine", "machines"), "from": linked("from_item", "items"),
-                   "to": linked("to_item", "items"), "kind": chosen("kind", {label: key for key, label in domain.CHANGEOVER_KINDS}),
+        "filter": {"id": code(), "start": moment("started_at"), "hours": compare("lost_h"), "machine": linked("machine", "machines"),
+                   "from": linked_any("from_item", "items"), "to": linked_any("to_item", "items"),
+                   "kind": chosen("kind", {label: key for key, label in domain.CHANGEOVER_KINDS}),
                    "source": chosen("source", {label: key for key, label in domain.CHANGEOVER_SOURCES}),
                    "status": chosen("confidence", {"High": "high", "Medium": "medium", "Low": "low"}), "basis": contains("basis")},
     },
@@ -336,19 +442,42 @@ def capabilities():
 
 
 def _conditions(spec, filters, gap_ids):
-    found = {}
+    found, clocks = {}, []
     for entry in filters or []:
         build = spec["filter"].get(entry.get("field"))
         text = _text(entry.get("value"))
         if build is None or not text:
             continue
         for column, condition in build(text).items():
-            found.setdefault(column, []).append(condition)
+            if column == "__clock__":
+                clocks.append(condition)
+            else:
+                found.setdefault(column, []).append(condition)
     if gap_ids is not None:
         if not gap_ids:
             raise _NoMatch()
         found.setdefault("code", []).append(q.any_of(*gap_ids))
-    return {column: conditions[0] if len(conditions) == 1 else q.all_of(*conditions) for column, conditions in found.items()}
+    query = {column: conditions[0] if len(conditions) == 1 else q.all_of(*conditions) for column, conditions in found.items()}
+    return query, clocks
+
+
+def _filter_clock(rows, clocks):
+    if not clocks:
+        return rows
+    kept = []
+    for row in rows:
+        if all(_clock_ok(domain.span_hours(row[start], row[end]), op, number) for start, end, op, number in clocks):
+            kept.append(row)
+    return kept
+
+
+def _found(spec, filters, gap_ids, sorters):
+    conditions, clocks = _conditions(spec, filters, gap_ids)
+    columns = ["code"]
+    for start, end, _op, _number in clocks:
+        columns.extend((start, end))
+    found = list(_table(spec["table"]).search(q.fetch_only(*list(dict.fromkeys(columns))), *_ordering(spec, sorters), **conditions))
+    return _filter_clock(found, clocks)
 
 
 def _ordering(spec, sorters):
@@ -376,10 +505,9 @@ def matching_codes(kind, filters=None, gap=None):
         return None
     gap_ids, _banner = _gap(kind, gap)
     try:
-        conditions = _conditions(spec, filters, gap_ids)
+        found = _found(spec, filters, gap_ids, ())
     except _NoMatch:
         return []
-    found = _table(spec["table"]).search(q.fetch_only("code"), *_ordering(spec, ()), **conditions)
     return [row["code"] for row in found]
 
 
@@ -409,10 +537,9 @@ def page(kind, number=1, size=25, sorters=None, filters=None, gap=None):
     gap_ids, banner = _gap(kind, gap)
     reply = {"data": [], "last_page": 1, "last_row": 0, "banner": banner}
     try:
-        conditions = _conditions(spec, filters, gap_ids)
+        found = _found(spec, filters, gap_ids, sorters)
     except _NoMatch:
         return reply
-    found = _table(spec["table"]).search(q.fetch_only("code"), *_ordering(spec, sorters), **conditions)
     total = len(found)
     codes = [row["code"] for row in found[(number - 1) * size:number * size]]
     plant = store._plant()

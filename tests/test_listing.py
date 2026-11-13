@@ -41,6 +41,12 @@ def test_filter_hint_uses_only_the_first_date():
     assert listing.period_of("15 Mar 2025, Mar 2025, 2025") == (D(2025, 3, 15), D(2025, 3, 16))
 
 
+def test_compare_header_reads_the_operator():
+    assert listing._compare_parts(">= 2") == (">=", 2.0)
+    assert listing._compare_parts("< 0,5") == ("<", 0.5)
+    assert listing._compare_parts("8") == (">=", 8.0)
+
+
 def test_iso_date_range_from_picker():
     assert listing.period_ranges("2025-03-01..2025-03-31") == [(D(2025, 3, 1), D(2025, 4, 1))]
     assert listing.period_ranges("2025-03-15") == [(D(2025, 3, 15), D(2025, 3, 16))]

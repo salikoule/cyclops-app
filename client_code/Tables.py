@@ -102,6 +102,57 @@ def _day_col(title, field, width=120):
     return _col(title, field, width=width, formatter=_day, header_filter_func=_matches_shown(False))
 
 
+# Percentage bands a plant can retune. "high" means a larger number is better.
+PERCENT = {
+    "progress": ("high", 100, 50),
+    "scrapPct": ("low", 2, 5),
+    "performance": ("high", 95, 80),
+    "share": ("high", 15, 5),
+    "pct": ("high", 80, 50),
+}
+
+
+def _percent(direction="high", good=90, warn=70):
+    def formatter(cell, **params):
+        value = _value(cell)
+        if value is None or value == "":
+            return _empty()
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return _empty()
+        if direction == "low":
+            tone = "good" if number <= good else "warn" if number <= warn else "bad"
+        else:
+            tone = "good" if number >= good else "warn" if number >= warn else "bad"
+        return '<span class="cy-pct cy-%s">%s%%</span>' % (tone, Layout.esc(Format.trim(number)))
+    return formatter
+
+
+def _pct_col(title, field, width, key):
+    direction, good, warn = PERCENT[key]
+    return dict(_num_col(title, field, width), formatter=_percent(direction, good, warn))
+
+
+def _entity(code, name):
+    if not code and not name:
+        return _empty()
+    parts = ['<div class="cy-entity">']
+    if code:
+        parts.append('<div class="cy-entity-id">%s</div>' % Layout.esc(code))
+    if name:
+        parts.append('<div class="cy-entity-name">%s</div>' % Layout.esc(name))
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def _item(id_field="itemId"):
+    def formatter(cell, **params):
+        data = _data(cell)
+        return _entity(data.get(id_field) or "", _value(cell) or "")
+    return formatter
+
+
 def _suffix(unit):
     def formatter(cell, **params):
         value = _value(cell)
@@ -215,7 +266,7 @@ def columns_for(kind, hide=()):
     elif kind == "recipe":
         columns = [
             _col("ID", "id", width=112, formatter=_id("recipe")),
-            _col("Item", "item", min_width=190, formatter=_text),
+            _col("Item", "item", min_width=190, formatter=_item()),
             _machine_col(),
             _col("Mold", "mold", width=110, formatter=_id("mold")),
             {"title": "Colors", "field": "colors", "min_width": 140, "formatter": _pills("colorant")},
@@ -239,11 +290,11 @@ def columns_for(kind, hide=()):
     elif kind == "order":
         columns = [
             _col("ID", "id", width=110, formatter=_id("order")),
-            _col("Item", "item", min_width=200, formatter=_text),
+            _col("Item", "item", min_width=200, formatter=_item()),
             _status_col(120),
             _num_col("Quantity", "quantity", 100),
             _num_col("Made", "made", 90),
-            dict(_num_col("Done", "progress", 80), formatter=_suffix("%")),
+            _pct_col("Done", "progress", 80, "progress"),
             _day_col("Due", "due"),
             _col("ERP order", "erp", width=110, formatter=_text),
             _num_col("Runs", "runs", 70),
@@ -254,12 +305,12 @@ def columns_for(kind, hide=()):
             _when_col("Started", "start"),
             dict(_num_col("Hours", "hours", 82), formatter=_suffix(" h")),
             _machine_col(),
-            _col("Item", "item", min_width=140, width_grow=3, formatter=_clip),
+            _col("Item", "item", min_width=160, width_grow=3, formatter=_item()),
             _col("Order", "order", width=100, formatter=_text),
             _num_col("Good", "good", 86),
-            dict(_num_col("Scrap", "scrapPct", 84), formatter=_suffix("%")),
+            _pct_col("Scrap", "scrapPct", 84, "scrapPct"),
             _num_col("Pcs/h", "pph", 80),
-            dict(_num_col("Vs target", "performance", 100), formatter=_suffix("%")),
+            _pct_col("Vs target", "performance", 100, "performance"),
             _col("Operator", "operator", min_width=110, width_grow=1, formatter=_clip),
             _status_col(110),
         ]
@@ -269,7 +320,7 @@ def columns_for(kind, hide=()):
             _when_col("Restarted", "end"),
             dict(_num_col("Downtime", "hours", 104), formatter=_suffix(" h")),
             _machine_col(),
-            _col("Item", "item", min_width=110, width_grow=1, formatter=_clip),
+            _col("Item", "item", min_width=140, width_grow=1, formatter=_item()),
             _col("Cause", "cause", min_width=110, width_grow=1, formatter=_clip),
             _list_col("Category", "category", 110),
             _col("What was seen", "description", min_width=120, width_grow=3, formatter=_clip),
@@ -283,8 +334,8 @@ def columns_for(kind, hide=()):
             _when_col("Started", "start"),
             dict(_num_col("Lost", "hours", 80), formatter=_suffix(" h")),
             _machine_col(),
-            _col("From", "from", min_width=120, width_grow=2, formatter=_clip),
-            _col("To", "to", min_width=120, width_grow=2, formatter=_clip),
+            _col("From", "from", min_width=140, width_grow=2, formatter=_item("fromItemId")),
+            _col("To", "to", min_width=140, width_grow=2, formatter=_item("toItemId")),
             _list_col("Kind", "kind", 150),
             _list_col("Source", "source", 150),
             dict(_status_col(116), title="Confidence"),
@@ -299,7 +350,7 @@ def columns_for(kind, hide=()):
         columns = [
             _col("ID", "id", width=118, formatter=_id("lot")),
             _col("Lot", "number", width=120, formatter=_text),
-            _col("Item", "item", min_width=200, formatter=_text),
+            _col("Item", "item", min_width=200, formatter=_item()),
             _list_col("Origin", "origin", 110),
             _num_col("Quantity", "quantity", 100),
             _col("Unit", "uom", width=70, formatter=_text, header_filter=False),
@@ -326,7 +377,7 @@ def columns_perf_causes():
         _list_col("Kind", "kind", 110),
         _num_col("Stops", "count", 88),
         dict(_num_col("Hours", "hours", 88), formatter=_suffix(" h")),
-        dict(_num_col("Share", "share", 88), formatter=_suffix("%")),
+        _pct_col("Share", "share", 88, "share"),
     ]
 
 
@@ -352,7 +403,7 @@ def columns_perf_capacity():
     return [
         dict(_machine_col("machine"), min_width=140, width_grow=1),
         _num_col("Shifts run", "used", 110),
-        dict(_num_col("Used", "pct", 88), formatter=_suffix("%")),
+        _pct_col("Used", "pct", 88, "pct"),
         _num_col("One-shift days", "oneShiftDays", 130),
         _num_col("Idle days", "idleDays", 100),
     ]
@@ -417,6 +468,7 @@ def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False
         "pagination_size": 25,
         "pagination_size_selector": [25, 50, 100, True],
         "pagination_counter": "rows",
+        "header_filter_live_filter_delay": cf_table.FILTER_DELAY_MS,
         "layout": "fitColumns" if kind in _LOGS else "fitDataFill",
         "index": "id",
         "placeholder": "No rows match.",
@@ -496,7 +548,7 @@ def mount_remote(kind, columns, fields, gap=None, on_reply=None, height="640px",
         "ajax_content_type": "json",
         "ajax_params": {"gap": gap} if gap else {},
         "ajax_response": received,
-        "header_filter_live_filter_delay": 500,
+        "header_filter_live_filter_delay": cf_table.FILTER_DELAY_MS,
         "layout": "fitColumns" if kind in _LOGS else "fitDataFill",
         "index": "id",
         "placeholder": "No rows match.",

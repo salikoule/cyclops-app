@@ -461,12 +461,20 @@ def _conditions(spec, filters, gap_ids):
     return query, clocks
 
 
+def _moment_text(value):
+    if value is None or value == "":
+        return ""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
 def _filter_clock(rows, clocks):
     if not clocks:
         return rows
     kept = []
     for row in rows:
-        if all(_clock_ok(domain.span_hours(row[start], row[end]), op, number) for start, end, op, number in clocks):
+        if all(_clock_ok(domain.span_hours(_moment_text(row[start]), _moment_text(row[end])), op, number) for start, end, op, number in clocks):
             kept.append(row)
     return kept
 

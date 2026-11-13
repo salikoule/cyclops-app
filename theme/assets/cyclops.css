@@ -56,6 +56,14 @@ html[data-theme="dark"] {
 }
 html.ipac-dark .cy-block, html.ipac-dark .cy-tree-wrap { color: var(--cy-ink); }
 
+.cy-entity { display: flex; flex-direction: column; gap: 1px; line-height: 1.25; min-width: 0; }
+.cy-entity-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 650; color: var(--cy-ink); }
+.cy-entity-name { font-size: 12px; color: var(--cy-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cy-pct { font-weight: 700; }
+.cy-pct.cy-good { color: var(--cy-green); }
+.cy-pct.cy-warn { color: var(--cy-amber); }
+.cy-pct.cy-bad { color: var(--cy-red); }
+
 .cy-muted { color: var(--cy-muted); }
 .cy-empty { color: var(--cy-muted); opacity: 0.8; }
 .cy-clean { margin: 10px 0 0; }

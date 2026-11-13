@@ -303,7 +303,7 @@ def columns_for(kind, hide=()):
         columns = [
             _col("ID", "id", width=108, formatter=_id("run")),
             _when_col("Started", "start"),
-            dict(_num_col("Hours", "hours", 82), formatter=_suffix(" h")),
+            dict(_num_col("Hours", "hours", 132), formatter=_suffix(" h")),
             _machine_col(),
             _col("Item", "item", min_width=160, width_grow=3, formatter=_item()),
             _col("Order", "order", width=100, formatter=_text),
@@ -318,7 +318,7 @@ def columns_for(kind, hide=()):
         columns = [
             _when_col("Stopped", "start"),
             _when_col("Restarted", "end"),
-            dict(_num_col("Downtime", "hours", 104), formatter=_suffix(" h")),
+            dict(_num_col("Downtime", "hours", 140), formatter=_suffix(" h")),
             _machine_col(),
             _col("Item", "item", min_width=140, width_grow=1, formatter=_item()),
             _col("Cause", "cause", min_width=110, width_grow=1, formatter=_clip),
@@ -332,7 +332,7 @@ def columns_for(kind, hide=()):
         columns = [
             _col("ID", "id", width=108, formatter=_text),
             _when_col("Started", "start"),
-            dict(_num_col("Lost", "hours", 80), formatter=_suffix(" h")),
+            dict(_num_col("Lost", "hours", 132), formatter=_suffix(" h")),
             _machine_col(),
             _col("From", "from", min_width=140, width_grow=2, formatter=_item("fromItemId")),
             _col("To", "to", min_width=140, width_grow=2, formatter=_item("toItemId")),

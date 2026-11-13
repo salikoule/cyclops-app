@@ -24,7 +24,6 @@ SCREENS = (
     ("lot", "Lots", False, False),
     ("configure", "Configure", False, False),
     ("notify", "Notifications", True, False),
-    ("account", "Account", True, False),
     ("history", "Audit log", False, True),
     ("users", "Users", False, True),
 )
@@ -60,7 +59,7 @@ PATHS = {
     "floor": "/floor", "overview": "/overview", "performance": "/performance", "item": "/items",
     "mold": "/molds", "machine": "/machines", "recipe": "/recipes", "order": "/orders",
     "run": "/production", "stoppage": "/stoppages", "changeover": "/changeovers", "lot": "/lots",
-    "configure": "/configure", "notify": "/notifications", "account": "/account",
+    "configure": "/configure", "notify": "/notifications",
     "history": "/history", "users": "/users",
 }
 
@@ -70,7 +69,7 @@ def home_path(role, stored):
     for key in list(HOME_ORDER) + visible:
         if key in visible:
             return PATHS[key]
-    return "/account"
+    return "/floor"
 
 
 def can_open(role, stored, screen):

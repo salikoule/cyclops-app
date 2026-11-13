@@ -120,8 +120,6 @@ class Screen:
             self._history_page()
         elif self.kind == "notify":
             self._notifications()
-        elif self.kind == "account":
-            self._account()
         elif self.code:
             self._detail()
         else:
@@ -1198,7 +1196,7 @@ class Screen:
             )
         card = Layout.section("Notifications", "Maintenance and breakdowns you asked to hear about.",
                               actions=(Layout.button("Mark all read", self._mark_read),))
-        body = '<div class="cy-list">%s</div>' % "".join(bits) if bits else '<p class="cy-muted">Nothing yet. Turn alerts on from Account.</p>'
+        body = '<div class="cy-list">%s</div>' % "".join(bits) if bits else '<p class="cy-muted">Nothing yet. Turn alerts on from the account menu (Plant alerts).</p>'
         Layout.body(card, self.block(body))
         self.show(Layout.page_header("Notifications"), card)
 
@@ -1206,23 +1204,6 @@ class Screen:
         _call("cyclops_mark_notifications")
         Data.invalidate_session()
         self.render()
-
-    def _account(self):
-        prefs = _call("cyclops_notification_prefs") or {}
-        maintenance = CheckBox(text="Planned maintenance", checked=bool(prefs.get("maintenance")))
-        breakdowns = CheckBox(text="Breakdowns", checked=bool(prefs.get("breakdowns")))
-
-        def save_prefs(**event_args):
-            saved = _call("cyclops_save_notification_prefs", bool(maintenance.checked), bool(breakdowns.checked))
-            if saved is not None:
-                Notification("Notification settings saved.", style="success", timeout=3).show()
-
-        alerts = Layout.section("Notifications", "Stored in the app for the signed-in user. Email is sent as well when the Anvil email service can send.")
-        Layout.body(alerts, maintenance, breakdowns, Layout.button("Save", save_prefs, primary=True))
-        security = Layout.section("Password and two-factor authentication", "Open the account menu at the bottom of the sidebar, choose Account, then use Password and Two-factor authentication.")
-        Layout.body(security, Layout.note("Notification preferences stay on this page. Everything about signing in lives in account settings."))
-        self.show(Layout.page_header("Account", description=anvil.users.get_user()["email"] if anvil.users.get_user() else ""), alerts, security)
-
 
 def mount_overview(form, ctx):
     Screen(form, "overview", None, ctx).render()
@@ -1258,9 +1239,5 @@ def mount_history(form, ctx):
 
 def mount_notifications(form, ctx):
     Screen(form, "notify", None, ctx).render()
-
-
-def mount_account(form, ctx):
-    Screen(form, "account", None, ctx).render()
 
 

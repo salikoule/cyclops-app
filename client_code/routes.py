@@ -190,10 +190,13 @@ class NotificationsRoute(AppPage):
     screen = "notify"
 
 
-class AccountRoute(AppPage):
+class AccountRoute(Route):
     path = "/account"
-    form = "AccountForm"
-    screen = "account"
+
+    def before_load(self, **loader_args):
+        if anvil.users.get_user() is None:
+            raise Redirect(path="/login")
+        raise Redirect(path="/floor", query={"settings": "account"})
 
 
 class HistoryRoute(AppPage):

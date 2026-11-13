@@ -27,7 +27,6 @@ NAV = (
     "Setup",
     ("Configure", "configure", "fa:list-check", False),
     ("Notifications", "notify", "fa:bell", True),
-    ("Account", "account", "fa:user-gear", True),
     ("Audit log", "history", "fa:clock-rotate-left", True),
     ("Users", "users", "fa:users", True),
 )
@@ -162,6 +161,7 @@ class CyclopsShell(CyclopsShellTemplate):
         self.footer_panel.add_component(menu, full_width_row=True)
 
     def _build_settings(self):
+        from cyclops_app.AccountSettings import plant_alerts_panel
         from cyclops_app.Security import account_mfa_panel
 
         self._settings = SettingsOverlay(
@@ -169,7 +169,10 @@ class CyclopsShell(CyclopsShellTemplate):
             app_version="1.1",
             app_description="Production records for the injection floor.",
             default_section="plant",
-            extra_sections=({"id": "plant", "label": "Plant data", "build": _plant_section},),
+            extra_sections=(
+                {"id": "plant", "label": "Plant data", "build": _plant_section},
+                {"id": "alerts", "label": "Plant alerts", "build": plant_alerts_panel},
+            ),
             hidden_sections=("notifications", "ai", "data"),
             account_mfa_build=account_mfa_panel,
         )

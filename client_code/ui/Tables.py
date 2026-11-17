@@ -318,7 +318,8 @@ def columns_for(kind, hide=()):
         columns = [
             _col("ID", "id", width=108, formatter=_id("run")),
             _when_col("Started", "start"),
-            dict(_num_col("Hours", "hours", 96), formatter=_suffix(" h"), filter_kind="plain"),
+            _when_col("Ended", "end"),
+            dict(_num_col("Hours", "hours", 96), formatter=_suffix(" h")),
             _machine_col(),
             _col("Item", "item", min_width=160, width_grow=3, formatter=_item()),
             _col("Order", "order", width=100, formatter=_text),
@@ -519,8 +520,6 @@ def _remote_column(column, fields):
     elif field in fields["filter"]:
         column["header_filter"] = "input"
         column["header_filter_params"] = dict(_NO_AUTOFILL)
-        if field in cf_table.DATE_FIELDS or column.get("formatter") in (_when, _day):
-            column["header_filter_placeholder"] = cf_table.DATE_FILTER_HINT
     else:
         column["header_filter"] = False
     return column

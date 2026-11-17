@@ -183,19 +183,121 @@ def _compare_query(op, number):
     raise _NoMatch()
 
 
-def compare(column):
-    """A stored number: the header value is ``>= 2``, ``< 0.5``, and so on."""
-    def build(text):
+_CONDITION_OPS = ("equals", "notEqual", "greaterThan", "greaterThanOrEqual", "lessThan", "lessThanOrEqual", "inRange", "blank", "notBlank")
+_LEGACY_OPS = {">=": "greaterThanOrEqual", ">": "greaterThan", "<=": "lessThanOrEqual", "<": "lessThan", "=": "equals"}
+
+
+def _encoded_condition(text):
+    """``cf|equals|8`` or ``cf|inRange|2025-12-01|2025-12-31``. Empty when the text is an older filter."""
+    raw = _text(text)
+    if not raw.startswith("cf|"):
+        return None
+    bits = raw.split("|")
+    if len(bits) < 2 or bits[1] not in _CONDITION_OPS:
+        raise _NoMatch()
+    return bits[1], bits[2:]
+
+
+def _number_value(text):
+    raw = _text(text).replace(",", ".")
+    if raw == "":
+        raise _NoMatch()
+    try:
+        return float(raw)
+    except ValueError:
+        raise _NoMatch()
+
+
+def _whole(number):
+    return int(number) if number == int(number) else number
+
+
+def _condition_values(text):
+    """``(op, [numbers])`` from an AG Grid number condition, or from ``>= 2``."""
+    encoded = _encoded_condition(text)
+    if encoded is None:
         op, number = _compare_parts(text)
-        return {column: _compare_query(op, number)}
+        return _LEGACY_OPS[op], [number]
+    op, values = encoded
+    if op in ("blank", "notBlank"):
+        return op, []
+    if op == "inRange":
+        if len(values) < 2:
+            raise _NoMatch()
+        return op, [_number_value(values[0]), _number_value(values[1])]
+    if not values:
+        raise _NoMatch()
+    return op, [_number_value(values[0])]
+
+
+def _number_holds(value, op, values):
+    """Whether a displayed number satisfies one condition. Blanks fail every comparison."""
+    if op == "blank":
+        return value is None
+    if op == "notBlank":
+        return value is not None
+    if value is None:
+        return False
+    if op == "inRange":
+        low, high = values
+        if high < low:
+            low, high = high, low
+        return low <= value <= high
+    number = values[0]
+    if op == "equals":
+        return value == number
+    if op == "notEqual":
+        return value != number
+    if op == "greaterThan":
+        return value > number
+    if op == "greaterThanOrEqual":
+        return value >= number
+    if op == "lessThan":
+        return value < number
+    if op == "lessThanOrEqual":
+        return value <= number
+    raise _NoMatch()
+
+
+def _stored_number_query(op, values):
+    if op == "blank":
+        return None
+    if op == "notBlank":
+        return q.not_(None)
+    if op == "inRange":
+        low, high = values
+        if high < low:
+            low, high = high, low
+        return q.between(_whole(low), _whole(high), min_inclusive=True, max_inclusive=True)
+    number = _whole(values[0])
+    if op == "equals":
+        return number
+    if op == "notEqual":
+        return q.all_of(q.not_(None), q.not_(number))
+    if op == "greaterThan":
+        return q.greater_than(number)
+    if op == "greaterThanOrEqual":
+        return q.greater_than_or_equal_to(number)
+    if op == "lessThan":
+        return q.less_than(number)
+    if op == "lessThanOrEqual":
+        return q.less_than_or_equal_to(number)
+    raise _NoMatch()
+
+
+def compare(column):
+    """A stored number, compared the way an AG Grid number filter compares it."""
+    def build(text):
+        op, values = _condition_values(text)
+        return {column: _stored_number_query(op, values)}
     return build
 
 
 def clock(start_col, end_col):
-    """Hours between two moments. Applied after the query, because the duration is not stored."""
+    """Hours between two moments, compared as the number the cell shows. Applied after the query."""
     def build(text):
-        op, number = _compare_parts(text)
-        return {"__clock__": (start_col, end_col, op, number)}
+        op, values = _condition_values(text)
+        return {"__clock__": (start_col, end_col, op, values)}
     return build
 
 
@@ -533,15 +635,84 @@ def _between_ranges(column, ranges, *, as_moment):
     return {column: q.any_of(*clauses)}
 
 
+def _iso_day(text):
+    try:
+        return datetime.date.fromisoformat(_text(text))
+    except ValueError:
+        raise _NoMatch()
+
+
+def _date_window(op, values):
+    """A half-open day window for one date condition. ``from`` and ``until`` are open on one side."""
+    if op == "blank":
+        return ("blank",)
+    if op == "notBlank":
+        return ("notBlank",)
+    if not values or not values[0]:
+        raise _NoMatch()
+    start = _iso_day(values[0])
+    if op == "equals":
+        return ("within", start, start + datetime.timedelta(days=1))
+    if op == "greaterThan":
+        return ("from", start + datetime.timedelta(days=1))
+    if op == "greaterThanOrEqual":
+        return ("from", start)
+    if op == "lessThan":
+        return ("until", start)
+    if op == "lessThanOrEqual":
+        return ("until", start + datetime.timedelta(days=1))
+    if op == "notEqual":
+        return ("outside", start, start + datetime.timedelta(days=1))
+    if op == "inRange":
+        if len(values) < 2 or not values[1]:
+            raise _NoMatch()
+        end = _iso_day(values[1])
+        if end < start:
+            start, end = end, start
+        return ("within", start, end + datetime.timedelta(days=1))
+    raise _NoMatch()
+
+
+def _date_query(column, op, values, as_moment):
+    window = _date_window(op, values)
+    kind = window[0]
+    if kind == "blank":
+        return {column: None}
+    if kind == "notBlank":
+        return {column: q.not_(None)}
+
+    def edge(day):
+        if not as_moment:
+            return day
+        return performance.local_bounds(day, day)[0]
+
+    if kind == "within":
+        return _between_ranges(column, [(window[1], window[2])], as_moment=as_moment)
+    if kind == "from":
+        return {column: q.greater_than_or_equal_to(edge(window[1]))}
+    if kind == "until":
+        return {column: q.less_than(edge(window[1]))}
+    start, finish = edge(window[1]), edge(window[2])
+    return {column: q.any_of(q.less_than(start), q.greater_than_or_equal_to(finish))}
+
+
 def moment(column):
     def build(text):
-        return _between_ranges(column, period_ranges(text), as_moment=True)
+        encoded = _encoded_condition(text)
+        if encoded is None:
+            return _between_ranges(column, period_ranges(text), as_moment=True)
+        op, values = encoded
+        return _date_query(column, op, values, True)
     return build
 
 
 def day(column):
     def build(text):
-        return _between_ranges(column, period_ranges(text), as_moment=False)
+        encoded = _encoded_condition(text)
+        if encoded is None:
+            return _between_ranges(column, period_ranges(text), as_moment=False)
+        op, values = encoded
+        return _date_query(column, op, values, False)
     return build
 
 
@@ -630,6 +801,7 @@ LISTS = {
                  "recipes": _Rank(_mold_recipes)},
         "shown": domain.mold_status,
         "filter": {"name": any_of_fields("molds", ("code", "name")), "location": contains("location"),
+                   "cavities": compare("cavities"), "shot": compare("shot_weight_g"),
                    "status": shown(domain.MOLD_SHOWN)},
     },
     "machine": {
@@ -640,6 +812,7 @@ LISTS = {
         "filter": {"name": any_of_fields("machines", ("code", "name")), "euromap": contains("euromap"),
                    "type": link_named("machine_type", "machine_types"),
                    "attachedTo": linked("attached_to", "machines"),
+                   "changeover": compare("changeover_min"),
                    "status": shown(domain.MACHINE_SHOWN)},
     },
     "recipe": {
@@ -647,25 +820,28 @@ LISTS = {
         "sort": {"id": "code", "cycle": "cycle_s", "pph": _Rank(_recipe_pph)},
         "shown": domain.recipe_status,
         "filter": {"id": code(), "item": linked_any("item", "items"), "machine": linked("machine", "machines"),
-                   "mold": linked("mold", "molds", "code"), "status": shown(domain.RECIPE_SHOWN)},
+                   "mold": linked("mold", "molds", "code"), "cycle": compare("cycle_s"),
+                   "status": shown(domain.RECIPE_SHOWN)},
     },
     "order": {
         "table": "production_orders", "order": ("code", True), "context": _order_context, "row": domain.order_row,
         "sort": {"id": "code", "quantity": "quantity", "due": "due_date", "erp": "erp_order_no",
                  "made": _metric_rank("made", _order_totals), "progress": _metric_rank("progress", _order_totals),
                  "runs": _metric_rank("runs", _order_totals)},
-        "filter": {"id": code(), "item": linked_any("item", "items"), "erp": contains("erp_order_no"), "due": day("due_date"),
+        "filter": {"id": code(), "item": linked_any("item", "items"), "erp": contains("erp_order_no"),
+                   "quantity": compare("quantity"), "due": day("due_date"),
                    "status": chosen("status", {domain.cap(status): status for status in domain.ORDER_STATUSES})},
     },
     "run": {
         "table": "production_runs", "order": ("started_at", False), "context": _run_context, "row": domain.run_row,
-        "sort": {"id": "code", "start": "started_at", "good": "good_qty",
+        "sort": {"id": "code", "start": "started_at", "end": "ended_at", "good": "good_qty",
                  "hours": _span_rank("started_at", "ended_at", blank_zero=True),
                  "scrapPct": _metric_rank("scrapPct", _run_metrics), "pph": _metric_rank("pph", _run_metrics),
                  "performance": _metric_rank("performance", _run_metrics)},
-        "filter": {"id": code(), "start": moment("started_at"), "order": linked("order", "production_orders", "code"),
+        "filter": {"id": code(), "start": moment("started_at"), "end": moment("ended_at"),
+                   "order": linked("order", "production_orders", "code"),
                    "machine": through("recipe", "recipes", "machine", "machines"), "item": through_any("recipe", "recipes", "item", "items"),
-                   "hours": hours_text("started_at", "ended_at"),
+                   "hours": clock("started_at", "ended_at"), "good": compare("good_qty"),
                    "operator": linked("operator", "personnel"), "status": chosen("ended_at", RUNNING)},
     },
     "stoppage": {
@@ -681,7 +857,8 @@ LISTS = {
         "table": "lots", "order": ("code", True), "context": _lot_context, "row": domain.lot_row,
         "sort": {"id": "code", "number": "number", "quantity": "quantity", "received": "received_at", "used": _Rank(_lot_used)},
         "filter": {"id": code(), "number": contains("number"), "item": linked_any("item", "items"), "origin": contains("origin"),
-                   "received": moment("received_at"), "run": linked("run", "production_runs", "code"),
+                   "quantity": compare("quantity"), "received": moment("received_at"),
+                   "run": linked("run", "production_runs", "code"),
                    "status": chosen("status", {domain.cap(status): status for status in domain.LOT_STATUSES})},
     },
     "changeover": {
@@ -776,12 +953,19 @@ def _filter_shown_status(spec, rows, labels):
     return [row for row in rows if row["code"] in read and reader(graph, read[row["code"]]) in wanted]
 
 
+def _shown_hours_number(row, start, end):
+    text = _hours_shown(row, start, end)
+    if not text:
+        return None
+    return float(text)
+
+
 def _filter_clock(rows, clocks):
     if not clocks:
         return rows
     kept = []
     for row in rows:
-        if all(_clock_ok(domain.span_hours(_moment_text(row[start]), _moment_text(row[end])), op, number) for start, end, op, number in clocks):
+        if all(_number_holds(_shown_hours_number(row, start, end), op, values) for start, end, op, values in clocks):
             kept.append(row)
     return kept
 

@@ -47,6 +47,26 @@ def test_compare_header_reads_the_operator():
     assert listing._compare_parts("8") == (">=", 8.0)
 
 
+def test_number_condition_matches_the_shown_value():
+    assert listing._condition_values("cf|equals|8") == ("equals", [8.0])
+    assert listing._condition_values("cf|inRange|2|8,5") == ("inRange", [2.0, 8.5])
+    assert listing._condition_values("8") == ("greaterThanOrEqual", [8.0])
+    assert listing._stored_number_query("equals", [8.0]) == 8
+    assert listing._number_holds(8.0, "equals", [8.0])
+    assert not listing._number_holds(18.0, "equals", [8.0])
+    assert listing._number_holds(8.0, "inRange", [2.0, 8.0])
+    assert listing._number_holds(None, "blank", [])
+    assert not listing._number_holds(None, "notEqual", [8.0])
+
+
+def test_date_condition_is_a_calendar_day():
+    assert listing._date_window("equals", ["2025-12-29"]) == ("within", D(2025, 12, 29), D(2025, 12, 30))
+    assert listing._date_window("greaterThan", ["2025-12-29"]) == ("from", D(2025, 12, 30))
+    assert listing._date_window("inRange", ["2025-12-31", "2025-12-01"]) == ("within", D(2025, 12, 1), D(2026, 1, 1))
+    assert listing._date_window("blank", []) == ("blank",)
+    assert listing.moment("started_at")("29 Dec 2025")["started_at"] is not None
+
+
 def test_iso_date_range_from_picker():
     assert listing.period_ranges("2025-03-01..2025-03-31") == [(D(2025, 3, 1), D(2025, 4, 1))]
     assert listing.period_ranges("2025-03-15") == [(D(2025, 3, 15), D(2025, 3, 16))]

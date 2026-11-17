@@ -193,3 +193,166 @@ html.craftify-theme-dark .cf-date-range-row input[type="date"] {
   border-color: #334155;
   color: #e2e8f0;
 }
+
+.tabulator .tabulator-header .tabulator-col.cf-filter-number .tabulator-header-filter,
+.tabulator .tabulator-header .tabulator-col.cf-filter-when .tabulator-header-filter {
+  position: relative;
+}
+
+.tabulator .tabulator-header .cf-cond-model {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
+.cf-cond {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  min-height: 28px;
+}
+
+.cf-cond-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cf-cond-icon:hover,
+.cf-cond-icon:focus {
+  outline: none;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.cf-cond-icon.cf-cond-on {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.cf-cond-menu {
+  position: fixed;
+  z-index: 4000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 220px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+.cf-cond-menu[hidden] {
+  display: none !important;
+}
+
+.cf-cond-select,
+.cf-cond-entry,
+.cf-cond-to-value {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.cf-cond-entry:focus,
+.cf-cond-to-value:focus,
+.cf-cond-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #3b82f6 18%, transparent);
+}
+
+.cf-cond-entry[hidden],
+.cf-cond-to-value[hidden] {
+  display: none;
+}
+
+.cf-cond-clear {
+  align-self: stretch;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.cf-cond-clear:hover:not(:disabled) {
+  border-color: #1d4ed8;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.cf-cond-clear:disabled {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #94a3b8;
+  font-weight: 500;
+  cursor: default;
+}
+
+html.ipac-dark .cf-cond-icon:hover,
+html.craftify-theme-dark .cf-cond-icon:hover {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+html.ipac-dark .cf-cond-icon.cf-cond-on,
+html.craftify-theme-dark .cf-cond-icon.cf-cond-on {
+  background: #1e3a8a;
+  color: #bfdbfe;
+}
+
+html.ipac-dark .cf-cond-menu,
+html.craftify-theme-dark .cf-cond-menu,
+html.ipac-dark .cf-cond-select,
+html.craftify-theme-dark .cf-cond-select,
+html.ipac-dark .cf-cond-entry,
+html.craftify-theme-dark .cf-cond-entry,
+html.ipac-dark .cf-cond-to-value,
+html.craftify-theme-dark .cf-cond-to-value {
+  background: #111827;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+html.ipac-dark .cf-cond-clear,
+html.craftify-theme-dark .cf-cond-clear {
+  background: #0f172a;
+  border-color: #64748b;
+  color: #e2e8f0;
+}
+
+html.ipac-dark .cf-cond-clear:disabled,
+html.craftify-theme-dark .cf-cond-clear:disabled {
+  background: #111827;
+  border-color: #334155;
+  color: #64748b;
+}

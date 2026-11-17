@@ -54,3 +54,34 @@ def test_iso_date_range_from_picker():
 
 def test_plain_folds_accents_for_matching():
     assert listing._plain("Σταμάτησε") == "Σταματησε"
+
+
+def test_calculated_number_sorts_with_blanks_last():
+    rows = [{"code": "a"}, {"code": "b"}, {"code": "c"}]
+    spec = {"sort": {"n": listing._Rank(lambda found: {"a": 2, "b": None, "c": 1})}, "order": ("code", True)}
+    assert [row["code"] for row in listing._apply_ranks(spec, rows, [{"field": "n", "dir": "asc"}])] == ["c", "a", "b"]
+    assert [row["code"] for row in listing._apply_ranks(spec, rows, [{"field": "n", "dir": "desc"}])] == ["a", "c", "b"]
+
+
+def test_calculated_sort_does_not_become_a_query_column():
+    spec = {"sort": {"hours": listing._Rank(lambda found: {}, ("started_at", "ended_at")), "good": "good_qty"}, "order": ("started_at", False)}
+    assert listing._sort_columns(spec, [{"field": "hours", "dir": "desc"}]) == [("started_at", False), ("code", True)]
+    assert listing._sort_columns(spec, [{"field": "good", "dir": "asc"}]) == [("good_qty", True), ("code", True)]
+
+
+def test_number_and_percentage_columns_can_be_sorted():
+    sortable = listing.capabilities()
+    expected = {
+        "item": ("recipes", "trial", "usedIn"),
+        "mold": ("recipes", "cavities", "shot"),
+        "machine": ("molds", "recipes", "changeover"),
+        "recipe": ("cycle", "pph"),
+        "order": ("quantity", "made", "progress", "runs"),
+        "run": ("hours", "good", "scrapPct", "pph", "performance"),
+        "stoppage": ("hours",),
+        "lot": ("quantity", "used"),
+        "changeover": ("hours",),
+    }
+    for kind, fields in expected.items():
+        missing = [field for field in fields if field not in sortable[kind]["sort"]]
+        assert not missing, "%s cannot sort %s" % (kind, missing)

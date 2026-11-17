@@ -2,8 +2,9 @@
 
 A list asks for a page with its sorters and header filters. The filters become a query on stored
 columns (a name filter on a linked record finds those records first), the query is sliced to the
-page, and only the page's records and what their rows are computed from are read. Calculated
-columns (status, scrap, pieces per hour) show on the page but cannot be filtered or sorted.
+page, and only the page's records and what their rows are computed from are read. A number or
+percentage column can be sorted: stored numbers are ordered in the query, and a calculated
+number is ordered after the query, before the page is sliced.
 """
 
 import datetime
@@ -153,6 +154,205 @@ def clock(start_col, end_col):
         op, number = _compare_parts(text)
         return {"__clock__": (start_col, end_col, op, number)}
     return build
+
+
+class _Rank:
+    """A calculated number. ``keys(rows)`` maps a row code to the number shown in that column."""
+
+    def __init__(self, keys, fetch=()):
+        self.keys = keys
+        self.fetch = tuple(fetch)
+
+
+def _chunks(items, size):
+    items = list(items)
+    return [items[start:start + size] for start in range(0, len(items), size)]
+
+
+def _search_codes(table, fetch, codes):
+    found = []
+    for chunk in _chunks(codes, 300):
+        found.extend(table.search(fetch, code=q.any_of(*chunk)))
+    return found
+
+
+def _search_linked(table, fetch, column, parents):
+    found = []
+    for chunk in _chunks(parents, 200):
+        found.extend(table.search(fetch, **{column: q.any_of(*chunk)}))
+    return found
+
+
+def _num_part(value, descending):
+    """Blanks stay at the bottom, in either direction."""
+    if value is None or value == "":
+        return (1, 0.0)
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return (1, 0.0)
+    return (0, -number if descending else number)
+
+
+def _span_rank(start, end, blank_zero=False):
+    """Hours between two stored moments. Runs round to the tenth and treat zero as blank, as the row does."""
+
+    def keys(rows):
+        found = {}
+        for row in rows:
+            hours = domain.span_hours(_moment_text(row[start]), _moment_text(row[end]))
+            if blank_zero:
+                hours = round(hours, 1) if hours else None
+            found[row["code"]] = hours
+        return found
+
+    return _Rank(keys, (start, end))
+
+
+def _item_counts(rows):
+    wanted = {row["code"] for row in rows}
+    counts = {code: {"recipes": 0, "trial": 0, "usedIn": 0} for code in wanted}
+    if not wanted:
+        return counts
+    for recipe in _table("recipes").search(q.fetch_only("status", item=q.fetch_only("code"))):
+        item = recipe["item"]
+        if item is None or item["code"] not in counts:
+            continue
+        if recipe["status"] == "approved":
+            counts[item["code"]]["recipes"] += 1
+        elif recipe["status"] == "trial":
+            counts[item["code"]]["trial"] += 1
+    using = {code: [] for code in wanted}
+    for line in _table("recipe_inputs").search(q.fetch_only(item=q.fetch_only("code"), recipe=q.fetch_only("status"))):
+        item, recipe = line["item"], line["recipe"]
+        if item is None or recipe is None or item["code"] not in using:
+            continue
+        using[item["code"]].append({"status": recipe["status"]})
+    for code, recipes in using.items():
+        counts[code]["usedIn"] = len(domain.live(recipes))
+    return counts
+
+
+def _count_rank(field, counts):
+    def keys(rows):
+        return {code: values[field] for code, values in counts(rows).items()}
+    return _Rank(keys)
+
+
+def _mold_recipes(rows):
+    wanted = {row["code"] for row in rows}
+    grouped = {code: [] for code in wanted}
+    if not wanted:
+        return {code: 0 for code in wanted}
+    for recipe in _table("recipes").search(q.fetch_only("status", mold=q.fetch_only("code"))):
+        mold = recipe["mold"]
+        if mold is not None and mold["code"] in grouped:
+            grouped[mold["code"]].append({"status": recipe["status"]})
+    return {code: len(domain.live(recipes)) for code, recipes in grouped.items()}
+
+
+def _machine_recipe_stats(rows):
+    wanted = {row["code"] for row in rows}
+    grouped = {code: [] for code in wanted}
+    if not wanted:
+        return {code: {"recipes": 0, "molds": 0} for code in wanted}
+    for recipe in _table("recipes").search(q.fetch_only("status", machine=q.fetch_only("code"), mold=q.fetch_only("code"))):
+        machine = recipe["machine"]
+        if machine is None or machine["code"] not in grouped:
+            continue
+        mold = recipe["mold"]
+        grouped[machine["code"]].append({"status": recipe["status"], "moldId": mold["code"] if mold is not None else ""})
+    stats = {}
+    for code, recipes in grouped.items():
+        running = domain.live(recipes)
+        stats[code] = {"recipes": len(running), "molds": len(domain.uniq(recipe.get("moldId") for recipe in running))}
+    return stats
+
+
+def _recipe_pph(rows):
+    result = {row["code"]: None for row in rows}
+    for recipe in _search_codes(_table("recipes"), q.fetch_only("code", "cycle_s", mold=q.fetch_only("code", "cavities")), result):
+        mold = recipe["mold"]
+        mold_id = mold["code"] if mold is not None else ""
+        index = {"molds": ({mold_id: {"cavities": mold["cavities"]}} if mold is not None else {})}
+        result[recipe["code"]] = domain.pieces_per_hour(index, {"moldId": mold_id, "cycle": recipe["cycle_s"]})
+    return result
+
+
+def _order_totals(rows):
+    codes = [row["code"] for row in rows]
+    result = {code: {"made": 0, "runs": 0, "progress": None} for code in codes}
+    loaded = _search_codes(_table("production_orders"), q.fetch_only("code", "quantity"), codes)
+    goods = {row["code"]: [] for row in loaded}
+    for run in _search_linked(_table("production_runs"), q.fetch_only("good_qty", order=q.fetch_only("code")), "order", loaded):
+        order = run["order"]
+        if order is not None and order["code"] in goods:
+            goods[order["code"]].append(run["good_qty"])
+    quantity = {row["code"]: row["quantity"] for row in loaded}
+    for code, values in goods.items():
+        made = sum(domain.num(value) or 0 for value in values)
+        qty = quantity.get(code)
+        result[code] = {"made": made, "runs": len(values), "progress": int(round(100.0 * made / qty)) if qty else None}
+    return result
+
+
+def _run_metrics(rows):
+    """The same hours, scrap, rate, and performance the production row shows."""
+    codes = [row["code"] for row in rows]
+    if not codes:
+        return {}
+    loaded = _search_codes(_table("production_runs"), q.fetch_only(
+        "code", "started_at", "ended_at", "good_qty", "cycle_s", "cavities_running",
+        recipe=q.fetch_only("code", "cycle_s", mold=q.fetch_only("code", "cavities")),
+    ), codes)
+    scrap = {}
+    for line in _search_linked(_table("run_scrap"), q.fetch_only("quantity", run=q.fetch_only("code")), "run", loaded):
+        run = line["run"]
+        if run is not None:
+            scrap.setdefault(run["code"], []).append({"quantity": line["quantity"]})
+    stops = []
+    for stop in _search_linked(_table("stoppages"), q.fetch_only("code", "started_at", "ended_at", run=q.fetch_only("code")), "run", loaded):
+        run = stop["run"]
+        if run is None:
+            continue
+        stops.append({"id": stop["code"], "runId": run["code"], "startedAt": _moment_text(stop["started_at"]), "endedAt": _moment_text(stop["ended_at"])})
+    by_code = {row["code"]: row for row in loaded}
+    recipes, molds, run_dicts = {}, {}, []
+    for code in codes:
+        row = by_code.get(code)
+        if row is None:
+            continue
+        recipe = row["recipe"]
+        mold = recipe["mold"] if recipe is not None else None
+        recipe_id = recipe["code"] if recipe is not None else ""
+        mold_id = mold["code"] if mold is not None else ""
+        if recipe is not None:
+            recipes[recipe_id] = {"id": recipe_id, "moldId": mold_id, "cycle": recipe["cycle_s"]}
+        if mold is not None:
+            molds[mold_id] = {"id": mold_id, "cavities": mold["cavities"]}
+        run_dicts.append({
+            "id": code, "recipeId": recipe_id, "startedAt": _moment_text(row["started_at"]), "endedAt": _moment_text(row["ended_at"]),
+            "good": row["good_qty"], "cycle": row["cycle_s"], "cavities": row["cavities_running"], "scrap": scrap.get(code, []),
+        })
+    graph = {"recipes": list(recipes.values()), "molds": list(molds.values()), "stoppages": stops, "production_runs": run_dicts}
+    domain.reindex(graph)
+    return {run["id"]: domain.run_metrics(graph, run) for run in run_dicts}
+
+
+def _metric_rank(field, metrics):
+    def keys(rows):
+        return {code: values.get(field) for code, values in metrics(rows).items()}
+    return _Rank(keys)
+
+
+def _lot_used(rows):
+    counts = {row["code"]: 0 for row in rows}
+    loaded = _search_codes(_table("lots"), q.fetch_only("code"), counts)
+    for line in _search_linked(_table("run_inputs"), q.fetch_only(lot=q.fetch_only("code")), "lot", loaded):
+        lot = line["lot"]
+        if lot is not None and lot["code"] in counts:
+            counts[lot["code"]] += 1
+    return counts
 
 
 def _clock_ok(hours, op, number):
@@ -372,35 +572,44 @@ def _stoppage_item():
 LISTS = {
     "item": {
         "table": "items", "order": ("code", True), "context": _item_context, "row": domain.item_row,
-        "sort": {"id": "code", "name": "name", "erp": "erp_code", "typeLabel": "item_type"},
+        "sort": {"id": "code", "name": "name", "erp": "erp_code", "typeLabel": "item_type",
+                 "recipes": _count_rank("recipes", _item_counts), "trial": _count_rank("trial", _item_counts),
+                 "usedIn": _count_rank("usedIn", _item_counts)},
         "filter": {"id": code(), "name": contains("name"), "erp": contains("erp_code"), "category": linked("category", "item_categories"),
                    "typeLabel": chosen("item_type", {label: key for key, label in domain.ITEM_TYPES})},
     },
     "mold": {
         "table": "molds", "order": ("code", True), "context": _mold_context, "row": domain.mold_row,
-        "sort": {"id": "code", "name": "name", "cavities": "cavities", "shot": "shot_weight_g", "location": "location"},
+        "sort": {"id": "code", "name": "name", "cavities": "cavities", "shot": "shot_weight_g", "location": "location",
+                 "recipes": _Rank(_mold_recipes)},
         "filter": {"id": code(), "name": contains("name"), "location": contains("location")},
     },
     "machine": {
         "table": "machines", "order": ("code", True), "context": _machine_context, "row": domain.machine_row,
-        "sort": {"id": "code", "name": "name", "euromap": "euromap", "changeover": "changeover_min", "location": "location"},
+        "sort": {"id": "code", "name": "name", "euromap": "euromap", "changeover": "changeover_min", "location": "location",
+                 "molds": _metric_rank("molds", _machine_recipe_stats), "recipes": _metric_rank("recipes", _machine_recipe_stats)},
         "filter": {"id": code(), "name": contains("name"), "euromap": contains("euromap"), "type": linked("machine_type", "machine_types"),
                    "attachedTo": linked("attached_to", "machines")},
     },
     "recipe": {
         "table": "recipes", "order": ("code", True), "context": lambda plant, rows: store._recipe_context(plant), "row": domain.recipe_row,
-        "sort": {"id": "code", "cycle": "cycle_s"},
+        "sort": {"id": "code", "cycle": "cycle_s", "pph": _Rank(_recipe_pph)},
         "filter": {"id": code(), "item": linked_any("item", "items"), "machine": linked("machine", "machines"), "mold": linked("mold", "molds", "code")},
     },
     "order": {
         "table": "production_orders", "order": ("code", True), "context": _order_context, "row": domain.order_row,
-        "sort": {"id": "code", "quantity": "quantity", "due": "due_date", "erp": "erp_order_no"},
+        "sort": {"id": "code", "quantity": "quantity", "due": "due_date", "erp": "erp_order_no",
+                 "made": _metric_rank("made", _order_totals), "progress": _metric_rank("progress", _order_totals),
+                 "runs": _metric_rank("runs", _order_totals)},
         "filter": {"id": code(), "item": linked_any("item", "items"), "erp": contains("erp_order_no"), "due": day("due_date"),
                    "status": chosen("status", {domain.cap(status): status for status in domain.ORDER_STATUSES})},
     },
     "run": {
         "table": "production_runs", "order": ("started_at", False), "context": _run_context, "row": domain.run_row,
-        "sort": {"id": "code", "start": "started_at", "good": "good_qty"},
+        "sort": {"id": "code", "start": "started_at", "good": "good_qty",
+                 "hours": _span_rank("started_at", "ended_at", blank_zero=True),
+                 "scrapPct": _metric_rank("scrapPct", _run_metrics), "pph": _metric_rank("pph", _run_metrics),
+                 "performance": _metric_rank("performance", _run_metrics)},
         "filter": {"id": code(), "start": moment("started_at"), "order": linked("order", "production_orders", "code"),
                    "machine": through("recipe", "recipes", "machine", "machines"), "item": through_any("recipe", "recipes", "item", "items"),
                    "hours": clock("started_at", "ended_at"),
@@ -408,7 +617,7 @@ LISTS = {
     },
     "stoppage": {
         "table": "stoppages", "order": ("started_at", False), "context": _stoppage_context, "row": domain.stoppage_row,
-        "sort": {"start": "started_at", "end": "ended_at"},
+        "sort": {"start": "started_at", "end": "ended_at", "hours": _span_rank("started_at", "ended_at")},
         "filter": {"start": moment("started_at"), "end": moment("ended_at"), "hours": clock("started_at", "ended_at"),
                    "machine": linked("machine", "machines"), "item": _stoppage_item(),
                    "cause": linked("cause", "stoppage_causes"), "category": linked("cause", "stoppage_causes", "category"),
@@ -417,7 +626,7 @@ LISTS = {
     },
     "lot": {
         "table": "lots", "order": ("code", True), "context": _lot_context, "row": domain.lot_row,
-        "sort": {"id": "code", "number": "number", "quantity": "quantity", "received": "received_at"},
+        "sort": {"id": "code", "number": "number", "quantity": "quantity", "received": "received_at", "used": _Rank(_lot_used)},
         "filter": {"id": code(), "number": contains("number"), "item": linked_any("item", "items"), "origin": contains("origin"),
                    "received": moment("received_at"), "run": linked("run", "production_runs", "code"),
                    "status": chosen("status", {domain.cap(status): status for status in domain.LOT_STATUSES})},
@@ -479,21 +688,44 @@ def _filter_clock(rows, clocks):
     return kept
 
 
+def _sort_columns(spec, sorters):
+    """Stored columns only. A calculated number is ordered later, in Python."""
+    chosen = [(spec["sort"][entry["field"]], entry.get("dir") != "desc") for entry in sorters or []
+              if isinstance(spec["sort"].get(entry.get("field")), str)]
+    ordering = chosen or [spec["order"]]
+    if all(column != "code" for column, _ascending in ordering):
+        ordering.append(("code", True))
+    return ordering
+
+
+def _apply_ranks(spec, rows, sorters):
+    active = [(entry, spec["sort"][entry["field"]]) for entry in sorters or []
+              if isinstance(spec["sort"].get(entry.get("field")), _Rank)]
+    if not active:
+        return rows
+    maps = {entry["field"]: rank.keys(rows) for entry, rank in active}
+
+    def sort_key(row):
+        return tuple(_num_part(maps[entry["field"]].get(row["code"]), entry.get("dir") == "desc") for entry, _rank in active) + ((row["code"] or ""),)
+
+    return sorted(rows, key=sort_key)
+
+
 def _found(spec, filters, gap_ids, sorters):
     conditions, clocks = _conditions(spec, filters, gap_ids)
     columns = ["code"]
     for start, end, _op, _number in clocks:
         columns.extend((start, end))
+    for entry in sorters or []:
+        rank = spec["sort"].get(entry.get("field"))
+        if isinstance(rank, _Rank):
+            columns.extend(rank.fetch)
     found = list(_table(spec["table"]).search(q.fetch_only(*list(dict.fromkeys(columns))), *_ordering(spec, sorters), **conditions))
-    return _filter_clock(found, clocks)
+    return _apply_ranks(spec, _filter_clock(found, clocks), sorters)
 
 
 def _ordering(spec, sorters):
-    chosen_sort = [(spec["sort"][entry["field"]], entry.get("dir") != "desc") for entry in sorters or [] if entry.get("field") in spec["sort"]]
-    ordering = chosen_sort or [spec["order"]]
-    if all(column != "code" for column, _ in ordering):
-        ordering.append(("code", True))
-    return [anvil.tables.order_by(column, ascending=ascending) for column, ascending in ordering]
+    return [anvil.tables.order_by(column, ascending=ascending) for column, ascending in _sort_columns(spec, sorters)]
 
 
 def _gap(kind, key):

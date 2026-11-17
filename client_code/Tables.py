@@ -192,7 +192,8 @@ def _col(title, field, **extra):
 
 
 def _num_col(title, field, width=96):
-    return {"title": title, "field": field, "width": width, "hoz_align": "right", "sorter": "number", "formatter": _num}
+    return {"title": title, "field": field, "width": width, "hoz_align": "right", "sorter": "number",
+            "header_sort": True, "formatter": _num}
 
 
 def _list_col(title, field, width=130):

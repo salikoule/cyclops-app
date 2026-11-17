@@ -1,11 +1,11 @@
 import anvil.users
 from craftify_library.CraftifyRouting import AuthenticatedShellRoute, Redirect, Route
 
-from cyclops_app import Data
+from cyclops_app.session import Data
 
 
 class AppPage(AuthenticatedShellRoute):
-    template = "CyclopsShell"
+    template = "shell.CyclopsShell"
     login_path = "/login"
     screen = ""
 
@@ -26,7 +26,7 @@ class AppPage(AuthenticatedShellRoute):
 
 class LoginRoute(Route):
     path = "/login"
-    form = "AppStartup"
+    form = "shell.AppStartup"
 
     def before_load(self, **loader_args):
         if anvil.users.get_user() is not None:
@@ -49,126 +49,6 @@ class RootRoute(Route):
         raise Redirect(path=home)
 
 
-class FloorRoute(AppPage):
-    path = "/floor"
-    form = "FloorForm"
-    screen = "floor"
-
-
-class OverviewRoute(AppPage):
-    path = "/overview"
-    form = "OverviewForm"
-    screen = "overview"
-
-
-class PerformanceRoute(AppPage):
-    path = "/performance"
-    form = "PerformanceForm"
-    screen = "performance"
-
-
-class StructureRoute(AppPage):
-    path = "/structure"
-    form = "StructureForm"
-    screen = "overview"
-
-
-class ItemsRoute(AppPage):
-    path = "/items"
-    form = "ItemsForm"
-    screen = "item"
-
-
-class ItemRoute(AppPage):
-    path = "/items/:code"
-    form = "ItemForm"
-    screen = "item"
-
-
-class MoldsRoute(AppPage):
-    path = "/molds"
-    form = "MoldsForm"
-    screen = "mold"
-
-
-class MoldRoute(AppPage):
-    path = "/molds/:code"
-    form = "MoldForm"
-    screen = "mold"
-
-
-class MachinesRoute(AppPage):
-    path = "/machines"
-    form = "MachinesForm"
-    screen = "machine"
-
-
-class MachineRoute(AppPage):
-    path = "/machines/:code"
-    form = "MachineForm"
-    screen = "machine"
-
-
-class RecipesRoute(AppPage):
-    path = "/recipes"
-    form = "RecipesForm"
-    screen = "recipe"
-
-
-class RecipeRoute(AppPage):
-    path = "/recipes/:code"
-    form = "RecipeForm"
-    screen = "recipe"
-
-
-class OrdersRoute(AppPage):
-    path = "/orders"
-    form = "OrdersForm"
-    screen = "order"
-
-
-class OrderRoute(AppPage):
-    path = "/orders/:code"
-    form = "OrderForm"
-    screen = "order"
-
-
-class ProductionRoute(AppPage):
-    path = "/production"
-    form = "ProductionForm"
-    screen = "run"
-
-
-class RunRoute(AppPage):
-    path = "/production/:code"
-    form = "RunForm"
-    screen = "run"
-
-
-class StoppagesRoute(AppPage):
-    path = "/stoppages"
-    form = "StoppagesForm"
-    screen = "stoppage"
-
-
-class ChangeoversRoute(AppPage):
-    path = "/changeovers"
-    form = "ChangeoversForm"
-    screen = "changeover"
-
-
-class LotsRoute(AppPage):
-    path = "/lots"
-    form = "LotsForm"
-    screen = "lot"
-
-
-class LotRoute(AppPage):
-    path = "/lots/:code"
-    form = "LotForm"
-    screen = "lot"
-
-
 class ConfigureRoute(Route):
     path = "/configure"
 
@@ -176,18 +56,6 @@ class ConfigureRoute(Route):
         if anvil.users.get_user() is None:
             raise Redirect(path="/login")
         raise Redirect(path="/configure/shifts")
-
-
-class ConfigureSectionRoute(AppPage):
-    path = "/configure/:code"
-    form = "ConfigureForm"
-    screen = "configure"
-
-
-class NotificationsRoute(AppPage):
-    path = "/notifications"
-    form = "NotificationsForm"
-    screen = "notify"
 
 
 class AccountRoute(Route):
@@ -199,13 +67,38 @@ class AccountRoute(Route):
         raise Redirect(path="/floor", query={"settings": "account"})
 
 
-class HistoryRoute(AppPage):
-    path = "/history"
-    form = "HistoryForm"
-    screen = "history"
+def _page(name, path, screen, form="pages.PageForm", mode="", key=""):
+    """One route class. ``mode`` is list, detail, or page; ``key`` is the record kind or the page name."""
+    attrs = {"path": path, "form": form, "screen": screen, "mode": mode}
+    if mode in ("list", "detail"):
+        attrs["kind"] = key
+    elif mode == "page":
+        attrs["page"] = key
+    globals()[name] = type(name, (AppPage,), attrs)
 
 
-class UsersRoute(AppPage):
-    path = "/users"
-    form = "UsersForm"
-    screen = "users"
+# Structure is gated by the overview screen: it is the same plant picture, drawn as a tree.
+_page("FloorRoute", "/floor", "floor", form="live.FloorForm")
+_page("OverviewRoute", "/overview", "overview", mode="page", key="overview")
+_page("PerformanceRoute", "/performance", "performance", mode="page", key="performance")
+_page("StructureRoute", "/structure", "overview", mode="page", key="structure")
+_page("ItemsRoute", "/items", "item", mode="list", key="item")
+_page("ItemRoute", "/items/:code", "item", mode="detail", key="item")
+_page("MoldsRoute", "/molds", "mold", mode="list", key="mold")
+_page("MoldRoute", "/molds/:code", "mold", mode="detail", key="mold")
+_page("MachinesRoute", "/machines", "machine", mode="list", key="machine")
+_page("MachineRoute", "/machines/:code", "machine", mode="detail", key="machine")
+_page("RecipesRoute", "/recipes", "recipe", mode="list", key="recipe")
+_page("RecipeRoute", "/recipes/:code", "recipe", mode="detail", key="recipe")
+_page("OrdersRoute", "/orders", "order", mode="list", key="order")
+_page("OrderRoute", "/orders/:code", "order", mode="detail", key="order")
+_page("ProductionRoute", "/production", "run", mode="list", key="run")
+_page("RunRoute", "/production/:code", "run", mode="detail", key="run")
+_page("StoppagesRoute", "/stoppages", "stoppage", mode="list", key="stoppage")
+_page("ChangeoversRoute", "/changeovers", "changeover", mode="list", key="changeover")
+_page("LotsRoute", "/lots", "lot", mode="list", key="lot")
+_page("LotRoute", "/lots/:code", "lot", mode="detail", key="lot")
+_page("ConfigureSectionRoute", "/configure/:code", "configure", mode="page", key="configure")
+_page("NotificationsRoute", "/notifications", "notify", mode="page", key="notify")
+_page("HistoryRoute", "/history", "history", mode="page", key="history")
+_page("UsersRoute", "/users", "users", mode="page", key="users")

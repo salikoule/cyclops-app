@@ -93,6 +93,49 @@ def linked_any(column, table, fields=("code", "name")):
     return lambda text: {column: q.any_of(*_match_rows(table, fields, text))}
 
 
+def any_of_fields(table, fields):
+    """This table's own rows, matching the text on any of ``fields``."""
+    def build(text):
+        return {"code": q.any_of(*[row["code"] for row in _match_rows(table, fields, text)])}
+    return build
+
+
+def link_named(column, table):
+    """A pick-list of the names in ``table``. The choice has to match the name exactly."""
+    def build(text):
+        return {column: q.any_of(*_rows_where(table, name=text))}
+
+    def choices():
+        try:
+            rows = _table(table).search(q.fetch_only("name"))
+        except Exception:
+            return []
+        return sorted({row["name"] for row in rows if row["name"]})
+
+    build.choices = choices
+    return build
+
+
+def shown(labels):
+    """A pick-list of the status labels the page shows. Applied after the query."""
+    def build(text):
+        if text not in labels:
+            raise _NoMatch()
+        return {"__status__": text}
+    build.choices = tuple(labels)
+    return build
+
+
+def hours_text(start_col, end_col):
+    """The hours printed in the cell, matched as text. The duration is not a stored column."""
+    def build(text):
+        needle = _text(text).lower().replace(",", ".").replace("h", "").strip()
+        if not needle:
+            raise _NoMatch()
+        return {"__hours__": (start_col, end_col, needle)}
+    return build
+
+
 def through(column, table, link, target, field="name"):
     """Rows whose ``column`` links to a ``table`` row whose ``link`` points at a matching ``target`` row."""
     def build(text):
@@ -575,26 +618,36 @@ LISTS = {
         "sort": {"id": "code", "name": "name", "erp": "erp_code", "typeLabel": "item_type",
                  "recipes": _count_rank("recipes", _item_counts), "trial": _count_rank("trial", _item_counts),
                  "usedIn": _count_rank("usedIn", _item_counts)},
-        "filter": {"id": code(), "name": contains("name"), "erp": contains("erp_code"), "category": linked("category", "item_categories"),
-                   "typeLabel": chosen("item_type", {label: key for key, label in domain.ITEM_TYPES})},
+        "shown": domain.item_status,
+        "filter": {"name": any_of_fields("items", ("code", "name")), "erp": contains("erp_code"),
+                   "category": link_named("category", "item_categories"),
+                   "typeLabel": chosen("item_type", {label: key for key, label in domain.ITEM_TYPES}),
+                   "status": shown(domain.ITEM_SHOWN)},
     },
     "mold": {
         "table": "molds", "order": ("code", True), "context": _mold_context, "row": domain.mold_row,
         "sort": {"id": "code", "name": "name", "cavities": "cavities", "shot": "shot_weight_g", "location": "location",
                  "recipes": _Rank(_mold_recipes)},
-        "filter": {"id": code(), "name": contains("name"), "location": contains("location")},
+        "shown": domain.mold_status,
+        "filter": {"name": any_of_fields("molds", ("code", "name")), "location": contains("location"),
+                   "status": shown(domain.MOLD_SHOWN)},
     },
     "machine": {
         "table": "machines", "order": ("code", True), "context": _machine_context, "row": domain.machine_row,
         "sort": {"id": "code", "name": "name", "euromap": "euromap", "changeover": "changeover_min", "location": "location",
                  "molds": _metric_rank("molds", _machine_recipe_stats), "recipes": _metric_rank("recipes", _machine_recipe_stats)},
-        "filter": {"id": code(), "name": contains("name"), "euromap": contains("euromap"), "type": linked("machine_type", "machine_types"),
-                   "attachedTo": linked("attached_to", "machines")},
+        "shown": domain.machine_status,
+        "filter": {"name": any_of_fields("machines", ("code", "name")), "euromap": contains("euromap"),
+                   "type": link_named("machine_type", "machine_types"),
+                   "attachedTo": linked("attached_to", "machines"),
+                   "status": shown(domain.MACHINE_SHOWN)},
     },
     "recipe": {
         "table": "recipes", "order": ("code", True), "context": lambda plant, rows: store._recipe_context(plant), "row": domain.recipe_row,
         "sort": {"id": "code", "cycle": "cycle_s", "pph": _Rank(_recipe_pph)},
-        "filter": {"id": code(), "item": linked_any("item", "items"), "machine": linked("machine", "machines"), "mold": linked("mold", "molds", "code")},
+        "shown": domain.recipe_status,
+        "filter": {"id": code(), "item": linked_any("item", "items"), "machine": linked("machine", "machines"),
+                   "mold": linked("mold", "molds", "code"), "status": shown(domain.RECIPE_SHOWN)},
     },
     "order": {
         "table": "production_orders", "order": ("code", True), "context": _order_context, "row": domain.order_row,
@@ -612,7 +665,7 @@ LISTS = {
                  "performance": _metric_rank("performance", _run_metrics)},
         "filter": {"id": code(), "start": moment("started_at"), "order": linked("order", "production_orders", "code"),
                    "machine": through("recipe", "recipes", "machine", "machines"), "item": through_any("recipe", "recipes", "item", "items"),
-                   "hours": clock("started_at", "ended_at"),
+                   "hours": hours_text("started_at", "ended_at"),
                    "operator": linked("operator", "personnel"), "status": chosen("ended_at", RUNNING)},
     },
     "stoppage": {
@@ -643,15 +696,22 @@ LISTS = {
 }
 
 
+def _choice_labels(build):
+    labels = getattr(build, "choices", None)
+    if callable(labels):
+        labels = labels()
+    return list(labels or [])
+
+
 def capabilities():
     """Which fields each list can filter and sort, and the labels of its pick-list filters, for the page's column headers."""
     return {kind: {"filter": sorted(spec["filter"].keys()), "sort": sorted(spec["sort"].keys()),
-                   "choices": {field: build.choices for field, build in spec["filter"].items() if hasattr(build, "choices")}}
+                   "choices": {field: _choice_labels(build) for field, build in spec["filter"].items() if hasattr(build, "choices")}}
             for kind, spec in LISTS.items()}
 
 
 def _conditions(spec, filters, gap_ids):
-    found, clocks = {}, []
+    found, clocks, statuses, hours = {}, [], [], []
     for entry in filters or []:
         build = spec["filter"].get(entry.get("field"))
         text = _text(entry.get("value"))
@@ -660,6 +720,10 @@ def _conditions(spec, filters, gap_ids):
         for column, condition in build(text).items():
             if column == "__clock__":
                 clocks.append(condition)
+            elif column == "__status__":
+                statuses.append(condition)
+            elif column == "__hours__":
+                hours.append(condition)
             else:
                 found.setdefault(column, []).append(condition)
     if gap_ids is not None:
@@ -667,7 +731,7 @@ def _conditions(spec, filters, gap_ids):
             raise _NoMatch()
         found.setdefault("code", []).append(q.any_of(*gap_ids))
     query = {column: conditions[0] if len(conditions) == 1 else q.all_of(*conditions) for column, conditions in found.items()}
-    return query, clocks
+    return query, clocks, statuses, hours
 
 
 def _moment_text(value):
@@ -676,6 +740,40 @@ def _moment_text(value):
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def _hours_shown(row, start, end):
+    hours = domain.span_hours(_moment_text(row[start]), _moment_text(row[end]))
+    if not hours:
+        return ""
+    rounded = round(hours, 1)
+    if rounded == int(rounded):
+        return str(int(rounded))
+    return ("%.4f" % rounded).rstrip("0").rstrip(".")
+
+
+def _filter_hours_text(rows, needles):
+    if not needles:
+        return rows
+    kept = []
+    for row in rows:
+        if all(needle in _hours_shown(row, start, end) for start, end, needle in needles):
+            kept.append(row)
+    return kept
+
+
+def _filter_shown_status(spec, rows, labels):
+    if not labels:
+        return rows
+    reader = spec.get("shown")
+    if reader is None:
+        return rows
+    plant = store._plant()
+    loaded = plant.by_codes(spec["table"], [row["code"] for row in rows])
+    graph = spec["context"](plant, loaded).graph()
+    read = domain.reindex(graph)[spec["table"]]
+    wanted = set(labels)
+    return [row for row in rows if row["code"] in read and reader(graph, read[row["code"]]) in wanted]
 
 
 def _filter_clock(rows, clocks):
@@ -712,16 +810,19 @@ def _apply_ranks(spec, rows, sorters):
 
 
 def _found(spec, filters, gap_ids, sorters):
-    conditions, clocks = _conditions(spec, filters, gap_ids)
+    conditions, clocks, statuses, hours = _conditions(spec, filters, gap_ids)
     columns = ["code"]
-    for start, end, _op, _number in clocks:
+    for start, end, *_rest in clocks + hours:
         columns.extend((start, end))
     for entry in sorters or []:
         rank = spec["sort"].get(entry.get("field"))
         if isinstance(rank, _Rank):
             columns.extend(rank.fetch)
     found = list(_table(spec["table"]).search(q.fetch_only(*list(dict.fromkeys(columns))), *_ordering(spec, sorters), **conditions))
-    return _apply_ranks(spec, _filter_clock(found, clocks), sorters)
+    found = _filter_clock(found, clocks)
+    found = _filter_hours_text(found, hours)
+    found = _filter_shown_status(spec, found, statuses)
+    return _apply_ranks(spec, found, sorters)
 
 
 def _ordering(spec, sorters):

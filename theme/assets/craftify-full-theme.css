@@ -1073,9 +1073,11 @@ html:not(.designer) .sidebar-toggle {
 }
 
 .structure.nav-collapsed .left-nav-main a .link-text,
+.structure.nav-collapsed .left-nav-main a .anvil-link-text,
 .structure.nav-collapsed .left-nav-main a.anvil-role-nav-sub-link,
 .structure.nav-collapsed .left-nav-main a.anvil-role-nav-expand-toggle,
-.structure.nav-collapsed .left-nav-main a > span:not(.anvil-component-icon):not(.fa) {
+.structure.nav-collapsed .left-nav-main a > span:not(.anvil-component-icon):not(.fa),
+.structure.nav-collapsed .left-nav-main a > i.anvil-right {
   display: none !important;
 }
 

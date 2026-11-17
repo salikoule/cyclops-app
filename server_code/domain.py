@@ -322,6 +322,9 @@ def best_cycle(recipes):
     return min(cycles) if cycles else None
 
 
+RECIPE_SHOWN = ("Active", "Cannot produce", "Incomplete", "Retired", "Standard", "Trial")
+
+
 def recipe_status(graph, recipe):
     index = _ix(graph)
     if recipe.get("status") == "retired":
@@ -356,6 +359,9 @@ def injection_settings(recipe):
 
 # Statuses ---------------------------------------------------------------------------------------
 
+ITEM_SHOWN = ("Active", "Cannot produce", "Incomplete", "No code", "No recipe", "Retired", "Trial only", "Unused")
+
+
 def item_status(graph, item):
     index = _ix(graph)
     if item.get("status") == "retired":
@@ -382,6 +388,9 @@ def item_status(graph, item):
     return "Active"
 
 
+MOLD_SHOWN = ("Active", "In repair", "Incomplete", "Retired", "Stored", "Unused")
+
+
 def mold_status(graph, mold):
     if mold.get("status") and mold.get("status") != "in use":
         return cap(mold.get("status"))
@@ -403,6 +412,9 @@ def open_run(graph, machine_code):
 def open_stoppage(graph, machine_code):
     found = [stop for stop in _ix(graph)["stoppagesByMachine"].get(machine_code) or [] if stop.get("startedAt") and not stop.get("endedAt")]
     return max(found, key=lambda stop: stop["startedAt"]) if found else None
+
+
+MACHINE_SHOWN = ("Attached", "Idle", "No recipes", "Retired", "Running")
 
 
 def machine_status(graph, machine):

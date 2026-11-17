@@ -180,6 +180,23 @@ def _machine_pill(cell, **params):
     return '<span class="cy-pill cy-machine">%s</span>' % Layout.esc(value)
 
 
+def _label_pill(kind):
+    def formatter(cell, **params):
+        value = _value(cell)
+        if value is None or value == "":
+            return _empty()
+        return '<span class="cy-pill cy-%s">%s</span>' % (kind, Layout.esc(value))
+    return formatter
+
+
+def _stacked(name_field="name"):
+    """The code above the name, the same arrangement as an order's item cell."""
+    def formatter(cell, **params):
+        data = _data(cell)
+        return _entity(data.get("id") or "", data.get(name_field) or "")
+    return formatter
+
+
 _NO_AUTOFILL = {"elementAttributes": {"autocomplete": "off", "name": "cy-filter"}}
 _LOGS = ("stoppage", "run", "changeover")
 _OPENS = {"summary": ("item", "id"), "changeover": ("run", "toRun")}
@@ -226,11 +243,10 @@ SETTING_COLUMNS = {
 def columns_for(kind, hide=()):
     if kind == "item":
         columns = [
-            _col("ID", "id", width=112, formatter=_id("item")),
-            _col("Item", "name", min_width=220, formatter=_text),
+            _col("Item", "name", min_width=240, formatter=_stacked()),
             _status_col(),
-            _list_col("Type", "typeLabel", 130),
-            _list_col("Category", "category", 130),
+            dict(_list_col("Type", "typeLabel", 150), formatter=_label_pill("item")),
+            dict(_list_col("Category", "category", 140), formatter=_label_pill("category")),
             _col("SKU", "erp", width=110, formatter=_text),
             _col("Product", "parent", min_width=160, formatter=_text),
             {"title": "Runs on", "field": "machines", "min_width": 150, "formatter": _pills("machine")},
@@ -241,8 +257,7 @@ def columns_for(kind, hide=()):
         ]
     elif kind == "mold":
         columns = [
-            _col("ID", "id", width=112, formatter=_id("mold")),
-            _col("Mold", "name", min_width=220, formatter=_text),
+            _col("Mold", "name", min_width=240, formatter=_stacked()),
             _status_col(),
             {"title": "Makes", "field": "items", "min_width": 180, "formatter": _pills("item")},
             {"title": "Runs on", "field": "machines", "min_width": 150, "formatter": _pills("machine")},
@@ -253,10 +268,9 @@ def columns_for(kind, hide=()):
         ]
     elif kind == "machine":
         columns = [
-            _col("ID", "id", width=100, formatter=_id("machine")),
-            _col("Machine", "name", width=170, formatter=_text),
+            _col("Machine", "name", min_width=220, formatter=_stacked()),
             _status_col(),
-            _list_col("Type", "type", 140),
+            dict(_list_col("Type", "type", 150), formatter=_label_pill("machine")),
             _col("Attached to", "attachedTo", width=130, formatter=_text),
             _col("EUROMAP", "euromap", width=120, formatter=_text),
             _num_col("Molds", "molds", 80),
@@ -304,7 +318,7 @@ def columns_for(kind, hide=()):
         columns = [
             _col("ID", "id", width=108, formatter=_id("run")),
             _when_col("Started", "start"),
-            dict(_num_col("Hours", "hours", 132), formatter=_suffix(" h")),
+            dict(_num_col("Hours", "hours", 96), formatter=_suffix(" h"), filter_kind="plain"),
             _machine_col(),
             _col("Item", "item", min_width=160, width_grow=3, formatter=_item()),
             _col("Order", "order", width=100, formatter=_text),

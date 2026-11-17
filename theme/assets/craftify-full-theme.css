@@ -1026,10 +1026,15 @@ html:not(.designer) .sidebar-toggle {
   min-width: 64px;
   max-width: 64px;
   overflow: visible;
+  z-index: 30;
 }
 
-.structure.nav-collapsed .left-nav-main {
-  overflow: visible;
+.structure.nav-collapsed .left-nav-main,
+.structure.nav-collapsed .left-nav-main .anvil-container,
+.structure.nav-collapsed .left-nav-main .anvil-panel-section,
+.structure.nav-collapsed .left-nav-main .anvil-panel-col,
+.structure.nav-collapsed .left-nav-main .anvil-panel-section-container {
+  overflow: visible !important;
 }
 
 .nav-brand,
@@ -1057,9 +1062,14 @@ html:not(.designer) .sidebar-toggle {
   align-items: center;
   justify-content: center;
   overflow: visible;
+  box-sizing: border-box;
+  width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  margin: 2px auto !important;
   font-size: 0 !important;
   line-height: 0 !important;
-  padding: 8px !important;
+  padding: 0 !important;
 }
 
 .structure.nav-collapsed .left-nav-main a .link-text,
@@ -1290,7 +1300,13 @@ html body .left-nav-main a.anvil-component.anvil-role-selected {
   box-shadow: var(--cf-nav-ring);
 }
 html body .left-nav-main a.anvil-component.anvil-role-selected > i.anvil-left { color: var(--cf-nav-accent) !important; }
-html body .structure.nav-collapsed .left-nav-main a.anvil-component { justify-content: center; padding: 8px !important; }
+html body .structure.nav-collapsed .left-nav-main a.anvil-component {
+  justify-content: center;
+  width: 40px !important;
+  height: 40px !important;
+  margin: 2px auto !important;
+  padding: 0 !important;
+}
 
 /* Group label between links: Layout.html('<div class="cf-nav-group">Records</div>') */
 .cf-nav-group {
@@ -1469,7 +1485,7 @@ html body .structure.nav-collapsed .left-nav-main a.anvil-component { justify-co
 }
 
 .structure.nav-collapsed .left-nav .anvil-component.left_edge-icon {
-  padding-left: 8px;
+  padding-left: 0 !important;
 }
 
 .structure.nav-collapsed .left-nav a {

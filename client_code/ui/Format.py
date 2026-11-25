@@ -6,6 +6,7 @@ import anvil.js
 from anvil.js import window
 
 from cyclops_app.ui import Layout, Nav
+from cyclops_app.ui.duration import text as duration
 
 
 def _naive(js_date):

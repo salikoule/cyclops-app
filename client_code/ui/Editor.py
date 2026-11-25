@@ -113,8 +113,68 @@ class _Swatch:
         return self.hex
 
 
+def _mold_count(value):
+    try:
+        count = int(float(value))
+    except (TypeError, ValueError):
+        return 0
+    return count if count >= 1 else 0
+
+
+def _notify(widget):
+    fire = getattr(widget, "fire_change", None)
+    if fire is not None:
+        fire()
+        return
+    try:
+        widget.raise_event("change")
+    except Exception:
+        pass
+
+
+class _CavityField:
+    """1 to the mold's cavity count, defaulting to all of them, or a number while the mold has no count."""
+
+    def __init__(self, value, mold_count, default_full):
+        self.panel = ColumnPanel()
+        self._box = None
+        self._seed = "" if value is None else str(value)
+        self.apply(mold_count, default_full=default_full)
+
+    def apply(self, mold_count, default_full=False):
+        current = self.value()
+        count = _mold_count(mold_count)
+        self.panel.clear()
+        if count:
+            items = [(str(number), str(number)) for number in range(1, count + 1)]
+            if not default_full:
+                items = [("Not recorded", "")] + items
+            self._box = DropDown(items=items)
+            allowed = [item[1] for item in items]
+            if current in allowed and current != "":
+                self._box.selected_value = current
+            elif default_full:
+                self._box.selected_value = str(count)
+            else:
+                self._box.selected_value = ""
+        else:
+            self._box = TextBox(text=current, placeholder="blocked ones excluded")
+            self._box.type = "number"
+        self.panel.add_component(self._box)
+
+    def value(self):
+        if self._box is None:
+            return self._seed
+        if isinstance(self._box, DropDown):
+            return self._box.selected_value or ""
+        return self._box.text or ""
+
+
 def _widget(field):
     kind = field.get("type") or "text"
+    if kind == "cavities":
+        pick = _CavityField(field.get("value"), field.get("mold"), field.get("defaultFull"))
+        return pick, pick.panel
     if kind == "select":
         options = field.get("options") or []
         widget = DropDown(items=[(opt.get("label") or "", opt.get("value")) for opt in options])
@@ -147,7 +207,7 @@ def _widget(field):
 
 
 def _read(widget):
-    if isinstance(widget, (_Tags, _Moment, _Swatch)):
+    if isinstance(widget, (_Tags, _Moment, _Swatch, _CavityField)):
         return widget.value()
     if isinstance(widget, DropDown):
         return widget.selected_value or ""
@@ -187,6 +247,7 @@ def _follow(parent, child, groups, empty, keep):
         values = [opt.get("value") for opt in options]
         child.selected_value = keep["value"] if keep["value"] in values else (values[0] if values else "")
         keep["value"] = None
+        _notify(child)
 
     parent.set_event_handler("change", refill)
     refill()
@@ -240,6 +301,19 @@ def show(title, fields, on_save, hint="", eyebrow="", save_text="Save", width=52
         if field.get("follows") in widgets:
             _follow(widgets[field["follows"]], widgets[field["name"]], field.get("groups") or {}, field.get("empty") or "",
                     {"value": field.get("value")})
+    for field in fields:
+        molds = field.get("molds")
+        if field.get("name") != "cavities" or not molds or "recipe" not in widgets:
+            continue
+        recipe = widgets["recipe"]
+        pick = widgets["cavities"]
+
+        def sync(recipe=recipe, pick=pick, molds=molds, full=field.get("defaultFull")):
+            pick.apply(molds.get(recipe.selected_value), default_full=bool(full))
+
+        recipe.add_event_handler("change", sync)
+        if recipe.selected_value:
+            sync()
     for field in fields:
         rule = field.get("shown_for")
         if rule and rule[0] in widgets and field["name"] in boxes:
@@ -305,7 +379,10 @@ def open_editor(screen, action, extra=None):
     title, fields, hint = spec[:3]
     save_text = spec[3] if len(spec) > 3 else "Save"
     removal = spec[4] if len(spec) > 4 else None
-    eyebrow = (extra.get("row") or {}).get("id") or (screen.data or {}).get("id") or ""
+    eyebrow = (extra.get("record") or extra.get("row") or {}).get("id") or (screen.data or {}).get("id") or ""
+    context = {}
+    if extra.get("contextKind") and extra.get("contextId"):
+        context = {"contextKind": extra["contextKind"], "contextId": extra["contextId"]}
     on_delete = None
     if removal:
         remove, question, detail, payload = removal
@@ -313,10 +390,16 @@ def open_editor(screen, action, extra=None):
         def on_delete(close):
             if not dialogs.confirm(detail, title=question, confirm_text="Delete", danger=True):
                 return None
-            return screen.apply(remove, payload, close)
+            body = dict(context)
+            body.update(payload or {})
+            return screen.apply(remove, body, close)
 
-    show(title, fields, lambda payload, close: screen.apply(action, payload, close), hint, eyebrow=eyebrow,
-         save_text=save_text, on_delete=on_delete)
+    def on_save(payload, close):
+        body = dict(context)
+        body.update(payload or {})
+        return screen.apply(action, body, close)
+
+    show(title, fields, on_save, hint, eyebrow=eyebrow, save_text=save_text, on_delete=on_delete)
     return True
 
 
@@ -346,7 +429,27 @@ def _shift_now(choices):
     return ""
 
 
-def _run_fields(run, choices, order_field=None, recipes=None):
+def _cycle_hint(run):
+    effective = (run or {}).get("effectiveCycle")
+    if effective:
+        return "Optional. The output implies %s s. The target stays the recipe's cycle." % Format.trim(effective)
+    return "Optional. What the press showed. The target stays the recipe's cycle."
+
+
+def _cavity_field(run, mold_count=None, molds=None):
+    count = mold_count if mold_count is not None else (run or {}).get("moldCavities")
+    known = _mold_count(count)
+    if molds:
+        hint = "If the mold has a cavity count, this is 1 up to that number and starts on all of them."
+    elif known:
+        hint = "The mold has %s. This starts on all of them; pick fewer when some were blocked." % known
+    else:
+        hint = "The mold has no cavity count yet, so this stays a number."
+    return {"name": "cavities", "label": "Cavities running", "type": "cavities", "value": (run or {}).get("cavities"),
+            "mold": count, "defaultFull": not (run or {}).get("id"), "molds": molds, "hint": hint}
+
+
+def _run_fields(run, choices, order_field=None, recipes=None, mold_count=None):
     fields = []
     if order_field is not None:
         fields.append(order_field)
@@ -361,8 +464,9 @@ def _run_fields(run, choices, order_field=None, recipes=None):
         {"name": "operatorId", "label": "Operator", "type": "select", "options": [_blank("Choose the operator")] + _sorted(choices.get("operators")),
          "value": run.get("operatorId") or ""},
         {"name": "good", "label": "Good pieces", "type": "number", "value": run.get("good")},
-        {"name": "cycle", "label": "Actual cycle (s)", "type": "number", "value": run.get("cycle"), "placeholder": "from the press display"},
-        {"name": "cavities", "label": "Cavities running", "type": "number", "value": run.get("cavities"), "placeholder": "blocked ones excluded"},
+        {"name": "cycle", "label": "Actual cycle (s)", "type": "number", "value": run.get("cycle"),
+         "placeholder": "from the press display", "hint": _cycle_hint(run)},
+        _cavity_field(run, mold_count, choices.get("cavitiesByRecipe") if recipes is not None else None),
         {"name": "notes", "label": "Notes", "type": "area", "value": run.get("notes"), "height": 64},
     ])
     return fields
@@ -622,14 +726,15 @@ def _spec(screen, action, extra):
         order = {"itemId": data.get("id")} if screen.kind == "item" else {}
         return ("New production order", _order_fields(order, choices), "Until the ERP sends orders, write them here.", "Create order")
     if action == "edit-order":
-        return ("Edit order", _order_fields(data, choices), "")
+        return ("Edit order", _order_fields(extra.get("record") or data, choices), "")
     if action == "add-run":
         if screen.kind == "order":
             recipes = {"name": "recipe", "label": "Recipe", "type": "select", "options": data.get("recipes") or [], "wide": True}
             return ("Log a run", _run_fields({}, choices, recipes=recipes), "One run is one job on one machine, start to end.", "Log run")
         order = {"name": "order", "label": "Production order", "type": "select", "options": [_blank("Choose the order")] + (choices.get("openOrders") or []), "wide": True}
         if screen.kind == "recipe":
-            return ("Log a run", _run_fields({}, choices, order_field=order), "The order has to be for this recipe's item.", "Log run")
+            return ("Log a run", _run_fields({}, choices, order_field=order, mold_count=data.get("moldCavities")),
+                    "The order has to be for this recipe's item.", "Log run")
         recipes = {"name": "recipe", "label": "Recipe", "type": "select", "options": [], "follows": "order", "wide": True,
                    "groups": choices.get("recipesByOrder") or {}, "empty": "Choose an order with a live recipe"}
         return ("Log a run", _run_fields({}, choices, order_field=order, recipes=recipes), "One run is one job on one machine, start to end.", "Log run")
@@ -646,7 +751,8 @@ def _spec(screen, action, extra):
              "hint": "Administrators see every screen. For the other roles, these are the pages in the sidebar."},
         ], row.get("email") or "", "Save")
     if action == "edit-run":
-        return ("Edit run", _run_fields(data, choices), "%s on %s" % (data.get("item") or "", data.get("machine") or ""), "Save",
+        run = extra.get("record") or data
+        return ("Edit run", _run_fields(run, choices), "%s on %s" % (run.get("item") or "", run.get("machine") or ""), "Save",
                 ("delete-run", "Delete this run?", "Its scrap, consumed lots, and output lots are removed. Its stoppages stay on the machine.", {}))
     if action == "add-scrap":
         return ("Add scrap", [

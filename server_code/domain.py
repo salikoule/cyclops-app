@@ -463,12 +463,15 @@ def run_metrics(graph, run):
     cycle = num(run.get("cycle")) or num(recipe.get("cycle"))
     cavities = num(run.get("cavities")) or num(mold.get("cavities"))
     target = 3600.0 / cycle * cavities if cycle and cavities else None
+    # The cycle the output implies. It is shown, never stored, and never used as the target.
+    effective = round(cavities * 3600.0 / rate, 1) if run.get("endedAt") and rate and cavities else None
     return {
         "hours": round(hours, 1) if hours else None,
         "downHours": round(down, 1) if down else None,
         "scrap": scrap,
         "pph": int(round(rate)) if rate else None,
         "target": int(round(target)) if target else None,
+        "effectiveCycle": effective,
         "performance": int(round(100.0 * rate / target)) if rate and target else None,
         "scrapPct": round(100.0 * scrap / made, 1) if made else None,
         "state": run_state(run),
@@ -1239,6 +1242,7 @@ def detail_recipe(graph, code):
         "itemId": recipe.get("itemId") or "", "itemName": name_of(index, "items", recipe.get("itemId")),
         "machineId": recipe.get("machineId") or "", "machineName": name_of(index, "machines", recipe.get("machineId")),
         "moldId": recipe.get("moldId") or "", "moldName": mold.get("name") or "",
+        "moldCavities": num(mold.get("cavities")),
         "cycle": trim_num(recipe.get("cycle")), "cooling": recipe.get("cooling") or "", "screwRpm": recipe.get("screwRpm") or "",
         "pph": pph, "pphHint": "" if pph else ("needs cavities" if num(recipe.get("cycle")) else "needs cycle"),
         "siblings": siblings,
@@ -1285,6 +1289,7 @@ def detail_run(graph, code):
         "kind": "run", "missing": False, "orderId": run.get("orderId") or "", "recipeId": run.get("recipeId") or "",
         "shiftId": run.get("shiftId") or "", "operatorId": run.get("operatorId") or "", "startedAt": run.get("startedAt") or "",
         "endedAt": run.get("endedAt") or "", "cavities": run.get("cavities"), "cycle": run.get("cycle"), "notes": run.get("notes") or "",
+        "moldCavities": num((index["molds"].get(recipe.get("moldId")) or {}).get("cavities")),
         "uom": unit_of(index, recipe.get("itemId")),
         "scrapLines": [{"index": position, "reason": name_of(index, "scrap_reasons", entry.get("reasonId")),
                         "category": (index["scrap_reasons"].get(entry.get("reasonId")) or {}).get("category") or "",
@@ -1493,6 +1498,8 @@ def choices(graph):
         "recipesByMachine": recipes_by_machine,
         "recipesByOrder": recipes_by_order,
         "runsByMachine": runs_by_machine,
+        "cavitiesByRecipe": {recipe["id"]: int(count) for recipe in graph.get("recipes") or []
+                             for count in [num((index["molds"].get(recipe.get("moldId")) or {}).get("cavities"))] if count},
     }
 
 
@@ -2009,6 +2016,12 @@ def _run_fields(graph, run, payload):
     for key in ("good", "cavities", "cycle"):
         if num(payload.get(key)) is not None and num(payload.get(key)) < 0:
             return "Numbers cannot be negative."
+    cavities = num(payload.get("cavities"))
+    mold_count = num((index["molds"].get(recipe.get("moldId")) or {}).get("cavities"))
+    if cavities is not None and cavities < 1:
+        return "Cavities running has to be at least 1."
+    if mold_count and cavities is not None and cavities > mold_count:
+        return "The mold has %s cavities." % int(mold_count)
     run.update({"orderId": order["id"], "recipeId": recipe["id"], "shiftId": payload["shiftId"], "operatorId": payload["operatorId"],
                 "startedAt": text(payload.get("startedAt")), "endedAt": text(payload.get("endedAt")), "good": num(payload.get("good")),
                 "cavities": num(payload.get("cavities")), "cycle": num(payload.get("cycle")), "notes": text(payload.get("notes"))})

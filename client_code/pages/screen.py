@@ -147,6 +147,7 @@ class Screen(Plant, Record, Admin):
         if close is not None:
             close()
         Data.invalidate()
+        _forget_cached_records()
         redirect = result.get("redirect") or {}
         if redirect.get("kind"):
             Nav.go(redirect["kind"], redirect.get("code"))
@@ -156,6 +157,19 @@ class Screen(Plant, Record, Admin):
 
     def block(self, markup):
         return Layout.interactive(markup, self.on_html)
+
+def _forget_cached_records():
+    """A save changes other records. Drop their pages so the next open loads again. Lists stay, so a filter stays."""
+    try:
+        from routing.router._cached import CACHED_FORMS
+    except Exception:
+        return
+    for key in list(CACHED_FORMS):
+        path = str(key).split(":", 1)[0]
+        parts = [part for part in path.split("/") if part]
+        if len(parts) >= 2 and parts[0] != "configure":
+            CACHED_FORMS.pop(key, None)
+
 
 def mount_overview(form, ctx):
     Screen(form, "overview", None, ctx).render()

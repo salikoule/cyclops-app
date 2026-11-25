@@ -1,5 +1,6 @@
 """Overview, the live floor, and the structure page."""
 
+import anvil.server
 from .common import KPI_ICON
 from craftify_library.CraftifyUtils.echarts_theme import apply_craftify_echarts_theme
 from craftify_library.CustomComponents.ChartCard import ChartCard
@@ -192,14 +193,15 @@ class Plant:
             today = Format.now().date().isoformat()
         except Exception:
             today = ""
-        data = _call("cyclops_floor", today)
+        with anvil.server.no_loading_indicator:
+            data = _call("cyclops_floor", today)
+            writable = bool(data) and Data.can_write() and not data.get("demo")
         if not data:
             self.show(Layout.empty_state("The floor could not be loaded."))
             return
         self.data = data
         counts = data.get("counts") or {}
         kpis = data.get("kpis") or {}
-        writable = Data.can_write() and not data.get("demo")
         cards = []
         for machine in data.get("machines") or []:
             state = machine.get("state") or "Idle"

@@ -12,6 +12,17 @@ def _account_needs_enabling(message):
 
 
 class CyclopsLoginForm(CraftifyLoginForm):
+    def __init__(self, **properties):
+        CraftifyLoginForm.__init__(self, **properties)
+        button = Button(
+            text="Microsoft",
+            role="login-sso-btn",
+            spacing_above="none",
+            spacing_below="small",
+        )
+        button.set_event_handler("click", self.microsoft_login_btn_click)
+        self.login_form_card.add_component(button, full_width_row=True, index=11)
+
     def _mfa_for(self, email, password):
         """An authenticator code when this account has one. None when it has not enrolled, or the platform cannot say."""
         mfa = getattr(anvil.users, "mfa", None)
@@ -129,11 +140,41 @@ class CyclopsLoginForm(CraftifyLoginForm):
             pass
         self._go_next()
 
+    def microsoft_login_btn_click(self, **event_args):
+        self.error_label.visible = False
+        try:
+            user = anvil.users.login_with_microsoft(remember=True)
+        except anvil.users.AuthenticationFailed as error:
+            if type(error).__name__ == "MFARequired":
+                self._show_error("This account needs an authenticator code. Sign in with email and password to enter it.")
+                return
+            if not self.signup_btn.visible:
+                self._show_error("Microsoft sign-in failed.")
+                return
+            try:
+                user = anvil.users.signup_with_microsoft(remember=True)
+            except Exception as error:
+                self._show_error(str(error) or "Could not create an account with Microsoft.")
+                return
+        except Exception as error:
+            if type(error).__name__ == "MFARequired":
+                self._show_error("This account needs an authenticator code. Sign in with email and password to enter it.")
+                return
+            self._show_error(str(error) or "Microsoft sign-in failed.")
+            return
+        if not user:
+            return
+        try:
+            anvil.server.call("cyclops_enable_new_user", user["email"])
+        except Exception:
+            pass
+        self._go_next()
+
     def _google_message(self, error):
         message = str(error) or "Google sign-in failed."
         lowered = message.lower()
         if "client" in lowered or "google" in lowered or "configured" in lowered:
-            return message + " In the Anvil editor, open the Google service and set the OAuth client ID and secret. The Users service already allows Google. The local server reads that config from anvil.yaml; it will not accept a token you type in."
+            return message + " The server needs GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET."
         return message
 
     def login_btn_click(self, **event_args):

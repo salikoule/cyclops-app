@@ -1,17 +1,17 @@
 """Signed-in users: role, screen grants, notifications, and the audit list.
 
 The plant graph does not include these tables, so a workbook import does not wipe them.
+Sign-in stays on Anvil's users table. Roles, notices, and the audit list are ordinary rows.
 """
 
 import datetime
 
 import anvil.server
-import anvil.tables
-from anvil.tables import app_tables
 
 import access
 import audit
 import records
+import sql
 
 _UNSET = object()
 
@@ -35,20 +35,38 @@ def _screens(row):
 
 
 def _profiles():
+    rows = sql.query("SELECT email, role, active, screens FROM plant.access_grants")
     return [{"email": row["email"] or "", "role": row["role"] or "observer", "active": bool(row["active"]),
-             "screens": _screens(row)} for row in app_tables.access_grants.search()]
+             "screens": _screens(row)} for row in rows]
 
 
 def _prefs():
+    rows = sql.query("SELECT email, maintenance, breakdowns FROM plant.notification_prefs")
     return [{"email": row["email"] or "", "maintenance": bool(row["maintenance"]), "breakdowns": bool(row["breakdowns"])}
-            for row in app_tables.notification_prefs.search()]
+            for row in rows]
 
 
 def unread_count(email):
     key = access.email_key(email)
-    return sum(1 for row in app_tables.notifications.search(read_at=None) if access.email_key(row["email"]) == key)
+    row = sql.one(
+        "SELECT count(*) AS n FROM plant.notifications WHERE read_at IS NULL AND lower(btrim(email)) = %s",
+        (key,),
+    )
+    return int(row["n"]) if row else 0
 
 
+def _grant(email):
+    return sql.one(
+        """
+        SELECT id, email, role, screens, active
+        FROM plant.access_grants
+        WHERE lower(btrim(email)) = %s
+        """,
+        (access.email_key(email),),
+    )
+
+
+@sql.in_transaction
 def resolve(user):
     """The signed-in user's access. The first account, or the next one when no administrator is active, becomes administrator."""
     email = _user_email(user)
@@ -57,17 +75,28 @@ def resolve(user):
     if user["enabled"] is False:
         raise anvil.server.PermissionDenied("This account is deactivated.")
     profiles = _profiles()
-    row = app_tables.access_grants.get(email=email)
+    row = _grant(email)
     active_admin = any(profile["role"] == "administrator" and profile["active"] for profile in profiles)
     if row is None:
         role = "administrator" if not active_admin else "observer"
-        row = app_tables.access_grants.add_row(email=email, role=role, screens={"ids": access.default_ids(role)}, active=True)
+        row = sql.one(
+            """
+            INSERT INTO plant.access_grants (email, role, screens, active)
+            VALUES (%s, %s, %s, true)
+            RETURNING id, email, role, screens, active
+            """,
+            (email, role, sql.as_json({"ids": access.default_ids(role)})),
+        )
         write_audit([audit.user_row(email, email, _now(), "Signed in as %s" % access.ROLE_LABEL[role], {"role": [None, role]})])
     elif row["active"] is False:
         raise anvil.server.PermissionDenied("This account is deactivated.")
     elif not active_admin and row["role"] != "administrator":
         previous = row["role"] or "observer"
-        row.update(role="administrator", active=True, screens={"ids": access.default_ids("administrator")})
+        sql.execute(
+            "UPDATE plant.access_grants SET role = 'administrator', active = true, screens = %s WHERE id = %s",
+            (sql.as_json({"ids": access.default_ids("administrator")}), row["id"]),
+        )
+        row = _grant(email)
         write_audit([audit.user_row(email, email, _now(), "Became administrator because none was active",
                                     {"role": [previous, "administrator"]})])
     stored = None if row["role"] == "administrator" else _screens(row)
@@ -81,14 +110,20 @@ def require(user):
 
 def write_audit(entries):
     for entry in entries or []:
-        app_tables.audit_events.add_row(
-            at=records.parse_moment(entry.get("at")) or datetime.datetime.now(datetime.timezone.utc),
-            email=entry.get("email") or "",
-            record_table=entry.get("recordTable") or "",
-            record=entry.get("record") or "",
-            action=entry.get("action") or "",
-            summary=entry.get("summary") or "",
-            changes=entry.get("changes") or {},
+        sql.execute(
+            """
+            INSERT INTO plant.audit_events (at, email, record_table, record, action, summary, changes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                records.parse_moment(entry.get("at")) or datetime.datetime.now(datetime.timezone.utc),
+                entry.get("email") or "",
+                entry.get("recordTable") or "",
+                entry.get("record") or "",
+                entry.get("action") or "",
+                entry.get("summary") or "",
+                sql.as_json(entry.get("changes") or {}),
+            ),
         )
 
 
@@ -96,10 +131,29 @@ def history(kind="", code="", limit=80):
     table = ""
     if kind:
         table = next((name for name, label in audit.TABLE_KIND.items() if label == kind), kind)
-    query = {"record_table": table, "record": code} if code else {}
-    found = app_tables.audit_events.search(anvil.tables.order_by("at", ascending=False), **query)
+    if code:
+        found = sql.query(
+            """
+            SELECT at, email, record_table, record, action, summary, changes
+            FROM plant.audit_events
+            WHERE record_table = %s AND record = %s
+            ORDER BY at DESC
+            LIMIT %s
+            """,
+            (table, code, int(limit)),
+        )
+    else:
+        found = sql.query(
+            """
+            SELECT at, email, record_table, record, action, summary, changes
+            FROM plant.audit_events
+            ORDER BY at DESC
+            LIMIT %s
+            """,
+            (int(limit),),
+        )
     rows = []
-    for row in list(found)[:limit]:
+    for row in found:
         table = row["record_table"] or ""
         changes = dict(row["changes"] or {})
         rows.append({
@@ -124,14 +178,19 @@ def record_changes(before, after, dirty, email):
 def _notify_rows(entries):
     stored = []
     for entry in entries or []:
-        app_tables.notifications.add_row(
-            email=entry.get("email") or "",
-            kind=entry.get("kind") or "",
-            record=entry.get("record") or "",
-            title=entry.get("title") or "",
-            body=entry.get("body") or "",
-            created_at=records.parse_moment(entry.get("createdAt")) or datetime.datetime.now(datetime.timezone.utc),
-            read_at=None,
+        sql.execute(
+            """
+            INSERT INTO plant.notifications (email, kind, record, title, body, created_at, read_at)
+            VALUES (%s, %s, %s, %s, %s, %s, NULL)
+            """,
+            (
+                entry.get("email") or "",
+                entry.get("kind") or "",
+                entry.get("record") or "",
+                entry.get("title") or "",
+                entry.get("body") or "",
+                records.parse_moment(entry.get("createdAt")) or datetime.datetime.now(datetime.timezone.utc),
+            ),
         )
         stored.append(entry)
     return stored
@@ -173,25 +232,35 @@ def try_email(entries):
 
 def list_notifications(email, limit=50):
     key = access.email_key(email)
-    rows = [row for row in app_tables.notifications.search(anvil.tables.order_by("created_at", ascending=False))
-            if access.email_key(row["email"]) == key]
+    rows = sql.query(
+        """
+        SELECT id, kind, record, title, body, created_at, read_at
+        FROM plant.notifications
+        WHERE lower(btrim(email)) = %s
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (key, int(limit)),
+    )
     return [{
-        "id": row.get_id(),
+        "id": row["id"],
         "kind": row["kind"] or "",
         "record": row["record"] or "",
         "title": row["title"] or "",
         "body": row["body"] or "",
         "at": records.moment_text(row["created_at"]),
         "read": row["read_at"] is not None,
-    } for row in rows[:limit]]
+    } for row in rows]
 
 
+@sql.in_transaction
 def mark_notifications(email):
     key = access.email_key(email)
     now = datetime.datetime.now(datetime.timezone.utc)
-    for row in app_tables.notifications.search(read_at=None):
-        if access.email_key(row["email"]) == key:
-            row.update(read_at=now)
+    sql.execute(
+        "UPDATE plant.notifications SET read_at = %s WHERE read_at IS NULL AND lower(btrim(email)) = %s",
+        (now, key),
+    )
 
 
 def notification_prefs(email):
@@ -203,25 +272,37 @@ def notification_prefs(email):
 
 def _pref_row(email):
     key = access.email_key(email)
-    for row in app_tables.notification_prefs.search():
-        if access.email_key(row["email"]) == key:
-            return row
-    return None
+    return sql.one(
+        """
+        SELECT id, email, maintenance, breakdowns
+        FROM plant.notification_prefs
+        WHERE lower(btrim(email)) = %s
+        """,
+        (key,),
+    )
 
 
+@sql.in_transaction
 def save_notification_prefs(email, maintenance, breakdowns):
     row = _pref_row(email)
     if row is None:
-        app_tables.notification_prefs.add_row(email=email, maintenance=bool(maintenance), breakdowns=bool(breakdowns))
+        sql.execute(
+            "INSERT INTO plant.notification_prefs (email, maintenance, breakdowns) VALUES (%s, %s, %s)",
+            (email, bool(maintenance), bool(breakdowns)),
+        )
     else:
-        row.update(maintenance=bool(maintenance), breakdowns=bool(breakdowns))
+        sql.execute(
+            "UPDATE plant.notification_prefs SET maintenance = %s, breakdowns = %s WHERE id = %s",
+            (bool(maintenance), bool(breakdowns), row["id"]),
+        )
     return notification_prefs(email)
 
 
 def list_users():
-    profiles = {access.email_key(row["email"]): row for row in app_tables.access_grants.search()}
+    profiles = {access.email_key(row["email"]): row for row in sql.query(
+        "SELECT email, role, active, screens FROM plant.access_grants")}
     found = []
-    for user in app_tables.users.search():
+    for user in sql.query("SELECT email, enabled, last_login FROM app_tables.users"):
         email = user["email"] or ""
         profile = profiles.get(access.email_key(email))
         role = (profile["role"] if profile is not None else "observer") or "observer"
@@ -248,12 +329,13 @@ def _split_screens(value):
     return [key for key in value or [] if key in allowed]
 
 
+@sql.in_transaction
 def save_access(actor, payload):
     session = resolve(actor)
     if session["role"] != "administrator":
         return {"error": "That needs an administrator."}
     email = (payload.get("email") or "").strip()
-    user = app_tables.users.get(email=email)
+    user = sql.one("SELECT email, enabled FROM app_tables.users WHERE email = %s", (email,))
     if user is None:
         return {"error": "That user was not found."}
     role = payload.get("role") or ""
@@ -263,14 +345,20 @@ def save_access(actor, payload):
     if not access.leaves_an_admin(_profiles(), email, role, active):
         return {"error": "Keep at least one active administrator."}
     screens = _split_screens(payload.get("screens"))
-    row = app_tables.access_grants.get(email=email)
+    row = _grant(email)
     before_role = row["role"] if row is not None else "observer"
     before_active = bool(row["active"]) if row is not None else True
     if row is None:
-        row = app_tables.access_grants.add_row(email=email, role=role, active=active, screens={"ids": screens})
+        sql.execute(
+            "INSERT INTO plant.access_grants (email, role, active, screens) VALUES (%s, %s, %s, %s)",
+            (email, role, active, sql.as_json({"ids": screens})),
+        )
     else:
-        row.update(role=role, active=active, screens={"ids": screens})
-    user.update(enabled=active)
+        sql.execute(
+            "UPDATE plant.access_grants SET role = %s, active = %s, screens = %s WHERE id = %s",
+            (role, active, sql.as_json({"ids": screens}), row["id"]),
+        )
+    sql.execute("UPDATE app_tables.users SET enabled = %s WHERE email = %s", (active, email))
     write_audit([audit.user_row(
         email, session["email"], _now(),
         "Set %s to %s%s" % (email, access.ROLE_LABEL[role], "" if active else ", deactivated"),

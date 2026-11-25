@@ -15,6 +15,14 @@ from cyclops_app.ui import Tree
 from cyclops_app.ui.query import call as _call
 
 
+_ROW_ACTIONS = {
+    "order": ("edit-order", "delete-order", "Delete this order?", "Only an order without runs can be deleted."),
+    "run": ("edit-run", "delete-run", "Delete this run?",
+            "Its scrap, consumed lots, and output lots are removed. Its stoppages stay on the machine."),
+    "stoppage": ("edit-stoppage", "delete-stoppage", "Delete this stoppage?", "The record of this stop and its fix is removed."),
+}
+
+
 class Record:
     def _list(self):
         gap = self.query.get("gap") or None
@@ -26,8 +34,6 @@ class Record:
         actions = []
         if create and Data.can_write():
             actions.append(Layout.button(create[0], self.act(create[1]), primary=True))
-        if self.kind == "changeover":
-            actions = [Layout.button("Derive again", self._derive_changeovers)] if Data.can_write() else []
         banner = Layout.stack()
         card = Layout.section(TITLES.get(self.kind) or "Records", LEADS.get(self.kind) or "", padded=False, actions=actions, lead=True)
         shown = {"banner": False}
@@ -40,8 +46,9 @@ class Record:
                     % (info.get("count") or 0, Layout.esc((info.get("title") or "")[:1].lower() + (info.get("title") or "")[1:]), Layout.esc(info.get("benefit")), Layout.esc(Nav.path(self.kind)))))
 
         editing = {"on_edit": self._edit_stoppage, "edit_on_click": True} if self.kind == "stoppage" else {}
+        menu = self._row_menu(self.kind) if self.kind in _ROW_ACTIONS and Data.can_write() else None
         table = Tables.mount_remote(self.kind, Tables.columns_for(self.kind), fields, gap, on_reply,
-                                    on_excel=self._download_excel, **editing)
+                                    on_excel=self._download_excel, on_menu=menu, **editing)
         self._table = table
         Layout.body(card, banner, table)
         self.show(card)
@@ -62,6 +69,36 @@ class Record:
             return
         anvil.media.download(media)
 
+    def _row_menu(self, kind):
+        def handler(action, row):
+            self._row_action(kind, action, row)
+        return handler
+
+    def _row_action(self, kind, action, row):
+        spec = _ROW_ACTIONS.get(kind)
+        code = (row or {}).get("id")
+        if spec is None or not code:
+            return
+        edit_action, delete_action, question, detail = spec
+        if action == "delete":
+            if not dialogs.confirm(detail, title=question, confirm_text="Delete", danger=True):
+                return
+            payload = {"contextKind": kind, "contextId": code}
+            if kind == "stoppage":
+                payload["stoppage"] = code
+            problem = self.apply(delete_action, payload)
+            if problem:
+                Notification(problem, style="warning", timeout=5).show()
+            return
+        if kind == "stoppage":
+            Editor.open_editor(self, edit_action, {"row": row, "contextKind": kind, "contextId": code})
+            return
+        loaded = _call("cyclops_detail", kind, code)
+        if not loaded or loaded.get("missing"):
+            Notification("The record could not be loaded.", style="warning", timeout=4).show()
+            return
+        Editor.open_editor(self, edit_action, {"record": loaded, "contextKind": kind, "contextId": code})
+
     def _edit_stoppage(self, row):
         Editor.open_editor(self, "edit-stoppage", {"row": row})
 
@@ -76,19 +113,18 @@ class Record:
 
     def _changeover_section(self, rows, hide=()):
         lost = sum(row.get("hours") or 0 for row in rows)
-        return self._table_section("Changeovers", "%s changes · %s h of production lost · newest first. Click a row for the run that followed."
-                                   % (len(rows), Format.trim(round(lost, 1))), rows, "changeover", hide, empty="No changeover found.")
+        return self._table_section("Changeovers", "%s changes · %s of production lost · newest first. Click a row for the run that followed."
+                                   % (len(rows), Format.duration(lost) or "0 min"), rows, "changeover", hide, empty="No changeover found.")
 
     def _table_section(self, title, subtitle, rows, kind, hide=(), actions=(), height="420px", empty="Nothing yet."):
         card = Layout.section(title, subtitle, padded=not rows, actions=actions)
         if not rows:
             Layout.body(card, Layout.html('<p class="cy-muted">%s</p>' % Layout.esc(empty)))
             return card
-        if kind == "stoppage":
-            table = Tables.mount(rows, kind, Tables.columns_for(kind, hide), height=height if len(rows) > 8 else None,
-                                 on_edit=self._edit_stoppage, edit_on_click=True)
-        else:
-            table = Tables.mount(rows, kind, Tables.columns_for(kind, hide), height=height if len(rows) > 8 else None)
+        menu = self._row_menu(kind) if kind in _ROW_ACTIONS and Data.can_write() else None
+        editing = {"on_edit": self._edit_stoppage, "edit_on_click": True} if kind == "stoppage" else {}
+        table = Tables.mount(rows, kind, Tables.columns_for(kind, hide), height=height if len(rows) > 8 else None,
+                             on_menu=menu, **editing)
         Layout.body(card, table)
         return card
 
@@ -419,8 +455,11 @@ class Record:
                 ("Started", Layout.esc(Format.when(data.get("startedAt"))), False),
                 ("Ended", Layout.esc(Format.when(data.get("endedAt"), "still running")), False),
                 ("Good pieces", metric(data.get("good")), data.get("good") is None),
-                ("Hours", metric(data.get("hours"), " h") + (" <small>· %s h down</small>" % Format.trim(data.get("downHours")) if data.get("downHours") else ""), False),
+                ("Hours", (Layout.esc(Format.duration(data.get("hours"))) or "—") + (" <small>· %s down</small>" % Layout.esc(Format.duration(data.get("downHours"))) if data.get("downHours") else ""), False),
                 ("Pieces / hour", metric(data.get("pph")) + (" <small>· target %s</small>" % data.get("target") if data.get("target") else ""), False),
+                ("Press cycle", metric(data.get("cycle"), " s"), data.get("cycle") is None),
+                ("Effective cycle", metric(data.get("effectiveCycle"), " s") if data.get("effectiveCycle") is not None
+                 else ("needs the cavity count" if data.get("endedAt") and data.get("pph") else "—"), data.get("effectiveCycle") is None),
                 ("Vs target", metric(data.get("performance"), "%"), False),
                 ("Scrap", metric(data.get("scrap")) + (" <small>· %s%%</small>" % Format.trim(data.get("scrapPct")) if data.get("scrapPct") is not None else ""), False),
             )),
@@ -467,62 +506,54 @@ class Record:
             ("Supplier batch", Format.text(data.get("supplierLot")), False) if data.get("supplierLot") else None,
             ("Quantity", "%s <small>%s</small>" % (Format.text(Format.trim(data.get("quantity"))), Layout.esc(data.get("uom"))), data.get("quantity") is None),
         )
+        consumed = self._consumed_rows(data)
+        used = self._used_rows(data)
+        tabs = []
+        if data.get("run") or data.get("origin") == "Produced":
+            empty = "No run recorded for this lot." if not data.get("run") else "No consumed lot recorded."
+            tabs.append(("back", "Trace back", len(consumed), lambda rows=consumed, blank=empty: [self._trace_table(
+                "Trace back", "The lots this run consumed. Open a row to follow that lot further back.",
+                rows, "lot", Tables.columns_trace_back(), blank)]))
+        tabs.append(("forward", "Trace forward", len(used), lambda rows=used: [self._trace_table(
+            "Trace forward", "The runs that used this lot. Open a row for what that run made.",
+            rows, "run", Tables.columns_trace_forward(), "No run has used this lot.")]))
         self.show_tabbed(
             (Layout.page_header("Lot %s" % (data.get("number") or ""), eyebrow=data.get("id") or "", description=data.get("item") or "",
                                 actions=(Layout.button("Edit", self.act("edit-lot")),)),
              self._meta(data), self._facts(facts), self._notes(data.get("notes"))),
-            (("back", "Trace back", None, lambda: [self._trace_back(data)]),
-             ("forward", "Trace forward", len((data.get("forward") or {}).get("runs") or []), lambda: [self._trace_forward(data)])),
+            tabs,
         )
 
-    def _lot_label(self, lot):
-        return "%s %s <span class=\"cy-muted\">%s</span>" % (Format.link("lot", lot.get("id"), lot.get("number")), Layout.esc(lot.get("item")),
-                                                              Layout.esc(Format.status(lot.get("status"), lot.get("tone")) if lot.get("tone") != "ok" else ""))
+    def _consumed_rows(self, data):
+        rows = []
+        for child in (data.get("back") or {}).get("inputs") or []:
+            lot = child.get("lot") or {}
+            run = child.get("run") or {}
+            rows.append({
+                "id": lot.get("id") or "", "number": lot.get("number") or "", "item": lot.get("item") or "",
+                "itemId": lot.get("itemId") or "", "quantity": child.get("quantity"), "uom": lot.get("uom") or "",
+                "origin": lot.get("origin") or "", "received": lot.get("received") or "", "run": run.get("id") or "",
+            })
+        return rows
 
-    def _back_html(self, node):
-        lot = node.get("lot") or {}
-        run = node.get("run")
-        used = (" <small>· %s %s used</small>" % (Layout.esc(Format.trim(node.get("quantity"))), Layout.esc(lot.get("uom")))) if node.get("quantity") is not None else ""
-        html = "<li>%s%s" % (self._lot_label(lot), used)
-        if run:
-            html += ' <span class="cy-muted">made by</span> %s <small>%s · %s</small>' % (Format.link("run", run.get("id"), run.get("id")), Layout.esc(run.get("machine")),
-                                                                                          Layout.esc(Format.when(run.get("start"))))
-            if node.get("inputs"):
-                html += "<ul>%s</ul>" % "".join(self._back_html(child) for child in node["inputs"])
-            else:
-                html += ' <span class="cy-flag">no consumed lot recorded</span>'
-        elif lot.get("origin") == "Produced":
-            html += ' <span class="cy-flag">no run recorded</span>'
-        else:
-            supplier = (" · batch %s" % lot.get("supplierLot")) if lot.get("supplierLot") else ""
-            html += ' <span class="cy-muted">received %s%s</span>' % (Layout.esc(Format.when(lot.get("received"), "")), Layout.esc(supplier))
-        return html + "</li>"
-
-    def _forward_html(self, node):
-        lot = node.get("lot") or {}
-        html = "<li>%s" % self._lot_label(lot)
-        runs = node.get("runs") or []
-        if runs:
-            html += "<ul>"
-            for entry in runs:
-                run = entry.get("run") or {}
-                html += '<li><span class="cy-muted">into</span> %s <small>%s · %s · %s %s used</small>' % (
-                    Format.link("run", run.get("id"), run.get("id")), Layout.esc(run.get("item")), Layout.esc(run.get("machine")),
-                    Layout.esc(Format.trim(entry.get("quantity"))), Layout.esc(lot.get("uom")))
-                if entry.get("outputs"):
-                    html += "<ul>%s</ul>" % "".join(self._forward_html(child) for child in entry["outputs"])
-                html += "</li>"
-            html += "</ul>"
-        return html + "</li>"
-
-    def _trace_back(self, data):
-        card = Layout.section("Trace back", "What this lot was made from, down to the supplier lots.")
-        Layout.body(card, self.block('<ul class="cy-trace">%s</ul>' % self._back_html(data.get("back") or {})))
-        return card
-
-    def _trace_forward(self, data):
+    def _used_rows(self, data):
         forward = data.get("forward") or {}
-        card = Layout.section("Trace forward", "What this lot went into: the runs that consumed it and the lots they made.")
-        body = '<ul class="cy-trace">%s</ul>' % self._forward_html(forward) if forward.get("runs") else '<p class="cy-muted">No run has used this lot.</p>'
-        Layout.body(card, self.block(body))
+        unit = (forward.get("lot") or {}).get("uom") or ""
+        rows = []
+        for entry in forward.get("runs") or []:
+            run = entry.get("run") or {}
+            made = [number for number in [((child.get("lot") or {}).get("number") or "") for child in entry.get("outputs") or []] if number]
+            rows.append({
+                "id": run.get("id") or "", "start": run.get("start") or "", "machine": run.get("machine") or "",
+                "item": run.get("item") or "", "itemId": run.get("itemId") or "", "quantity": entry.get("quantity"),
+                "uom": unit, "made": ", ".join(made),
+            })
+        return rows
+
+    def _trace_table(self, title, subtitle, rows, kind, columns, empty):
+        card = Layout.section(title, subtitle, padded=not rows)
+        if not rows:
+            Layout.body(card, Layout.html('<p class="cy-muted">%s</p>' % Layout.esc(empty)))
+            return card
+        Layout.body(card, Tables.mount(rows, kind, columns, height="420px" if len(rows) > 8 else None))
         return card

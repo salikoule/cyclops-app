@@ -28,11 +28,20 @@ class PageForm(PageFormTemplate):
 
     def __init__(self, routing_context=None, **properties):
         self.init_components(**properties)
-        route = routing_context.route
+        self._route = routing_context.route
+        self._ctx = routing_context
+        self.first_load = True
+        self.set_event_handler("show", self.form_show)
+
+    def form_show(self, **event_args):
+        if not self.first_load:
+            return
+        self.first_load = False
+        route = self._route
         mode = getattr(route, "mode", "")
         if mode == "list":
-            mount_list(self, route.kind, routing_context)
+            mount_list(self, route.kind, self._ctx)
         elif mode == "detail":
-            mount_detail(self, route.kind, routing_context)
+            mount_detail(self, route.kind, self._ctx)
         else:
-            _PAGE[route.page](self, routing_context)
+            _PAGE[route.page](self, self._ctx)

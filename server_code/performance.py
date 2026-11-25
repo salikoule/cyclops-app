@@ -1,7 +1,8 @@
 """How the plant used its time: the production log and stoppages turned into hours and losses.
 
 Every staffed shift is split into hours: good pieces and scrap at the rated speed (the run's
-cavities and cycle), running slower than that, changing over, stopped (planned or not, by the
+cavities and cycle), or at the pieces per hour the run actually made when that speed is missing.
+The rest is running slower than the rated speed, changing over, stopped (planned or not, by the
 cause's flag), and idle with no reason given. A run logged for a whole shift is cut at its
 changeover (see ``changeovers``), so two items in one shift share it instead of both filling it.
 Pages filter by year, month and machine.
@@ -215,19 +216,23 @@ def view(graph, year=None, month=0, machine="", years=None, through=None):
                 if stop["stop"]["id"] not in seen_stops:
                     seen_stops.add(stop["stop"]["id"])
                     hours["planned" if stop["planned"] else "unplanned"] += stop["hours"]
-            rate = _rate(run)
-            if not rate:
-                continue
-            rated = True
-            rated_runs += 1
+            rated_speed = _rate(run)
             run_h = (entry["finish"] - entry["begin"]).total_seconds() / 3600.0
             stop_in = sum(_overlap(entry["begin"], entry["finish"], stop["begin"], stop["finish"]) for stop in own)
             running = max(0.0, run_h - stop_in)
-            needed = (good + scrap) / rate
+            made = good + scrap
+            actual = (made / running) if made and running > 0 else None
+            speed = rated_speed or actual
+            if not speed:
+                continue
+            rated = True
+            if rated_speed:
+                rated_runs += 1
+            needed = made / speed
             fit = min(1.0, running / needed) if needed else 1.0
             share = 1.0 / together.get(run["id"], 1)
-            hours["good"] += good / rate * fit * share
-            hours["scrap"] += scrap / rate * fit * share
+            hours["good"] += good / speed * fit * share
+            hours["scrap"] += scrap / speed * fit * share
             hours["slow"] += max(0.0, running - needed) * share
             if running > 0.5 and needed:
                 shift_ratio.setdefault(shift_code, []).append((on_change, needed / running))

@@ -1,36 +1,15 @@
 """Reads the plant tables for one request, in the shape the domain module works on.
 
 A request names what it shows, and its scope in ``store`` reads those rows and what decides
-their status: a recipe brings its inputs and runs, a run its scrap, lots and stoppages. Every
-query names its columns, with only the code of each linked row, so following a link never
-fetches rows one at a time. Nothing is cached between requests; the tables are the record.
+their status. Every query is SQL against the plant schema, with the code of each linked row.
+Nothing is cached between requests; the tables are the record.
 """
 
-import anvil.tables.query as q
-from anvil.tables import app_tables
-
 import records
+import sql
 
 
-def _table(name):
-    return getattr(app_tables, name)
-
-
-def _fetch(columns, extra=()):
-    plain, nested = list(extra), {}
-    for column, _, kind in columns:
-        if isinstance(kind, tuple):
-            nested[column] = q.fetch_only("code")
-        else:
-            plain.append(column)
-    return q.fetch_only(*plain, **nested)
-
-
-_ROW_FETCH = {table: _fetch(columns, ("code",) + (("temps", "injection", "extra") if table == "recipes" else ()))
-              for table, columns in records.TABLES}
 _CHILD = {spec[0]: spec for spec in records.CHILDREN}
-_CHILD_FETCH = {child: _fetch(columns + [(parent_column, "", records.link(parent))])
-                for child, parent, parent_column, _, columns in records.CHILDREN}
 _TARGET = {(table, column): kind[1] for table, columns in records.TABLES for column, _, kind in columns if isinstance(kind, tuple)}
 _TARGET.update({(child, column): kind[1] for child, _, _, _, columns in records.CHILDREN for column, _, kind in columns if isinstance(kind, tuple)})
 
@@ -51,16 +30,6 @@ class Codes:
         return known[linked.get_id()]
 
 
-def _bare_fetch(columns, extra=(), coded=()):
-    plain, nested = list(extra), {}
-    for column, key, kind in columns:
-        if isinstance(kind, tuple):
-            nested[column] = q.fetch_only("code") if key in coded else q.fetch_only()
-        else:
-            plain.append(column)
-    return q.fetch_only(*plain, **nested)
-
-
 def _narrow_item(row, spec, first, codes):
     item = {first: row["code"]} if first else {}
     for column, key, kind in spec:
@@ -68,11 +37,10 @@ def _narrow_item(row, spec, first, codes):
     return item
 
 
-def narrow(table, keys, codes, coded=(), **filters):
-    """The rows of ``table`` matching ``filters``, with only the record fields in ``keys``, sorted by code. For read-only
-    views; read linked tables first so ``codes`` knows their rows, or name the link keys in ``coded`` to fetch their code."""
+def narrow(table, keys, codes, coded=(), where="TRUE", params=()):
+    """The rows of ``table`` matching ``where``, with only the record fields in ``keys``, sorted by code."""
     spec = [entry for entry in records.COLUMNS[table] if entry[1] in keys]
-    rows = list(_table(table).search(_bare_fetch(spec, ("code",), coded), **filters))
+    rows = sql.read(table, where, params)
     codes.remember(table, rows)
     found = [_narrow_item(row, spec, "id", codes) for row in rows]
     found.sort(key=lambda item: item["id"])
@@ -85,7 +53,7 @@ def narrow_lines(child, keys, codes):
     spec = [entry for entry in columns if entry[1] in keys]
     parents = codes.known.get(parent) or {}
     by_parent = {}
-    for row in _table(child).search(_bare_fetch(spec + [(parent_column, "", records.link(parent))])):
+    for row in sql.read(child):
         owner = row[parent_column]
         if owner is not None and owner.get_id() in parents:
             by_parent.setdefault(parents[owner.get_id()], []).append(_narrow_item(row, spec, None, codes))
@@ -105,7 +73,10 @@ class Plant:
         self.line_rows = {}
         self.read_lines = set()
         self.covered = {}
-        self.codes = {table: [row["code"] for row in _table(table).search(q.fetch_only("code"))] for table in codes}
+        self.codes = {}
+        for table in codes:
+            found = sql.query("SELECT code FROM plant.%s ORDER BY code" % sql.ident(table))
+            self.codes[table] = [row["code"] for row in found]
 
     def _add(self, table, found):
         known = self.rows[table]
@@ -119,15 +90,12 @@ class Plant:
     def all(self, *tables):
         for table in tables:
             if table not in self.whole:
-                self._add(table, _table(table).search(_ROW_FETCH[table]))
+                self._add(table, sql.read(table))
                 self.whole.add(table)
         return self
 
-    def find(self, table, **filters):
-        if table in self.whole:
-            rows = list(self.rows[table].values())
-            return [row for row in rows if all(_matches(row, column, wanted) for column, wanted in filters.items())]
-        return self._add(table, _table(table).search(_ROW_FETCH[table], **filters))
+    def find(self, table, where="TRUE", params=()):
+        return self._add(table, sql.read(table, where, params))
 
     def get(self, table, code):
         for row in self.rows[table].values():
@@ -135,14 +103,16 @@ class Plant:
                 return row
         if table in self.whole:
             return None
-        return (self._add(table, [row for row in [_table(table).get(_ROW_FETCH[table], code=code)] if row is not None]) or [None])[0]
+        found = self._add(table, sql.read(table, "t.code = %s", (code,)))
+        return found[0] if found else None
 
     def by_codes(self, table, codes):
         known = {row["code"] for row in self.rows[table].values()}
         wanted = sorted({code for code in codes if code and code not in known})
         if wanted and table not in self.whole:
-            self._add(table, _table(table).search(_ROW_FETCH[table], code=q.any_of(*wanted)))
-        return [row for row in self.rows[table].values() if row["code"] in set(codes)]
+            self._add(table, sql.read(table, "t.code = ANY(%s::text[])", (wanted,)))
+        wanted_set = set(codes)
+        return [row for row in self.rows[table].values() if row["code"] in wanted_set]
 
     def follow(self, table, column):
         """Read the rows that the loaded ``table`` rows link to through ``column``."""
@@ -157,9 +127,13 @@ class Plant:
         parents = [row for key, row in self.rows[parent].items() if key not in covered]
         if parents:
             if parent in self.whole and not covered:
-                found = _table(child).search(_CHILD_FETCH[child])
+                found = sql.read(child)
             else:
-                found = _table(child).search(_CHILD_FETCH[child], **{parent_column: q.any_of(*parents)})
+                found = sql.read(
+                    child,
+                    "t.%s_id = ANY(%%s::bigint[])" % parent_column,
+                    ([row.get_id() for row in parents],),
+                )
             covered.update(row.get_id() for row in parents)
             for row in found:
                 linked = row[parent_column]
@@ -203,10 +177,3 @@ class Plant:
         if self.codes:
             plant["codes"] = self.codes
         return plant
-
-
-def _matches(row, column, wanted):
-    value = row[column]
-    if hasattr(wanted, "get_id"):
-        return any(linked.get_id() == wanted.get_id() for linked in _linked(value))
-    return value == wanted

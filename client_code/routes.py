@@ -1,3 +1,4 @@
+import anvil.server
 import anvil.users
 from craftify_library.CraftifyRouting import AuthenticatedShellRoute, Redirect, Route
 
@@ -8,6 +9,7 @@ class AppPage(AuthenticatedShellRoute):
     template = "shell.CyclopsShell"
     login_path = "/login"
     screen = ""
+    cache_form = True
 
     def before_load(self, **loader_args):
         AuthenticatedShellRoute.before_load(self, **loader_args)
@@ -67,9 +69,18 @@ class AccountRoute(Route):
         raise Redirect(path="/floor", query={"settings": "account"})
 
 
+def _quiet_before_load(self, **loader_args):
+    """The floor reloads on its own. Its sign-in check should not cover the board with a spinner."""
+    with anvil.server.no_loading_indicator:
+        AppPage.before_load(self, **loader_args)
+
+
 def _page(name, path, screen, form="pages.PageForm", mode="", key=""):
     """One route class. ``mode`` is list, detail, or page; ``key`` is the record kind or the page name."""
     attrs = {"path": path, "form": form, "screen": screen, "mode": mode}
+    if form == "live.FloorForm":
+        attrs["cache_form"] = False
+        attrs["before_load"] = _quiet_before_load
     if mode in ("list", "detail"):
         attrs["kind"] = key
     elif mode == "page":

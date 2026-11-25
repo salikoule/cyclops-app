@@ -11,7 +11,7 @@ LEADS = {
     "order": "What has to be made. Each run is logged against an order; done counts the good pieces of its runs.",
     "run": "One row per job on a machine: pieces, scrap, consumed lots, and stoppages. Pieces per hour leaves out the stoppages logged on the run; target is what the recipe's cycle and cavities promise.",
     "stoppage": "Every stop, with its machine, the run it interrupted, and a cause from the list. Click a row to edit it.",
-    "lot": "Received lots of materials and packaging, and lots produced by runs. Open a lot for its trace back to the supplier and forward to what it went into.",
+    "lot": "Received lots of materials and packaging, and lots produced by runs. Trace forward lists the runs that used a lot. Trace back, on a lot a run produced, lists the lots that run consumed.",
     "changeover": "Every time a machine went from one item to another. When no stop was logged, the time is derived from the output the shifts around "
                   "the change did not make; the last column says how. Click a row for the run that followed.",
 }

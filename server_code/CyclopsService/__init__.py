@@ -5,11 +5,11 @@ import time
 import zlib
 
 import anvil.server
-from anvil.tables import app_tables
 from craftify_library.CraftifyAuth import craftify_require_user
 
 import access
 import accounts
+import sql
 import exports
 import listing
 import seed_data
@@ -58,17 +58,21 @@ def cyclops_enable_new_user(email):
     email = (email or "").strip()
     if not email or "@" not in email:
         return
-    row = app_tables.users.get(email=email)
+    row = sql.one("SELECT enabled, confirmed_email FROM app_tables.users WHERE email = %s", (email,))
     if row is None:
         return
-    profile = app_tables.access_grants.get(email=email)
+    profile = sql.one(
+        "SELECT active FROM plant.access_grants WHERE lower(btrim(email)) = %s",
+        (access.email_key(email),),
+    )
     if profile is not None and not profile["active"]:
         return
     if row["enabled"] and row["confirmed_email"]:
         return
-    row["enabled"] = True
-    row["confirmed_email"] = True
-    row.update()
+    sql.execute(
+        "UPDATE app_tables.users SET enabled = true, confirmed_email = true WHERE email = %s",
+        (email,),
+    )
 
 
 @anvil.server.callable

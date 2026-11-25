@@ -1,0 +1,77 @@
+# Local rehearsal of the rented server.
+# cpus and memory are the caps to match that machine. They limit the container;
+# they do not slow the CPU or the disk. A running container does not follow a git branch.
+
+name: cyclops
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: cyclops
+      POSTGRES_PASSWORD: cyclops
+      POSTGRES_DB: cyclops
+    volumes:
+      - cyclops-db:/var/lib/postgresql/data
+      - ./db/plant.sql:/docker-entrypoint-initdb.d/10-plant.sql:ro
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cyclops -d cyclops"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    restart: unless-stopped
+
+  mail:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .build
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ANVIL_ORIGIN: ${ANVIL_ORIGIN:-http://localhost:3040}
+      ANVIL_PORT: "3040"
+      POSTGRES_USER: cyclops
+      POSTGRES_PASSWORD: cyclops
+      POSTGRES_DB: cyclops
+      CYCLOPS_DATABASE_URL: postgresql://cyclops:cyclops@db:5432/cyclops
+      # Mailpit speaks plain SMTP. Set SMTP_ENCRYPTION to ssl or starttls for a real server.
+      SMTP_HOST: mail
+      SMTP_PORT: "1025"
+      SMTP_ENCRYPTION: ${SMTP_ENCRYPTION:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MICROSOFT_APP_ID: ${MICROSOFT_APP_ID:-}
+      MICROSOFT_APP_SECRET: ${MICROSOFT_APP_SECRET:-}
+      MICROSOFT_TENANT_ID: ${MICROSOFT_TENANT_ID:-}
+    ports:
+      - "127.0.0.1:3040:3040"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+    restart: unless-stopped
+
+volumes:
+  cyclops-db:

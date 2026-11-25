@@ -113,6 +113,43 @@ html.ipac-dark .cy-block, html.ipac-dark .cy-tree-wrap { color: var(--cy-ink); }
 }
 a.cy-pill:hover { box-shadow: inset 0 0 0 1px currentColor; }
 .cy-pill.cy-machine { background: var(--cy-chip); color: var(--cy-chip-ink); }
+.cy-pill.cy-morning { background: var(--cy-amber-soft); color: var(--cy-amber); }
+.cy-pill.cy-afternoon { background: var(--bc-soft); color: var(--bc-navy); }
+.cy-pill.cy-night { background: var(--cy-chip); color: var(--cy-chip-ink); }
+.tabulator-col[tabulator-field="shift"] .tabulator-header-filter > div {
+  padding: 0 !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  align-items: stretch !important;
+}
+.tabulator-header-filter .anvil-role-cy-shift-filter {
+  width: 100%;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  margin: 0 !important;
+}
+.cy-dur {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 1px 7px;
+  border-radius: 7px;
+  background: var(--cy-cyan-soft);
+  color: var(--cy-ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+.cy-dur b { font-weight: 650; }
+.cy-dur i {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--cy-cyan);
+  margin-left: 1px;
+  margin-right: 4px;
+}
+.cy-dur i:last-child { margin-right: 0; }
 .cy-pill.cy-base { background: var(--cy-green-soft); color: var(--cy-green); }
 .cy-pill.cy-colorant { background: var(--cy-plum-soft); color: var(--cy-plum); }
 .cy-pill.cy-mold { background: var(--cy-rose-soft); color: var(--cy-rose); }
@@ -265,7 +302,46 @@ html body .cf-drawer-actions > .anvil-role-cy-danger > button.anvil-btn { color:
 .cy-wrap { white-space: normal; line-height: 1.35; display: block; }
 .tabulator-row .tabulator-cell:has(> .cy-clip) { white-space: nowrap; }
 .cy-clip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tabulator-row .tabulator-cell.cy-col-edit { padding: 4px 6px; }
+.tabulator-row .tabulator-cell.cy-col-edit,
+.tabulator-row .tabulator-cell.cy-col-menu { padding: 4px 6px; }
+.cy-row-menu {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cy-muted);
+  cursor: pointer;
+}
+.cy-row-menu:hover,
+.cy-row-menu:focus { background: var(--cy-hover); color: var(--cy-ink); }
+.cy-row-menu-pop {
+  position: fixed;
+  z-index: 80;
+  min-width: 148px;
+  padding: 4px;
+  background: var(--cy-card);
+  border: 1px solid var(--cy-line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(20, 32, 51, 0.12);
+}
+.cy-row-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--cy-ink);
+  cursor: pointer;
+}
+.cy-row-menu-item:hover,
+.cy-row-menu-item:focus { background: var(--cy-hover); }
+.cy-row-menu-item.is-danger { color: var(--cy-red); }
 .cy-pad { padding: 14px 16px; margin: 0; }
 .cy-form-error { display: none; margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--cy-amber-soft); color: var(--cy-amber); }
 .cy-form-error.is-on { display: block; }
@@ -335,9 +411,6 @@ html.ipac-dark .anvil-role-login-divider::after { background: #334155; }
 .cy-flag.cy-role-base { background: var(--cy-green-soft); color: var(--cy-green); }
 .cy-flag.cy-role-colorant { background: var(--cy-plum-soft); color: var(--cy-plum); }
 .cy-flag.cy-role-additive, .cy-flag.cy-role-none { background: var(--cy-chip); color: var(--cy-chip-ink); }
-.cy-trace, .cy-trace ul { list-style: none; margin: 0; padding-left: 0; }
-.cy-trace ul { padding-left: 18px; border-left: 2px solid var(--bc-border, #e5e7eb); margin: 6px 0 6px 6px; }
-.cy-trace li { padding: 4px 0; line-height: 1.5; }
 
 .cy-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--cy-line); }
 .cy-tab { padding: 8px 14px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--cy-muted); font-weight: 600; font-size: 13px; text-decoration: none; }

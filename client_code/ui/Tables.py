@@ -2,6 +2,7 @@
 
 import anvil.server
 from anvil import *
+from anvil.js import window
 from tabulator.Tabulator import Tabulator
 
 from craftify_library.CraftifyUtils import craftify_table as cf_table
@@ -153,17 +154,109 @@ def _item(id_field="itemId"):
     return formatter
 
 
-def _suffix(unit):
-    def formatter(cell, **params):
-        value = _value(cell)
-        if value is None or value == "":
-            return _empty()
-        return Layout.esc(Format.trim(value)) + unit
+def _header_tip(label, tip):
+    def formatter(cell, *args, **params):
+        return '<span title="%s">%s</span>' % (Layout.esc(tip), Layout.esc(label))
     return formatter
 
 
 def _edit(cell, **params):
     return '<button type="button" class="cy-mini cy-row-edit">Edit</button>'
+
+
+def _menu_button(cell, **params):
+    return '<button type="button" class="cy-row-menu" aria-label="Row actions"><i class="fa-solid fa-ellipsis-vertical"></i></button>'
+
+
+_MENU_OPEN = {"close": None}
+
+
+def _close_row_menu():
+    close = _MENU_OPEN.get("close")
+    if close is not None:
+        close()
+
+
+def _show_row_menu(event, row, on_menu):
+    """One menu for the row. Edit and Delete stay off the click that opens the record."""
+    _close_row_menu()
+    try:
+        button = event.target.closest(".cy-row-menu")
+        data = dict(row.getData())
+    except Exception:
+        return
+    if button is None:
+        return
+    doc = window.document
+    pop = doc.createElement("div")
+    pop.className = "cy-row-menu-pop"
+    pop.setAttribute("role", "menu")
+
+    def close_menu(event=None):
+        try:
+            if pop.parentNode is not None:
+                pop.parentNode.removeChild(pop)
+        except Exception:
+            pass
+        try:
+            doc.removeEventListener("click", on_outside)
+            window.removeEventListener("resize", close_menu)
+            doc.removeEventListener("scroll", close_menu, True)
+        except Exception:
+            pass
+        if _MENU_OPEN.get("close") == close_menu:
+            _MENU_OPEN["close"] = None
+
+    def add_item(label, act, danger):
+        item = doc.createElement("button")
+        item.type = "button"
+        item.className = "cy-row-menu-item is-danger" if danger else "cy-row-menu-item"
+        item.setAttribute("role", "menuitem")
+        item.textContent = label
+
+        def choose(evt, act=act):
+            try:
+                evt.stopPropagation()
+            except Exception:
+                pass
+            close_menu()
+            on_menu(act, data)
+
+        item.addEventListener("click", choose)
+        pop.appendChild(item)
+
+    add_item("Edit", "edit", False)
+    add_item("Delete", "delete", True)
+    doc.body.appendChild(pop)
+    # Tabulator rows sit inside a transform, and the Python DOM rect ignores it.
+    window.Function(
+        "button",
+        "pop",
+        "var rect=button.getBoundingClientRect();"
+        "var box=pop.getBoundingClientRect();"
+        "var top=rect.bottom+4;"
+        "if(top+box.height>window.innerHeight-8){top=Math.max(8,rect.top-box.height-4);}"
+        "var left=rect.right-box.width;"
+        "if(left<8){left=8;}"
+        "pop.style.top=top+'px';"
+        "pop.style.left=left+'px';",
+    )(button, pop)
+
+    def on_outside(evt):
+        try:
+            if pop.contains(evt.target) or button.contains(evt.target):
+                return
+        except Exception:
+            pass
+        close_menu()
+
+    def arm():
+        doc.addEventListener("click", on_outside)
+        window.addEventListener("resize", close_menu)
+        doc.addEventListener("scroll", close_menu, True)
+
+    window.setTimeout(arm, 0)
+    _MENU_OPEN["close"] = close_menu
 
 
 def _num(cell, **params):
@@ -178,6 +271,34 @@ def _machine_pill(cell, **params):
     if not value:
         return _empty()
     return '<span class="cy-pill cy-machine">%s</span>' % Layout.esc(value)
+
+
+def _shift_pill(cell, **params):
+    value = _value(cell)
+    if not value:
+        return _empty()
+    kind = {"morning": "morning", "afternoon": "afternoon", "night": "night"}.get(str(value).lower(), "machine")
+    return '<span class="cy-pill cy-%s">%s</span>' % (kind, Layout.esc(value))
+
+
+def _shift_filter(**params):
+    """A real dropdown. Tabulator's list filter is a search box with the caret hidden."""
+    names = []
+    seen = set()
+    for name in params.get("values") or []:
+        text = "" if name is None else str(name)
+        if text and text not in seen:
+            seen.add(text)
+            names.append(text)
+    current = params.get("value") or ""
+    if current and current not in seen:
+        names.insert(0, str(current))
+    box = DropDown(items=[("All shifts", "")] + [(name, name) for name in names], selected_value=current or "")
+    def changed(**event_args):
+        box.raise_event("x-success", value=box.selected_value or "")
+    box.set_event_handler("change", changed)
+    box.role = "cy-shift-filter"
+    return box
 
 
 def _label_pill(kind):
@@ -319,14 +440,18 @@ def columns_for(kind, hide=()):
             _col("ID", "id", width=108, formatter=_id("run")),
             _when_col("Started", "start"),
             _when_col("Ended", "end"),
-            dict(_num_col("Hours", "hours", 96), formatter=_suffix(" h")),
+            dict(_num_col("Hours", "hours", 110), formatter=_hours, header_filter=True),
+            _col("Shift", "shift", width=140, formatter=_shift_pill, header_filter=_shift_filter),
             _machine_col(),
             _col("Item", "item", min_width=160, width_grow=3, formatter=_item()),
             _col("Order", "order", width=100, formatter=_text),
             _num_col("Good", "good", 86),
             _pct_col("Scrap", "scrapPct", 84, "scrapPct"),
             _num_col("Pcs/h", "pph", 80),
-            _pct_col("Vs target", "performance", 100, "performance"),
+            dict(_pct_col("Vs target", "performance", 100, "performance"),
+                 title_formatter=_header_tip("Vs target",
+                     "Pieces per hour on this run, with logged stoppages left out, as a share of the pieces per hour "
+                     "the cycle time and the cavities promise. 100% means the run matched that speed. Scrap is counted in the pieces made.")),
             _col("Operator", "operator", min_width=110, width_grow=1, formatter=_clip),
             _status_col(110),
         ]
@@ -334,7 +459,7 @@ def columns_for(kind, hide=()):
         columns = [
             _when_col("Stopped", "start"),
             _when_col("Restarted", "end"),
-            dict(_num_col("Downtime", "hours", 140), formatter=_suffix(" h")),
+            dict(_num_col("Downtime", "hours", 140), formatter=_hours, header_filter=True),
             _machine_col(),
             _col("Item", "item", min_width=140, width_grow=1, formatter=_item()),
             _col("Cause", "cause", min_width=110, width_grow=1, formatter=_clip),
@@ -348,13 +473,17 @@ def columns_for(kind, hide=()):
         columns = [
             _col("ID", "id", width=108, formatter=_text),
             _when_col("Started", "start"),
-            dict(_num_col("Lost", "hours", 132), formatter=_suffix(" h")),
+            dict(_num_col("Lost", "hours", 140), formatter=_hours, header_filter=True),
             _machine_col(),
             _col("From", "from", min_width=140, width_grow=2, formatter=_item("fromItemId")),
             _col("To", "to", min_width=140, width_grow=2, formatter=_item("toItemId")),
             _list_col("Kind", "kind", 150),
             _list_col("Source", "source", 150),
-            dict(_status_col(116), title="Confidence"),
+            dict(_status_col(116), title="Confidence",
+                 title_formatter=_header_tip("Confidence",
+                     "How sure the changeover time is. High: a logged stoppage that is a changeover supplied the times. "
+                     "Medium: worked out from the pieces and the speed, and the speed was solid. "
+                     "Low: worked out, but a speed was missing or thin, so the time is a weaker guess.")),
             _col("How it was worked out", "basis", min_width=160, width_grow=4, formatter=_clip),
         ]
     elif kind in SETTING_COLUMNS:
@@ -379,11 +508,66 @@ def columns_for(kind, hide=()):
     return [column for column in columns if column.get("field") not in hidden]
 
 
-def _median_hours(cell, **params):
+def columns_trace_back():
+    """Lots one run consumed. The row opens that lot."""
+    return [
+        _col("Lot", "number", width=130, formatter=_text),
+        _col("Item", "item", min_width=180, formatter=_item()),
+        dict(_num_col("Quantity", "quantity", 110), header_filter=True),
+        _col("Unit", "uom", width=70, formatter=_text, header_filter=False),
+        _list_col("Origin", "origin", 120),
+        _when_col("Received", "received"),
+        _col("Made by", "run", width=120, formatter=_text),
+    ]
+
+
+def columns_trace_forward():
+    """Runs that consumed one lot. The row opens that run."""
+    return [
+        _col("Run", "id", width=120, formatter=_id("run")),
+        _when_col("Started", "start"),
+        _machine_col(),
+        _col("Item", "item", min_width=180, formatter=_item()),
+        dict(_num_col("Quantity", "quantity", 110), header_filter=True),
+        _col("Unit", "uom", width=70, formatter=_text, header_filter=False),
+        _col("Lots made", "made", min_width=140, formatter=_clip),
+    ]
+
+
+def _duration_markup(shown):
+    """5h 54min as a clock reading: the figures in ink, the units quieter."""
+    raw = str(shown).strip()
+    sign = ""
+    if raw.startswith("-"):
+        sign = "\u2212"
+        raw = raw[1:].strip()
+    bits = []
+    for token in raw.replace("min", " min").split():
+        if token in ("h", "min"):
+            continue
+        if len(token) > 1 and token.endswith("h") and token[:-1].isdigit():
+            bits.append((token[:-1], "h"))
+        elif token.isdigit():
+            bits.append((token, "min"))
+    if not bits:
+        return Layout.esc(shown)
+    parts = []
+    for index, (number, unit) in enumerate(bits):
+        mark = sign if index == 0 else ""
+        parts.append("<b>%s%s</b><i>%s</i>" % (mark, Layout.esc(number), unit))
+    return '<span class="cy-dur">%s</span>' % "".join(parts)
+
+
+def _hours(cell, **params):
     value = _value(cell)
     if value is None or value == "":
         return _empty()
-    return Layout.esc(Format.trim(value)) + " h"
+    shown = Format.duration(value)
+    return _duration_markup(shown) if shown else _empty()
+
+
+def _median_hours(cell, **params):
+    return _hours(cell)
 
 
 def columns_perf_causes():
@@ -392,7 +576,7 @@ def columns_perf_causes():
         _col("Group", "group", width=120, formatter=_text),
         _list_col("Kind", "kind", 110),
         _num_col("Stops", "count", 88),
-        dict(_num_col("Hours", "hours", 88), formatter=_suffix(" h")),
+        dict(_num_col("Hours", "hours", 110), formatter=_hours),
         _pct_col("Share", "share", 88, "share"),
     ]
 
@@ -401,8 +585,8 @@ def columns_perf_changeover_kinds():
     return [
         _col("Kind", "label", min_width=160, width_grow=2, formatter=_text),
         _num_col("Changes", "count", 100),
-        dict(_num_col("Lost", "hours", 88), formatter=_suffix(" h")),
-        dict(_num_col("Median", "median", 100), formatter=_median_hours),
+        dict(_num_col("Lost", "hours", 110), formatter=_hours),
+        dict(_num_col("Median", "median", 110), formatter=_median_hours),
     ]
 
 
@@ -410,8 +594,8 @@ def columns_perf_changeover_machines():
     return [
         dict(_machine_col("machine"), min_width=140, width_grow=1),
         _num_col("Changes", "count", 100),
-        dict(_num_col("Lost", "hours", 88), formatter=_suffix(" h")),
-        dict(_num_col("Median", "median", 100), formatter=_median_hours),
+        dict(_num_col("Lost", "hours", 110), formatter=_hours),
+        dict(_num_col("Median", "median", 110), formatter=_median_hours),
     ]
 
 
@@ -473,9 +657,10 @@ def mount_report(rows, columns, height=None, on_row=None, on_excel=None):
     return Layout.flat(table)
 
 
-def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False, on_excel=None):
+def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False, on_excel=None, on_menu=None):
     """``on_edit(row_data)`` adds an Edit button to each row; the rest of the row still opens the record,
-    unless ``edit_on_click`` (stoppages, which have no page of their own)."""
+    unless ``edit_on_click`` (stoppages, which have no page of their own).
+    ``on_menu(action, row)`` puts Edit and Delete behind one button on the right instead."""
     table = Tabulator()
     if height:
         table.height = height
@@ -490,30 +675,64 @@ def mount(rows, kind, columns, height="640px", on_edit=None, edit_on_click=False
         "placeholder": "No rows match.",
     }
     cf_table.apply_table_theme(table)
-    built = _with_edit(columns, on_edit)
+    built = _with_choice_values(_with_edit(columns, on_edit, on_menu), rows)
     table.columns = cf_table.stamp_columns(built)
     table.data = rows or []
-    _open_rows(table, kind, on_edit, edit_on_click)
-    cf_table.attach_toolbar(table, remote=False)
+    _open_rows(table, kind, on_edit, edit_on_click, on_menu)
+    cf_table.attach_toolbar(table, remote=False, search=False)
     if on_excel is not None:
         cf_table.attach_excel_download(table, on_excel)
     return Layout.flat(table)
 
 
-def _with_edit(columns, on_edit):
+def _with_edit(columns, on_edit, on_menu=None):
+    if on_menu is not None:
+        return list(columns) + [{"title": "", "field": "_menu", "width": 48, "hoz_align": "center",
+                                 "header_sort": False, "header_filter": False, "formatter": _menu_button,
+                                 "css_class": "cy-col-menu"}]
     if on_edit is None:
         return columns
     return list(columns) + [{"title": "", "field": "edit", "width": 62, "hoz_align": "center",
                              "header_sort": False, "formatter": _edit, "css_class": "cy-col-edit"}]
 
 
+def _with_choice_values(columns, rows):
+    """Local tables have no server choice list, so a dropdown takes the names already on the rows."""
+    built = []
+    for column in columns:
+        column = dict(column)
+        if callable(column.get("header_filter")):
+            params = dict(column.get("header_filter_params") or {})
+            if not params.get("values"):
+                field = column.get("field")
+                names = []
+                seen = set()
+                for row in rows or []:
+                    value = row.get(field) if hasattr(row, "get") else None
+                    if value and value not in seen:
+                        seen.add(value)
+                        names.append(value)
+                params["values"] = names
+            column["header_filter_params"] = params
+        built.append(column)
+    return built
+
+
 def _remote_column(column, fields):
     """A column as the server can page it: header filters and sorting only where the tables can answer them."""
     column = dict(column)
     field = column.get("field")
+    custom = column.get("header_filter") if callable(column.get("header_filter")) else None
+    params = dict(column.get("header_filter_params") or {})
     for key in ("header_filter_func", "header_filter_params"):
         column.pop(key, None)
     column["header_sort"] = field in fields["sort"]
+    if custom is not None:
+        if field in (fields.get("choices") or {}):
+            params["values"] = fields["choices"][field]
+        column["header_filter"] = custom
+        column["header_filter_params"] = params
+        return column
     if field in (fields.get("choices") or {}):
         column["header_filter"] = "list"
         column["header_filter_params"] = dict(_NO_AUTOFILL, values=fields["choices"][field], clearable=True)
@@ -532,7 +751,7 @@ def _reply_value(response, key):
         return None
 
 
-def mount_remote(kind, columns, fields, gap=None, on_reply=None, height="640px", on_edit=None, edit_on_click=False, on_excel=None):
+def mount_remote(kind, columns, fields, gap=None, on_reply=None, height="640px", on_edit=None, edit_on_click=False, on_excel=None, on_menu=None):
     """A list read a page at a time from the ``/list/<kind>`` endpoint; ``on_reply(total, banner)`` sees each page."""
     table = Tabulator()
     if height:
@@ -568,17 +787,17 @@ def mount_remote(kind, columns, fields, gap=None, on_reply=None, height="640px",
         "placeholder": "No rows match.",
     }
     cf_table.apply_table_theme(table)
-    built = _with_edit([_remote_column(column, fields) for column in columns], on_edit)
+    built = _with_edit([_remote_column(column, fields) for column in columns], on_edit, on_menu)
     table.columns = cf_table.stamp_columns(built, fields)
-    _open_rows(table, kind, on_edit, edit_on_click)
+    _open_rows(table, kind, on_edit, edit_on_click, on_menu)
     table.on("dataLoadError", failed)
-    cf_table.attach_toolbar(table, remote=True)
+    cf_table.attach_toolbar(table, remote=True, search=False)
     if on_excel is not None:
         cf_table.attach_excel_download(table, on_excel)
     return Layout.flat(table)
 
 
-def _open_rows(table, kind, on_edit, edit_on_click):
+def _open_rows(table, kind, on_edit, edit_on_click, on_menu=None):
     target, key = _OPENS.get(kind, (kind, "id"))
 
     def on_row(sender, **event_args):
@@ -586,6 +805,14 @@ def _open_rows(table, kind, on_edit, edit_on_click):
         if row is None:
             return
         event = event_args.get("event")
+        try:
+            in_menu = event is not None and event.target.closest(".cy-col-menu")
+        except Exception:
+            in_menu = False
+        if in_menu:
+            if on_menu is not None:
+                _show_row_menu(event, row, on_menu)
+            return
         try:
             on_button = event is not None and event.target.closest(".cy-col-edit")
         except Exception:

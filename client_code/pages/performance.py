@@ -30,6 +30,20 @@ def _cause_table_rows(rows):
     } for row in rows]
 
 
+def _hours_unit(value, *rest):
+    """Tooltip unit for the By machine chart. Every series on that chart is hours."""
+    if value is None or value == "":
+        return "—"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    text = "{:,.1f}".format(number)
+    if text.endswith(".0"):
+        text = "{:,.0f}".format(number)
+    return text + " h"
+
+
 def _open_machine(data, tab=None):
     code = data.get("id")
     if not code:
@@ -79,7 +93,7 @@ class PerformancePage:
         data = self.data
         when = "%s %s" % (MONTHS[data["month"]], data.get("year")) if data.get("month") else str(data.get("year"))
         machine = next((entry["label"] for entry in data.get("machines") or [] if entry["value"] == data.get("machine")), "the plant")
-        return "How %s used its staffed time in %s, worked out from each run's pieces and rated speed." % (machine, when)
+        return "How %s used its staffed time in %s, worked out from each run's pieces and its speed." % (machine, when)
 
     def _filters(self):
         data = self.data
@@ -122,9 +136,9 @@ class PerformancePage:
         kpis = data.get("kpis") or {}
         parts = [self._kpis()]
         if kpis.get("runs") and not kpis.get("ratedRuns"):
-            parts.append(Layout.note("None of these runs has a cycle time and cavities, so their hours cannot be worked out.", "warn"))
+            parts.append(Layout.note("None of these runs has a cycle and a cavity count. Their hours are the time the pieces actually took. A day stays grey only when the pieces or the hours are missing.", "warn"))
         elif kpis.get("ratedRuns") and kpis["ratedRuns"] < kpis.get("runs", 0):
-            parts.append(Layout.note("%s of %s runs have a rated speed (cycle and cavities); the hours below come from those."
+            parts.append(Layout.note("%s of %s runs have a rated speed (cycle and cavities). The others are counted at the pieces per hour they actually ran."
                                      % (Format.grouped(kpis["ratedRuns"]), Format.grouped(kpis["runs"]))))
         buckets = data.get("buckets") or []
         months = None if data.get("month") else self._months_chart()
@@ -173,7 +187,7 @@ class PerformancePage:
             (unknown if value is None else points).append(point)
         labels = [Format.day(day)[:6] for day in every_day]
         return _chart("Plant calendar", "Each square is a machine-day: the share of 24 hours spent making good pieces. "
-                      "Blank means nobody ran it; grey means it ran but its runs have no rated speed.", {
+                      "Blank means nobody ran it; grey means it ran but the pieces or the hours are missing.", {
             "tooltip": {"formatter": lambda params, *rest: params["name"]},
             "grid": {"left": 104, "right": 16, "top": 8, "bottom": 70},
             "xAxis": {"type": "category", "data": labels, "splitArea": {"show": False}, "axisLabel": {"interval": max(0, len(labels) // 12 - 1)}},
@@ -193,10 +207,10 @@ class PerformancePage:
             return None
         names = [row["machine"] for row in rows]
         series = [{"type": "bar", "stack": "h", "name": label, "data": [row.get(key) for row in rows], "itemStyle": {"color": COLORS[key]}}
-                  for key, label in (("good", "Good pieces"), ("scrap", "Scrap"), ("slow", "Running slow"), ("changeover", "Changeovers"),
+                  for key, label in (("good", "Good-piece hours"), ("scrap", "Scrap hours"), ("slow", "Running slow"), ("changeover", "Changeovers"),
                                      ("planned", "Planned stops"), ("unplanned", "Breakdowns and other stops"), ("idle", "Idle, no reason given"))]
-        return _chart("By machine", "Staffed hours per machine, lowest productive share first. Machines with no rated speed are left out.", {
-            "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}}, "legend": {"top": 0, "type": "scroll"},
+        return _chart("By machine", "Staffed hours per machine, lowest productive share first. A machine with no cycle and cavities is counted at the speed it actually ran. Every figure is hours.", {
+            "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}, "valueFormatter": _hours_unit}, "legend": {"top": 0, "type": "scroll"},
             "grid": {"left": 104, "right": 24, "top": 40, "bottom": 24},
             "xAxis": {"type": "value", "name": "Hours"}, "yAxis": {"type": "category", "data": names, "inverse": True},
             "series": series,

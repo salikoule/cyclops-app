@@ -12,16 +12,26 @@ def _account_needs_enabling(message):
 
 
 class CyclopsLoginForm(CraftifyLoginForm):
-    def __init__(self, **properties):
+    def __init__(self, allow_microsoft=False, **properties):
         CraftifyLoginForm.__init__(self, **properties)
-        button = Button(
-            text="Microsoft",
-            role="login-sso-btn",
-            spacing_above="none",
-            spacing_below="small",
-        )
-        button.set_event_handler("click", self.microsoft_login_btn_click)
-        self.login_form_card.add_component(button, full_width_row=True, index=11)
+        # The sign-in card forces its buttons to display, so hiding them leaves them on screen.
+        # Password reset needs mail. Google, Microsoft, and new accounts are not part of this demo.
+        self.forgot_password_link.remove_from_parent()
+        if not properties.get("allow_google", True):
+            self.google_login_btn.remove_from_parent()
+        if not properties.get("allow_signup", True):
+            self.signup_btn.remove_from_parent()
+        if allow_microsoft:
+            button = Button(
+                text="Microsoft",
+                role="login-sso-btn",
+                spacing_above="none",
+                spacing_below="small",
+            )
+            button.set_event_handler("click", self.microsoft_login_btn_click)
+            self.login_form_card.add_component(button, full_width_row=True)
+        elif not (properties.get("allow_google", True) or properties.get("allow_signup", True)):
+            self.or_divider.remove_from_parent()
 
     def _mfa_for(self, email, password):
         """An authenticator code when this account has one. None when it has not enrolled, or the platform cannot say."""
@@ -215,8 +225,8 @@ class AppStartup(AppStartupTemplate):
                 brand_text="Cyclops",
                 brand_sub="Production records",
                 copyright="© Cyclops",
-                allow_signup=True,
-                allow_google=True,
+                allow_signup=False,
+                allow_google=False,
             ),
             full_width_row=True,
         )

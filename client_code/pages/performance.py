@@ -82,16 +82,18 @@ def _chart(title, subtitle, options, height="320px"):
 
 
 class PerformancePage:
+    _sent = None
+
     def __init__(self, form, ctx):
         self.form = form
         self.query = Nav.query(ctx)
         self.tab = self.query.get("tab") or "time"
         self.data = None
         self.holder = None
-        self._applying = False
 
     def render(self):
         data = call("cyclops_performance", self.query.get("year") or None, self.query.get("month") or 0, self.query.get("machine") or "")
+        PerformancePage._sent = None
         if data is None:
             return
         self.data = data
@@ -126,20 +128,12 @@ class PerformancePage:
                            selected_value=data.get("machine") or "")
 
         def apply(**event_args):
-            if self._applying:
-                return
             chosen = _filter_query(year.selected_value, month.selected_value, machine.selected_value, self.tab)
-            current_query = _filter_query(self.query.get("year"), self.query.get("month"), self.query.get("machine"), self.tab)
-            if chosen == current_query:
+            showing = _filter_query(data.get("year"), data.get("month"), data.get("machine"), self.tab)
+            if chosen == showing or chosen == PerformancePage._sent:
                 return
-            # The page form is cached, so changing the address does not rebuild it. Draw the chosen year here.
-            self._applying = True
-            try:
-                self.query = chosen
-                self.render()
-                Nav.go("performance", query=dict(self.query))
-            finally:
-                self._applying = False
+            PerformancePage._sent = chosen
+            Nav.go("performance", query=dict(chosen))
 
         for box in (year, month, machine):
             box.set_event_handler("change", apply)

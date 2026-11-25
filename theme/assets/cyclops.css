@@ -1,6 +1,13 @@
 /* Cyclops records on the Craftify shell. Layout chrome stays in coach.css. */
 
-.cy-brand { align-items: flex-start; }
+.cy-brand {
+  width: 100%;
+  box-sizing: border-box;
+  justify-content: center;
+  align-items: center;
+  padding-left: 0;
+  padding-right: 0;
+}
 .left-nav img.cy-brand-logo,
 .left-nav-main img.cy-brand-logo {
   display: block !important;
@@ -8,10 +15,24 @@
   height: 28px !important;
   max-width: 160px !important;
   max-height: 28px !important;
-  margin: 2px 0 0 !important;
+  margin: 2px auto 0 !important;
   object-fit: contain !important;
   border-radius: 0 !important;
   background: transparent !important;
+}
+
+/* Sign-in hero uses the red from the Cyclops wordmark. The form panel stays light. */
+.anvil-role-login-page {
+  background-color: #9b1218;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    radial-gradient(ellipse 72% 56% at 30% 34%, rgba(255, 120, 120, 0.42), transparent 64%),
+    radial-gradient(ellipse 48% 40% at 84% 88%, rgba(74, 6, 10, 0.45), transparent 62%),
+    linear-gradient(158deg, #6e0d12 0%, #c41218 46%, #e81820 100%);
+  background-size: 56px 56px, 56px 56px, auto, auto, auto;
+  background-position: center;
+  background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat;
 }
 .structure.nav-collapsed .cy-brand { align-items: center; }
 .structure.nav-collapsed .left-nav img.cy-brand-logo,

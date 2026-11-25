@@ -1,6 +1,6 @@
 /* Cyclops records on the Craftify shell. Layout chrome stays in coach.css. */
 
-.cy-brand { align-items: flex-start; flex-direction: column; gap: 6px; }
+.cy-brand { align-items: flex-start; }
 .left-nav img.cy-brand-logo,
 .left-nav-main img.cy-brand-logo {
   display: block !important;

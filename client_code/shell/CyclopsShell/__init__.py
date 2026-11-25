@@ -33,9 +33,9 @@ NAV = (
 )
 
 BRAND = (
-    '<div class="nav-brand bc-brand">'
-    '<div class="nav-brand-mark bc-brand-mark">CY</div>'
-    '<div class="nav-brand-text bc-brand-text"><strong>Cyclops</strong><span>Production records</span></div>'
+    '<div class="nav-brand bc-brand cy-brand">'
+    '<img class="cy-brand-logo" src="_/theme/cyclops-logo.png" alt="Cyclops">'
+    '<div class="nav-brand-text bc-brand-text"><span>Production records</span></div>'
     "</div>"
 )
 

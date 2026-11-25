@@ -1,5 +1,31 @@
 /* Cyclops records on the Craftify shell. Layout chrome stays in coach.css. */
 
+.cy-brand { align-items: flex-start; flex-direction: column; gap: 6px; }
+.left-nav img.cy-brand-logo,
+.left-nav-main img.cy-brand-logo {
+  display: block !important;
+  width: auto !important;
+  height: 28px !important;
+  max-width: 160px !important;
+  max-height: 28px !important;
+  margin: 2px 0 0 !important;
+  object-fit: contain !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+.structure.nav-collapsed .cy-brand { align-items: center; }
+.structure.nav-collapsed .left-nav img.cy-brand-logo,
+.structure.nav-collapsed .left-nav-main img.cy-brand-logo {
+  width: 40px !important;
+  height: 22px !important;
+  max-width: 40px !important;
+  max-height: 22px !important;
+  margin: 0 auto !important;
+  object-fit: cover !important;
+  object-position: left center !important;
+  border-radius: 6px !important;
+}
+
 :root {
   --bc-navy: #1e3a8a;
   --bc-navy-deep: #172e6e;

@@ -153,8 +153,11 @@ def view(graph, year=None, month=0, machine="", years=None, through=None):
         runs.append({"run": run, "begin": begin, "finish": finish, "day": day, "machine": recipe.get("machineId") or "",
                      "item": recipe.get("itemId") or "", "shift": run.get("shiftId") or "", "shiftHours": _shift_hours(shift),
                      "window": slot_window(day, shift, zone)})
-    years = years or sorted({entry["day"].year for entry in runs}, reverse=True)
-    year = int(year) if year else (years[0] if years else datetime.date.today().year)
+    known = [int(value) for value in years] if years else sorted({entry["day"].year for entry in runs}, reverse=True)
+    year = int(year) if year not in (None, "") else (known[0] if known else datetime.date.today().year)
+    if year not in known:
+        known.append(year)
+    years = sorted(set(known), reverse=True)
     month = int(month or 0)
 
     def wanted_day(day):

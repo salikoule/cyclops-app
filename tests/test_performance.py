@@ -32,6 +32,28 @@ def test_hours_add_up_to_staffed_time(year):
     assert 0 < kpis["oee"] <= 100
 
 
+def test_an_earlier_year_stays_selected():
+    graph = domain.normalize({
+        "machines": [{"id": "M1", "name": "EKIN"}],
+        "shifts": [{"id": "S1", "name": "Morning", "start": "06:00", "end": "14:00"}],
+        "items": [{"id": "I1", "name": "Cup"}],
+        "recipes": [{"id": "R1", "itemId": "I1", "machineId": "M1"}],
+        "production_runs": [
+            {"id": "RUN-A", "recipeId": "R1", "shiftId": "S1", "startedAt": "2025-05-18T03:00:00Z", "endedAt": "2025-05-18T11:00:00Z", "good": 800, "cycle": 12, "cavities": 2},
+            {"id": "RUN-B", "recipeId": "R1", "shiftId": "S1", "startedAt": "2026-01-10T03:00:00Z", "endedAt": "2026-01-10T11:00:00Z", "good": 100, "cycle": 12, "cavities": 2},
+        ],
+    })
+    earlier = performance.view(graph, "2025", years=[2026, 2025])
+    assert earlier["year"] == 2025
+    assert earlier["years"] == [2026, 2025]
+    assert earlier["kpis"]["runs"] == 1
+    assert earlier["kpis"]["good"] == 800
+    latest = performance.view(graph, None, years=[2026, 2025])
+    assert latest["year"] == 2026
+    assert latest["kpis"]["runs"] == 1
+    assert latest["kpis"]["good"] == 100
+
+
 def test_filters_narrow_the_view(seed, year):
     machine = year["machines"][0]["value"]
     month = performance.view(seed, year["year"], 3)

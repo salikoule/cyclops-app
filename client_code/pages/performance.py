@@ -18,6 +18,24 @@ COLORS = {"good": "#22c55e", "scrap": "#a855f7", "slow": "#f59e0b", "changeover"
 MONTHS = ("All months", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
 
 
+def _filter_query(year, month, machine, tab):
+    """The address-bar filters. Year, month and machine stay strings so the dropdown can show the year the page is actually on."""
+    query = {}
+    if year not in (None, ""):
+        query["year"] = str(year)
+    try:
+        month_number = int(month or 0)
+    except (TypeError, ValueError):
+        month_number = 0
+    if month_number:
+        query["month"] = str(month_number)
+    if machine not in (None, ""):
+        query["machine"] = str(machine)
+    if tab and tab != "time":
+        query["tab"] = tab
+    return query
+
+
 def _cause_table_rows(rows):
     total = sum(row["hours"] for row in rows) or 1
     return [{
@@ -70,6 +88,7 @@ class PerformancePage:
         self.tab = self.query.get("tab") or "time"
         self.data = None
         self.holder = None
+        self._applying = False
 
     def render(self):
         data = call("cyclops_performance", self.query.get("year") or None, self.query.get("month") or 0, self.query.get("machine") or "")
@@ -97,14 +116,30 @@ class PerformancePage:
 
     def _filters(self):
         data = self.data
-        year = DropDown(items=[(str(value), value) for value in data.get("years") or [data.get("year")]], selected_value=data.get("year"))
-        month = DropDown(items=[(label, number) for number, label in enumerate(MONTHS)], selected_value=data.get("month") or 0)
+        years = [str(value) for value in data.get("years") or []]
+        current = str(data.get("year") or "")
+        if current and current not in years:
+            years.insert(0, current)
+        year = DropDown(items=years, selected_value=current or None)
+        month = DropDown(items=[(label, str(number)) for number, label in enumerate(MONTHS)], selected_value=str(data.get("month") or 0))
         machine = DropDown(items=[("Every machine", "")] + [(entry["label"], entry["value"]) for entry in data.get("machines") or []],
                            selected_value=data.get("machine") or "")
 
         def apply(**event_args):
-            query = {"year": year.selected_value, "month": month.selected_value or "", "machine": machine.selected_value or "", "tab": self.tab}
-            Nav.go("performance", query={key: value for key, value in query.items() if value not in ("", None, 0)})
+            if self._applying:
+                return
+            chosen = _filter_query(year.selected_value, month.selected_value, machine.selected_value, self.tab)
+            current_query = _filter_query(self.query.get("year"), self.query.get("month"), self.query.get("machine"), self.tab)
+            if chosen == current_query:
+                return
+            # The page form is cached, so changing the address does not rebuild it. Draw the chosen year here.
+            self._applying = True
+            try:
+                self.query = chosen
+                self.render()
+                Nav.go("performance", query=dict(self.query))
+            finally:
+                self._applying = False
 
         for box in (year, month, machine):
             box.set_event_handler("change", apply)
